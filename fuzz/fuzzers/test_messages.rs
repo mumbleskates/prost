@@ -7,7 +7,7 @@
 /// this stays true in a unit test.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::bilrost::Message)]
-pub struct TestAllTypesProto3 {
+pub struct TestAllTypes {
     /// Singular
     #[bilrost(sint32, tag = "1")]
     pub optional_sint32: i32,
@@ -53,7 +53,7 @@ pub struct TestAllTypesProto3 {
     pub optional_cord: ::bilrost::alloc::string::String,
     #[bilrost(message, optional, boxed, tag = "27")]
     pub recursive_message: ::core::option::Option<
-        ::bilrost::alloc::boxed::Box<TestAllTypesProto3>,
+        ::bilrost::alloc::boxed::Box<TestAllTypes>,
     >,
     /// Repeated
     #[bilrost(sint32, repeated, tag = "31")]
@@ -318,7 +318,7 @@ pub struct TestAllTypesProto3 {
     )]
     pub oneof_field: ::core::option::Option<test_message::OneofField>,
 }
-/// Nested message and enum types in `TestAllTypesProto3`.
+/// Nested message and enum types in `TestAllTypes`.
 pub mod test_message {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::bilrost::Message)]
@@ -327,7 +327,7 @@ pub mod test_message {
         pub a: i32,
         #[bilrost(message, optional, boxed, tag = "2")]
         pub corecursive: ::core::option::Option<
-            ::bilrost::alloc::boxed::Box<super::TestAllTypesProto3>,
+            ::bilrost::alloc::boxed::Box<super::TestAllTypes>,
         >,
     }
     #[derive(
