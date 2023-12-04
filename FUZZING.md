@@ -7,7 +7,7 @@ Bilrost ships a few fuzz tests, using both libfuzzer and aflfuzz.
 
 To run the afl fuzz tests, first install cargo-afl:
 
-    cargo install -f afl
+    cargo install cargo-afl
 
 Then build a fuzz target and run afl on it:
 
