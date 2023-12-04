@@ -4,6 +4,7 @@ version = "0.0.0"
 authors = [
     "Dan Burkert <dan@danburkert.com>",
     "Tokio Contributors <team@tokio.rs>",
+    "Kent Ross <k@mad.cash>",
 ]
 publish = false
 edition = "2018"
@@ -12,14 +13,9 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = { git = "https://github.com/rust-fuzz/libfuzzer-sys.git" }
-protobuf = { path = "../protobuf" }
+libfuzzer-sys = "0.4"
 tests = { path = "../tests" }
 
 [[bin]]
-name = "proto3"
-path = "fuzzers/proto3.rs"
-
-[[bin]]
-name = "proto2"
-path = "fuzzers/proto2.rs"
+name = "bilrost_fuzz"
+path = "fuzzers/bilrost_fuzz.rs"
