@@ -1,13 +1,18 @@
-use fuzz::test_messages::TestAllTypes;
 use fuzz::roundtrip;
+use fuzz::test_messages::TestAllTypes;
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let [_, filename] = args.as_slice() else {
-        println!("Usage: {} <path-to-crash>", args[0]);
-        std::process::exit(1);
-    };
+    let mut args = std::env::args();
+    let program_name = args.next().unwrap();
 
-    let data = std::fs::read(&filename).expect(&format!("Could not open file {filename}"));
-    let _ = roundtrip::<TestAllTypes>(&data).unwrap_error();
+    let mut ran = false;
+    for filename in args {
+        ran = true;
+        let data = std::fs::read(&filename).expect(&format!("Could not open file {filename:?}"));
+        let _ = roundtrip::<TestAllTypes>(&data).unwrap_error();
+    }
+    if !ran {
+        println!("Usage: {program_name} <path-to-input> [...]");
+        std::process::exit(1);
+    }
 }
