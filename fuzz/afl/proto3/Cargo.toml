@@ -2,7 +2,7 @@
 name = "fuzz-target-proto3"
 version = "0.1.0"
 authors = ["Prost developers"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "fuzz-target"
@@ -13,6 +13,7 @@ name = "reproduce"
 path = "src/reproduce.rs"
 
 [dependencies]
-afl = "0.4"
-protobuf = { path = "../../protobuf/" }
-tests = { path = "../../tests/" }
+afl = "0.15"
+anyhow = "1"
+bilrost = { version = "0.12.3", path = "../../..", features = ["derive"] }
+bilrost-types = { version = "0.12.3", path = "../../../bilrost-types" }

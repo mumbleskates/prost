@@ -1,10 +1,10 @@
 use afl::fuzz;
-
-use protobuf::test_messages::proto3::TestAllTypesProto3;
-use tests::roundtrip;
+use anyhow::anyhow;
+use fuzz::roundtrip;
+use fuzz::test_messages::TestAllTypes;
 
 fn main() {
     fuzz!(|data: &[u8]| {
-        let _ = roundtrip::<TestAllTypesProto3>(data).unwrap_error();
+        let _ = roundtrip::<TestAllTypes>(data).unwrap_error();
     });
 }
