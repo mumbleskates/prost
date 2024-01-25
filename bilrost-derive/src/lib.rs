@@ -781,7 +781,7 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
                 let int_value = <u32 as ::core::convert::TryFrom<_>>::try_from(buf.decode_varint()?)
                     .map_err(|_| ::bilrost::DecodeError::new(
                         "varint for enumeration overflows range of u32"))?;
-                *value = <#ident as ::core::convert::TryFrom<_>>::try_from(int_value)?;
+                *value = <#ident #ty_generics as ::core::convert::TryFrom<_>>::try_from(int_value)?;
                 Ok(())
             }
         }
