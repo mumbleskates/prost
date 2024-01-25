@@ -1,8 +1,8 @@
 use bilrost::alloc::boxed::Box;
-use bilrost::alloc::collections::BTreeMap;
+use bilrost::alloc::collections::{BTreeMap, BTreeSet};
 use bilrost::alloc::string::String;
 use bilrost::alloc::vec::Vec;
-use bilrost::{Enumeration, Message, Oneof};
+use bilrost::{Blob, Enumeration, Message, Oneof};
 use core::option::Option;
 
 /// This proto includes every type of field in both singular and repeated
@@ -33,29 +33,22 @@ pub struct TestAllTypes {
     pub string: String,
     #[bilrost(encoder(vecblob))]
     pub bytes: Vec<u8>,
+    pub blob: Blob,
     pub direct_message: test_message::NestedMessage,
     pub boxed_message: Box<test_message::NestedMessage>,
     #[bilrost(enumeration(test_message::NestedEnum))]
     pub helped_enum: u32,
     pub direct_enum: test_message::NestedEnum,
-    pub map_sint32_sint32: BTreeMap<i32, i32>,
-    pub map_sint64_sint64: BTreeMap<i64, i64>,
-    pub map_uint32_uint32: BTreeMap<u32, u32>,
-    pub map_uint64_uint64: BTreeMap<u64, u64>,
+    pub map_varint_varint: BTreeMap<i32, i32>,
     #[bilrost(encoder(map<fixed, fixed>))]
     pub map_ufixed32_ufixed32: BTreeMap<u32, u32>,
     #[bilrost(encoder(map<fixed, fixed>))]
     pub map_ufixed64_ufixed64: BTreeMap<u64, u64>,
     #[bilrost(encoder(map<fixed, fixed>))]
-    pub map_sfixed32_sfixed32: BTreeMap<i32, i32>,
-    #[bilrost(encoder(map<fixed, fixed>))]
-    pub map_sfixed64_sfixed64: BTreeMap<i64, i64>,
-    pub map_sint32_float32: BTreeMap<i32, f32>,
-    pub map_sint32_float64: BTreeMap<i32, f64>,
+    pub map_fixed32_fixed64: BTreeMap<i32, f64>,
     pub map_bool_bool: BTreeMap<bool, bool>,
     pub map_string_string: BTreeMap<String, String>,
-    #[bilrost(encoder(map<general, vecblob>))]
-    pub map_string_bytes: BTreeMap<String, Vec<u8>>,
+    pub map_string_bytes: BTreeMap<String, Blob>,
     pub map_string_nested_message: BTreeMap<String, test_message::NestedMessage>,
     pub map_string_nested_enum: BTreeMap<String, test_message::NestedEnum>,
     /// Optional
@@ -77,29 +70,16 @@ pub struct TestAllTypes {
     pub optional_string: Option<String>,
     #[bilrost(encoder(vecblob))]
     pub optional_bytes: Option<Vec<u8>>,
-    pub optional_direct_message: Option<test_message::NestedMessage>,
+    pub optional_blob: Option<Blob>,
+    pub optional_message: Option<test_message::NestedMessage>,
     pub optional_boxed_message: Option<Box<test_message::NestedMessage>>,
     #[bilrost(enumeration(test_message::NestedEnum))]
     pub optional_helped_enum: Option<u32>,
-    pub optional_direct_enum: Option<test_message::NestedEnum>,
-    pub optional_map_sint32_sint32: Option<BTreeMap<i32, i32>>,
-    pub optional_map_sint64_sint64: Option<BTreeMap<i64, i64>>,
-    pub optional_map_uint32_uint32: Option<BTreeMap<u32, u32>>,
-    pub optional_map_uint64_uint64: Option<BTreeMap<u64, u64>>,
-    #[bilrost(encoder(map<fixed, fixed>))]
-    pub optional_map_ufixed32_ufixed32: Option<BTreeMap<u32, u32>>,
-    #[bilrost(encoder(map<fixed, fixed>))]
-    pub optional_map_ufixed64_ufixed64: Option<BTreeMap<u64, u64>>,
-    #[bilrost(encoder(map<fixed, fixed>))]
-    pub optional_map_sfixed32_sfixed32: Option<BTreeMap<i32, i32>>,
-    #[bilrost(encoder(map<fixed, fixed>))]
-    pub optional_map_sfixed64_sfixed64: Option<BTreeMap<i64, i64>>,
-    pub optional_map_sint32_float32: Option<BTreeMap<i32, f32>>,
-    pub optional_map_sint32_float64: Option<BTreeMap<i32, f64>>,
+    pub optional_enum: Option<test_message::NestedEnum>,
+    pub optional_map_fixed32_fixed64: Option<BTreeMap<i32, f64>>,
     pub optional_map_bool_bool: Option<BTreeMap<bool, bool>>,
     pub optional_map_string_string: Option<BTreeMap<String, String>>,
-    #[bilrost(encoder(map<general, vecblob>))]
-    pub optional_map_string_bytes: Option<BTreeMap<String, Vec<u8>>>,
+    pub optional_map_string_bytes: Option<BTreeMap<String, Blob>>,
     pub optional_map_string_nested_message: Option<BTreeMap<String, test_message::NestedMessage>>,
     pub optional_map_string_nested_enum: Option<BTreeMap<String, test_message::NestedEnum>>,
     /// Unpacked
@@ -121,32 +101,9 @@ pub struct TestAllTypes {
     pub unpacked_string: Vec<String>,
     #[bilrost(encoder(unpacked<vecblob>))]
     pub unpacked_bytes: Vec<Vec<u8>>,
+    pub unpacked_blob: Vec<Blob>,
     pub unpacked_nested_message: Vec<test_message::NestedMessage>,
-    pub unpacked_map_sint32_sint32: Vec<BTreeMap<i32, i32>>,
-    pub unpacked_map_sint64_sint64: Vec<BTreeMap<i64, i64>>,
-    pub unpacked_map_uint32_uint32: Vec<BTreeMap<u32, u32>>,
-    pub unpacked_map_uint64_uint64: Vec<BTreeMap<u64, u64>>,
-    #[bilrost(encoder(unpacked<map<fixed, fixed>>))]
-    pub unpacked_map_ufixed32_ufixed32: Vec<BTreeMap<u32, u32>>,
-    #[bilrost(encoder(unpacked<map<fixed, fixed>>))]
-    pub unpacked_map_ufixed64_ufixed64: Vec<BTreeMap<u64, u64>>,
-    #[bilrost(encoder(unpacked<map<fixed, fixed>>))]
-    pub unpacked_map_sfixed32_sfixed32: Vec<BTreeMap<i32, i32>>,
-    #[bilrost(encoder(unpacked<map<fixed, fixed>>))]
-    pub unpacked_map_sfixed64_sfixed64: Vec<BTreeMap<i64, i64>>,
-    pub unpacked_map_sint32_float32: Vec<BTreeMap<i32, f32>>,
-    pub unpacked_map_sint32_float64: Vec<BTreeMap<i32, f64>>,
-    pub unpacked_map_bool_bool: Vec<BTreeMap<bool, bool>>,
-    pub unpacked_map_string_string: Vec<BTreeMap<String, String>>,
-    #[bilrost(encoder(unpacked<map<general, vecblob>>))]
-    pub unpacked_map_string_bytes: Vec<BTreeMap<String, Vec<u8>>>,
-    pub unpacked_map_string_nested_message: Vec<BTreeMap<String, test_message::NestedMessage>>,
-    pub unpacked_map_string_nested_enum: Vec<BTreeMap<String, test_message::NestedEnum>>,
     /// Packed
-    #[bilrost(encoder(packed))]
-    pub packed_sint32: Vec<i32>,
-    #[bilrost(encoder(packed))]
-    pub packed_sint64: Vec<i64>,
     #[bilrost(encoder(packed))]
     pub packed_uint32: Vec<u32>,
     #[bilrost(encoder(packed))]
@@ -155,48 +112,58 @@ pub struct TestAllTypes {
     pub packed_ufixed32: Vec<u32>,
     #[bilrost(encoder(packed<fixed>))]
     pub packed_ufixed64: Vec<u64>,
-    #[bilrost(encoder(packed<fixed>))]
-    pub packed_sfixed32: Vec<i32>,
-    #[bilrost(encoder(packed<fixed>))]
-    pub packed_sfixed64: Vec<i64>,
-    #[bilrost(encoder(packed))]
-    pub packed_float32: Vec<f32>,
-    #[bilrost(encoder(packed))]
-    pub packed_float64: Vec<f64>,
     #[bilrost(encoder(packed))]
     pub packed_bool: Vec<bool>,
     #[bilrost(encoder(packed))]
     pub packed_nested_enum: Vec<test_message::NestedEnum>,
+    /// Set, unpacked
+    pub unpacked_set_uint32: BTreeSet<u32>,
+    pub unpacked_set_uint64: BTreeSet<u64>,
+    #[bilrost(encoder(unpacked<fixed>))]
+    pub unpacked_set_ufixed32: BTreeSet<u32>,
+    #[bilrost(encoder(unpacked<fixed>))]
+    pub unpacked_set_ufixed64: BTreeSet<u64>,
+    pub unpacked_set_bool: BTreeSet<bool>,
+    pub unpacked_set_string: BTreeSet<String>,
+    pub unpacked_set_blob: BTreeSet<Blob>,
+    pub unpacked_set_enum: BTreeSet<test_message::NestedEnum>,
+    pub unpacked_set_map: BTreeSet<BTreeMap<bool, bool>>,
+    /// Set, packed
     #[bilrost(encoder(packed))]
-    pub packed_map_sint32_sint32: Vec<BTreeMap<i32, i32>>,
+    pub packed_set_uint32: BTreeSet<u32>,
     #[bilrost(encoder(packed))]
-    pub packed_map_sint64_sint64: Vec<BTreeMap<i64, i64>>,
+    pub packed_set_uint64: BTreeSet<u64>,
+    #[bilrost(encoder(packed<fixed>))]
+    pub packed_set_ufixed32: BTreeSet<u32>,
+    #[bilrost(encoder(packed<fixed>))]
+    pub packed_set_ufixed64: BTreeSet<u64>,
     #[bilrost(encoder(packed))]
-    pub packed_map_uint32_uint32: Vec<BTreeMap<u32, u32>>,
+    pub packed_set_bool: BTreeSet<bool>,
     #[bilrost(encoder(packed))]
-    pub packed_map_uint64_uint64: Vec<BTreeMap<u64, u64>>,
-    #[bilrost(encoder(packed<map<fixed, fixed>>))]
-    pub packed_map_ufixed32_ufixed32: Vec<BTreeMap<u32, u32>>,
-    #[bilrost(encoder(packed<map<fixed, fixed>>))]
-    pub packed_map_ufixed64_ufixed64: Vec<BTreeMap<u64, u64>>,
-    #[bilrost(encoder(packed<map<fixed, fixed>>))]
-    pub packed_map_sfixed32_sfixed32: Vec<BTreeMap<i32, i32>>,
-    #[bilrost(encoder(packed<map<fixed, fixed>>))]
-    pub packed_map_sfixed64_sfixed64: Vec<BTreeMap<i64, i64>>,
+    pub packed_set_string: BTreeSet<String>,
     #[bilrost(encoder(packed))]
-    pub packed_map_sint32_float32: Vec<BTreeMap<i32, f32>>,
+    pub packed_set_blob: BTreeSet<Blob>,
     #[bilrost(encoder(packed))]
-    pub packed_map_sint32_float64: Vec<BTreeMap<i32, f64>>,
+    pub packed_set_enum: BTreeSet<test_message::NestedEnum>,
     #[bilrost(encoder(packed))]
-    pub packed_map_bool_bool: Vec<BTreeMap<bool, bool>>,
+    pub packed_set_map: BTreeSet<BTreeMap<bool, bool>>,
+    /// Set, packed & optional
     #[bilrost(encoder(packed))]
-    pub packed_map_string_string: Vec<BTreeMap<String, String>>,
-    #[bilrost(encoder(packed<map<general, vecblob>>))]
-    pub packed_map_string_bytes: Vec<BTreeMap<String, Vec<u8>>>,
+    pub optional_packed_set_uint32: Option<BTreeSet<u32>>,
     #[bilrost(encoder(packed))]
-    pub packed_map_string_nested_message: Vec<BTreeMap<String, test_message::NestedMessage>>,
+    pub optional_packed_set_uint64: Option<BTreeSet<u64>>,
+    #[bilrost(encoder(packed<fixed>))]
+    pub optional_packed_set_ufixed32: Option<BTreeSet<u32>>,
+    #[bilrost(encoder(packed<fixed>))]
+    pub optional_packed_set_ufixed64: Option<BTreeSet<u64>>,
     #[bilrost(encoder(packed))]
-    pub packed_map_string_nested_enum: Vec<BTreeMap<String, test_message::NestedEnum>>,
+    pub optional_packed_set_bool: Option<BTreeSet<bool>>,
+    #[bilrost(encoder(packed))]
+    pub optional_packed_set_string: Option<BTreeSet<String>>,
+    #[bilrost(encoder(packed<vecblob>))]
+    pub optional_packed_set_bytes: Option<BTreeSet<Vec<u8>>>,
+    #[bilrost(encoder(map<packed, general>))]
+    pub optional_map_set_enum_f32: Option<BTreeMap<BTreeSet<test_message::NestedEnum>, f32>>,
     /// Recursive message
     #[bilrost(recurses)]
     pub recursive_message: Option<Box<TestAllTypes>>,
