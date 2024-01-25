@@ -7,7 +7,8 @@ authors = [
     "Kent Ross <k@mad.cash>",
 ]
 publish = false
-edition = "2018"
+edition = "2021"
+default-run = "bilrost_fuzz"
 
 [package.metadata]
 cargo-fuzz = true
@@ -21,3 +22,6 @@ libfuzzer-sys = "0.4"
 [[bin]]
 name = "bilrost_fuzz"
 path = "fuzzers/bilrost_fuzz.rs"
+
+[[bin]]
+name = "reproduce"
