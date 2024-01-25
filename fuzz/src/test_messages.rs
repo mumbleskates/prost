@@ -198,7 +198,8 @@ pub struct TestAllTypes {
     #[bilrost(encoder(packed))]
     pub packed_map_string_nested_enum: Vec<BTreeMap<String, test_message::NestedEnum>>,
     /// Recursive message
-    // pub recursive_message: Option<Box<TestAllTypes>>, // TODO(widders): avoid recursive trait bounds
+    #[bilrost(recurses)]
+    pub recursive_message: Option<Box<TestAllTypes>>,
     /// Well-known types
     #[bilrost(tag = 301)]
     pub direct_duration: bilrost_types::Duration,
@@ -238,7 +239,8 @@ pub mod test_message {
     #[derive(Clone, PartialEq, Message)]
     pub struct NestedMessage {
         pub a: i32,
-        // pub corecursive: Option<Box<super::TestAllTypes>>, // TODO(widders): avoid recursive trait bounds
+        #[bilrost(recurses)]
+        pub corecursive: Option<Box<super::TestAllTypes>>,
     }
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Enumeration)]
     #[repr(u32)]
