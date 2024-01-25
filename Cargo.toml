@@ -20,6 +20,7 @@ rust-version = "1.65"
 members = [
     "bilrost-derive",
     "bilrost-types",
+    "fuzz",
 ]
 
 exclude = [
