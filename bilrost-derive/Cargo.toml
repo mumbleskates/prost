@@ -5,12 +5,13 @@ authors = [
     "Dan Burkert <dan@danburkert.com>",
     "Lucio Franco <luciofranco14@gmail.com>",
     "Tokio Contributors <team@tokio.rs>",
+    "Kent Ross <k@mad.cash>",
 ]
 license = "Apache-2.0"
 repository = "https://github.com/mumbleskates/bilrost"
 documentation = "https://docs.rs/bilrost-derive"
 readme = "README.md"
-description = "A Protocol Buffers implementation for the Rust Language."
+description = "A compact protobuf-like serializer and deserializer for the Rust Language."
 edition = "2021"
 rust-version = "1.65"
 
@@ -18,8 +19,8 @@ rust-version = "1.65"
 proc_macro = true
 
 [dependencies]
-anyhow = "1.0.1"
+anyhow = "1"
 itertools = { version = ">=0.10, <0.13", default-features = false, features = ["use_alloc"] }
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "2", features = [ "extra-traits" ] }
+syn = { version = "2", features = ["extra-traits"] }

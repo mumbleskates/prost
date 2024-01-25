@@ -18,6 +18,13 @@ cache:
 stages:
   - test
 
+lint:
+  stage: test
+  script:
+    - rustup component add clippy
+    - cargo clippy --all --all-targets --all-features
+    - cargo clippy --all --all-targets --no-default-features
+
 test:
   stage: test
   script:

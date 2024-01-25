@@ -10,24 +10,24 @@ authors = [
 license = "Apache-2.0"
 repository = "https://github.com/mumbleskates/bilrost"
 readme = "README.md"
-description = "A Protocol Buffers implementation for the Rust Language."
-keywords = ["protobuf", "serialization"]
+description = "A compact protobuf-like serializer and deserializer for the Rust Language."
+keywords = ["serialization"]
 categories = ["encoding"]
 edition = "2021"
 rust-version = "1.65"
 
 [workspace]
 members = [
-  "bilrost-derive",
-  "bilrost-types",
+    "bilrost-derive",
+    "bilrost-types",
 ]
 
 exclude = [
-  # The fuzz crate can't be compiled or tested without the 'cargo fuzz' command,
-  # so exclude it from normal builds.
-  "fuzz",
-  # Same counts for the afl fuzz targets
-  "afl",
+    # The fuzz crate can't be compiled or tested without the 'cargo fuzz' command,
+    # so exclude it from normal builds.
+    "fuzz",
+    # Same counts for the afl fuzz targets
+    "afl",
 ]
 
 [lib]
@@ -35,17 +35,22 @@ exclude = [
 bench = false
 
 [features]
-default = ["bilrost-derive", "std"]
+default = ["derive", "std"]
+derive = ["dep:bilrost-derive"]
+extended-diagnostics = ["dep:const_panic"]
+hashbrown = ["dep:hashbrown"]
 no-recursion-limit = []
 std = []
 
 [dependencies]
 bytes = { version = "1", default-features = false }
 bilrost-derive = { version = "0.12.3", path = "bilrost-derive", optional = true }
+const_panic = { version = "0.2", optional = true }
+hashbrown = { version = ">=0.1.0", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", default-features = false }
-env_logger = { version = "0.10", default-features = false }
+env_logger = { version = "0.11", default-features = false }
 log = "0.4"
 proptest = "1"
 rand = "0.8"
