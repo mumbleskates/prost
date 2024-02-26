@@ -12,6 +12,7 @@ use crate::DecodeErrorKind::{
 };
 use crate::{decode_length_delimiter, DecodeError, DecodeErrorKind};
 
+mod buf;
 mod fixed;
 mod general;
 mod map;
