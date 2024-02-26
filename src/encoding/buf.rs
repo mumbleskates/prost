@@ -45,14 +45,9 @@ impl ReverseBuf {
         self.capacity
     }
 
-    #[inline]
-    fn unused_capacity(&self) -> usize {
-        self.front
-    }
-
     #[inline(always)]
     pub fn plan_reservation(&mut self, additional: usize) {
-        let Some(more_needed) = additional.checked_sub(self.unused_capacity()) else {
+        let Some(more_needed) = additional.checked_sub(self.front) else {
             return; // There is already enough capacity for `additional` more bytes.
         };
         if self.planned_capacity.unsigned_abs() > more_needed {
@@ -63,7 +58,7 @@ impl ReverseBuf {
 
     #[inline]
     pub fn plan_reservation_exact(&mut self, additional: usize) {
-        let Some(more_needed) = additional.checked_sub(self.unused_capacity()) else {
+        let Some(more_needed) = additional.checked_sub(self.front) else {
             return;
         };
         self.planned_capacity = (self.capacity + more_needed) as isize;
