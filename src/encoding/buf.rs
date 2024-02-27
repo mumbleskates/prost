@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::cmp::max;
+use core::cmp::{max, min};
 use core::marker::PhantomData;
 use core::mem::{self, transmute, MaybeUninit};
 use core::ptr;
@@ -75,16 +75,17 @@ impl ReverseBuf {
         let copy_data = |data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]| {
             while !dest_chunk.is_empty() {
                 let src = data.chunk();
-                // SAFETY: we are just initializing dest_chunk with bytes from `data`.
+                let copy_size = min(src.len(), dest_chunk.len());
+                // SAFETY: we are initializing dest_chunk with bytes from `data`.
                 unsafe {
                     ptr::copy_nonoverlapping(
                         src.as_ptr(),
                         dest_chunk.as_mut_ptr() as *mut u8,
-                        src.len(),
+                        copy_size,
                     );
                 }
-                dest_chunk = &mut dest_chunk[src.len()..];
-                data.advance(src.len());
+                dest_chunk = &mut dest_chunk[copy_size..];
+                data.advance(copy_size);
             }
         };
 
@@ -292,5 +293,21 @@ mod test {
         buf.prepend(b"world".as_slice());
         buf.prepend(b"hello ".as_slice());
         check_read(buf, b"hello world!");
+    }
+
+    #[test]
+    fn build_bigger_and_read() {
+        let mut buf = ReverseBuf::new();
+        buf.prepend(b"!".as_slice());
+        buf.prepend(b"world".as_slice());
+        buf.prepend(b"hello ".as_slice());
+        let mut buf2 = ReverseBuf::new();
+        buf2.prepend(buf.reader()); // 1
+        buf.prepend(buf2.reader()); // 2
+        buf2.prepend(buf.reader()); // 3
+        buf.prepend(buf2.reader()); // 5
+        buf2.prepend(buf.reader()); // 8
+        buf.prepend(buf2.reader()); // 13
+        check_read(buf, b"hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!");
     }
 }
