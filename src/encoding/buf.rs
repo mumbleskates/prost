@@ -1,7 +1,8 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::cmp::min;
 use core::marker::PhantomData;
-use core::mem::{self, MaybeUninit};
+use core::mem::{self, transmute, MaybeUninit};
 use core::ptr;
 
 use bytes::Buf;
@@ -110,14 +111,10 @@ impl ReverseBuf {
             } else {
                 // We planned a minimum size for the new chunk. Choose the actual size for that
                 // allocation, planning to at least double in size.
-                [
-                    MIN_CHUNK_SIZE,
-                    self.capacity,
+                min(
+                    min(MIN_CHUNK_SIZE, self.capacity),
                     self.planned_capacity.unsigned_abs(),
-                ]
-                .into_iter()
-                .min()
-                .unwrap()
+                )
             };
 
             // Create the ownership of the new chunk
@@ -153,6 +150,16 @@ impl ReverseBuf {
             self.planned_capacity = 0; // reset planned capacity since we already allocated
         }
     }
+
+    /// Returns a reader that references this buf's value, which implements `bytes::Buf` without
+    /// draining bytes from the buffer.
+    pub fn reader(&self) -> ReverseBufReader {
+        ReverseBufReader {
+            chunks: self.chunks.as_slice(),
+            front: self.front,
+            capacity: self.capacity,
+        }
+    }
 }
 
 impl Default for ReverseBuf {
@@ -163,73 +170,94 @@ impl Default for ReverseBuf {
 
 // TODO(widders): clone
 
-// impl Buf for ReverseBuf<u8> {
-//     #[inline]
-//     fn remaining(&self) -> usize {
-//         self.len()
-//     }
-//
-//     #[inline(always)]
-//     fn chunk(&self) -> &[u8] {
-//         let Some(front_chunk) = self.chunks.last() else {
-//             return &[];
-//         };
-//         debug_assert!(self.front < front_chunk.len());
-//         unsafe { transmute(front_chunk.get_unchecked(self.front..)) }
-//     }
-//
-//     #[inline]
-//     fn advance(&mut self, cnt: usize) {
-//         if cnt == 0 {
-//             return;
-//         }
-//         if cnt > self.len() {
-//             panic!("advanced past end");
-//         };
-//         debug_assert!(!self.chunks.is_empty());
-//         // Front chunk will be a reference to the current front chunk.
-//         let mut front_chunk = unsafe { self.chunks.last_mut().unwrap_unchecked() };
-//         // Live front will be the index of the first live item in the current front chunk.
-//         let mut live_front = self.front;
-//         // New front is how far from the front of the front chunk the real front of the buffer is.
-//         // We will drop chunks and subtract their length from this value until it is an index in the
-//         // new front chunk.
-//         let mut new_front = self.front + cnt;
-//         let mut new_capacity = self.capacity;
-//
-//         // Drop chunks for as long as they are obsoleted
-//         while new_front >= front_chunk.len() {
-//             let mut to_drop = unsafe { self.chunks.pop().unwrap_unchecked() };
-//             unsafe {
-//                 for item in to_drop.get_unchecked_mut(live_front..) {
-//                     drop_in_place(item.as_mut_ptr())
-//                 }
-//             }
-//             new_front -= to_drop.len();
-//             new_capacity -= to_drop.len();
-//             drop(to_drop);
-//             live_front = 0;
-//             // Get the new front chunk
-//             front_chunk = match self.chunks.last_mut() {
-//                 None => {
-//                     // We've deleted all our chunks and should be empty now.
-//                     debug_assert_eq!(new_front, 0);
-//                     break;
-//                 }
-//                 Some(front_chunk) => front_chunk,
-//             };
-//         }
-//
-//         unsafe { for item in front_chunk.get_unchecked_mut(live_front..new_front) {} }
-//
-//         // TODO: this
-//         self.front = live_front;
-//         debug_assert!(
-//             self.chunks
-//                 .last()
-//                 .map(|front_chunk| front_chunk.len() - 1)
-//                 .unwrap_or(0)
-//                 <= self.front
-//         );
-//     }
-// }
+/// The implementation of `bytes::Buf` for `ReverseBuf` drains bytes from the buffer as they are
+/// advanced past. Calls to `bytes::Buf::advance` undo any planned reservations.
+impl Buf for ReverseBuf {
+    #[inline]
+    fn remaining(&self) -> usize {
+        self.len()
+    }
+
+    #[inline(always)]
+    fn chunk(&self) -> &[u8] {
+        let Some(front_chunk) = self.chunks.last() else {
+            return &[];
+        };
+        debug_assert!(self.front < front_chunk.len());
+        // SAFETY: front is always a valid index in the front chunk, and the bytes at and
+        // after that index are always initialized.
+        unsafe { transmute(front_chunk.get_unchecked(self.front..)) }
+    }
+
+    #[inline]
+    fn advance(&mut self, cnt: usize) {
+        if cnt == 0 {
+            return;
+        }
+        if cnt > self.len() {
+            panic!("advanced past end");
+        };
+        // Un-plan any particular growth.
+        self.planned_capacity = 0;
+        // Front becomes the number of bytes from the front that the buffer will end. This
+        // temporarily breaks our invariant that front must always be a valid index in the front
+        // chunk, so we will be removing chunks and subtracting from front until it fits.
+        self.front += cnt;
+        // Pop chunks off the front of the buffer until the new front doesn't overflow the front
+        // chunk
+        while self.front >= self.front_chunk_mut().len() {
+            let removed_capacity = self.chunks.pop().unwrap().len();
+            self.capacity -= removed_capacity;
+            self.front -= removed_capacity;
+        }
+    }
+}
+
+pub struct ReverseBufReader<'a> {
+    /// Buffer being read
+    chunks: &'a [Box<[MaybeUninit<u8>]>],
+    /// Index of the front byte in the front chunk (the last in the slice)
+    front: usize,
+    /// Enclosed capacity
+    capacity: usize,
+}
+
+impl Buf for ReverseBufReader<'_> {
+    #[inline]
+    fn remaining(&self) -> usize {
+        self.capacity - self.front
+    }
+
+    #[inline(always)]
+    fn chunk(&self) -> &[u8] {
+        let Some(front_chunk) = self.chunks.last() else {
+            return &[];
+        };
+        debug_assert!(self.front < front_chunk.len());
+        // SAFETY: front is always a valid index in the front chunk, and the bytes at and
+        // after that index are always initialized.
+        unsafe { transmute(front_chunk.get_unchecked(self.front..)) }
+    }
+
+    #[inline]
+    fn advance(&mut self, cnt: usize) {
+        if cnt == 0 {
+            return;
+        }
+        if cnt > self.remaining() {
+            panic!("advanced past end");
+        };
+        self.front += cnt;
+        loop {
+            let last_chunk_size = self.chunks.last().unwrap().len();
+            if self.front < last_chunk_size {
+                break;
+            }
+            // Snip off the first chunk from the end of the slice (chunks are in reverse order,
+            // remember)
+            self.chunks = &self.chunks[..self.chunks.len() - 1];
+            self.front -= last_chunk_size;
+            self.capacity -= last_chunk_size;
+        }
+    }
+}
