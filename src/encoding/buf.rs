@@ -308,6 +308,71 @@ mod test {
         buf.prepend(buf2.reader()); // 5
         buf2.prepend(buf.reader()); // 8
         buf.prepend(buf2.reader()); // 13
-        check_read(buf, b"hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!hello world!");
+        assert_eq!(buf.chunks.len(), 3);
+        check_read(
+            buf,
+            b"hello world!hello world!hello world!hello world!hello world!hello world!\
+            hello world!hello world!hello world!hello world!hello world!hello world!hello world!",
+        );
+    }
+
+    #[test]
+    fn build_with_planned_reservation() {
+        let mut buf = ReverseBuf::new();
+        buf.prepend(b"!".as_slice());
+        buf.prepend(b"world".as_slice());
+        buf.prepend(b"hello ".as_slice());
+        buf.plan_reservation(b"hello world!".len() * 12);
+        let mut buf2 = ReverseBuf::new();
+        buf2.prepend(buf.reader()); // 1
+        buf.prepend(buf2.reader()); // 2
+        buf2.prepend(buf.reader()); // 3
+        buf.prepend(buf2.reader()); // 5
+        buf2.prepend(buf.reader()); // 8
+        buf.prepend(buf2.reader()); // 13
+        // Only one additional chunk was allocated
+        assert_eq!(buf.chunks.len(), 2);
+        // No extra capacity exists in the buffer at this point
+        assert_eq!(buf.capacity() - buf.len(), 0);
+        check_read(
+            buf,
+            b"hello world!hello world!hello world!hello world!hello world!hello world!\
+            hello world!hello world!hello world!hello world!hello world!hello world!hello world!",
+        );
+    }
+
+    #[test]
+    fn build_with_initial_planned_reservation() {
+        let mut buf = ReverseBuf::new();
+        buf.plan_reservation(b"hello world!".len() * 13);
+        buf.prepend(b"!".as_slice());
+        buf.prepend(b"world".as_slice());
+        buf.prepend(b"hello ".as_slice());
+        let mut buf2 = ReverseBuf::new();
+        buf2.prepend(buf.reader()); // 1
+        buf.prepend(buf2.reader()); // 2
+        buf2.prepend(buf.reader()); // 3
+        buf.prepend(buf2.reader()); // 5
+        buf2.prepend(buf.reader()); // 8
+        buf.prepend(buf2.reader()); // 13
+        assert_eq!(buf.chunks.len(), 1); // Only one chunk was allocated in total
+        assert_eq!(buf.capacity() - buf.len(), 0); // No extra capacity exists in the buffer
+        check_read(
+            buf,
+            b"hello world!hello world!hello world!hello world!hello world!hello world!\
+            hello world!hello world!hello world!hello world!hello world!hello world!hello world!",
+        );
+    }
+    
+    #[test]
+    fn build_with_exact_planned_reservation() {
+        let mut buf = ReverseBuf::new();
+        buf.plan_reservation_exact(b"hello world!".len());
+        buf.prepend(b"!".as_slice());
+        buf.prepend(b"world".as_slice());
+        buf.prepend(b"hello ".as_slice());
+        assert_eq!(buf.chunks.len(), 1); // Only one chunk was allocated in total
+        assert_eq!(buf.capacity() - buf.len(), 0); // No extra capacity exists in the buffer
+        check_read(buf, b"hello world!");
     }
 }
