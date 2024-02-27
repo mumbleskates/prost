@@ -26,6 +26,7 @@ pub struct ReverseBuf {
 }
 
 impl ReverseBuf {
+    /// Creates a new empty buffer.
     pub fn new() -> Self {
         Self {
             chunks: Vec::new(),
@@ -36,16 +37,20 @@ impl ReverseBuf {
         }
     }
 
+    /// Returns the number of bytes written into this buffer so far.
     #[inline]
     pub fn len(&self) -> usize {
         self.capacity - self.front
     }
 
+    /// Returns the number of bytes this buffer currently has allocated capacity for.
     #[inline]
     pub fn capacity(&self) -> usize {
         self.capacity
     }
 
+    /// Ensures that the buffer will, upon its next allocation, reserve at least enough space to fit
+    /// this many more bytes than are currently in the buffer.
     #[inline(always)]
     pub fn plan_reservation(&mut self, additional: usize) {
         let Some(more_needed) = additional.checked_sub(self.front) else {
@@ -57,6 +62,13 @@ impl ReverseBuf {
         self.planned_capacity = -(more_needed as isize);
     }
 
+    /// Ensures that the buffer will, upon its next allocation, reserve enough space to fit this
+    /// many more bytes than are in the buffer at present. If there is already enough additional
+    /// capacity to fit this many more bytes, this method has no effect.
+    ///
+    /// If this method is repeatedly called interleaved with calls to `prepend` that trigger new
+    /// allocations, the buffer may become very fragmented as this method can be used to control the
+    /// exact sizes of all its allocations. Use sparingly.
     #[inline]
     pub fn plan_reservation_exact(&mut self, additional: usize) {
         let Some(more_needed) = additional.checked_sub(self.front) else {
@@ -65,11 +77,15 @@ impl ReverseBuf {
         self.planned_capacity = (self.capacity + more_needed) as isize;
     }
 
+    /// Returns the slice of bytes ordered at the front of the buffer.
     #[inline]
     fn front_chunk_mut(&mut self) -> &mut [MaybeUninit<u8>] {
         self.chunks.last_mut().map(Box::as_mut).unwrap_or(&mut [])
     }
 
+    /// Prepends bytes to the buffer. These bytes will still be in the order they appear in the
+    /// provided `Buf` when they are read back, but they will appear immediately before any bytes
+    /// already written to the buffer.
     #[inline]
     pub fn prepend<B: Buf>(&mut self, mut data: B) {
         let copy_data = |data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]| {
@@ -221,12 +237,14 @@ impl Buf for ReverseBuf {
     }
 }
 
+/// Non-draining reader-by-reference for `ReverseBuf`, implementing `bytes::Buf`.
 pub struct ReverseBufReader<'a> {
     /// Buffer being read
     chunks: &'a [Box<[MaybeUninit<u8>]>],
-    /// Index of the front byte in the front chunk (the last in the slice)
+    /// Index of the front byte in the front chunk (the last in the slice). If chunks is non-empty,
+    /// front is always a valid index inside it.
     front: usize,
-    /// Enclosed capacity
+    /// Total size of all the boxes covered by chunks.
     capacity: usize,
 }
 
@@ -330,7 +348,7 @@ mod test {
         buf.prepend(buf2.reader()); // 5
         buf2.prepend(buf.reader()); // 8
         buf.prepend(buf2.reader()); // 13
-        // Only one additional chunk was allocated
+                                    // Only one additional chunk was allocated
         assert_eq!(buf.chunks.len(), 2);
         // No extra capacity exists in the buffer at this point
         assert_eq!(buf.capacity() - buf.len(), 0);
@@ -363,7 +381,7 @@ mod test {
             hello world!hello world!hello world!hello world!hello world!hello world!hello world!",
         );
     }
-    
+
     #[test]
     fn build_with_exact_planned_reservation() {
         let mut buf = ReverseBuf::new();
