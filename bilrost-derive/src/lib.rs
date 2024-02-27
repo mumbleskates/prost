@@ -17,9 +17,9 @@ use itertools::Itertools;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
-    parse2, parse_str, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Fields,
-    FieldsNamed, FieldsUnnamed, Ident, ImplGenerics, Index, Meta, MetaList, MetaNameValue,
-    TypeGenerics, Variant, WhereClause,
+    parse2, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, FieldsNamed,
+    FieldsUnnamed, Ident, ImplGenerics, Index, Meta, MetaList, MetaNameValue, TypeGenerics,
+    Variant, WhereClause,
 };
 
 use self::field::{bilrost_attrs, Field};
@@ -586,12 +586,9 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
         }
     };
 
-    let impl_wrapper_const_ident = parse_str::<Ident>(
-        &("__BILROST_DERIVED_IMPL_MESSAGE_FOR_".to_owned() + &ident.to_string()),
-    )?;
     let aliases = encoder_alias_header();
     let expanded = quote! {
-        const #impl_wrapper_const_ident: () = {
+        const _: () = {
             #aliases
 
             #expanded
@@ -683,12 +680,9 @@ fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
         }
     };
 
-    let impl_wrapper_const_ident = parse_str::<Ident>(
-        &("__BILROST_DERIVED_IMPL_DISTINGUISHED_MESSAGE_FOR_".to_owned() + &ident.to_string()),
-    )?;
     let aliases = encoder_alias_header();
     let expanded = quote! {
-        const #impl_wrapper_const_ident: () = {
+        const _: () = {
             #aliases
 
             #expanded
@@ -762,8 +756,6 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
         .iter()
         .map(|(variant, value)| quote!(#value => #ident::#variant));
 
-    let is_valid_doc = format!("Returns `true` if `value` is a variant of `{}`.", ident);
-
     // When the type has a zero-valued variant, we implement `EmptyState`. When it doesn't, we
     // need an alternate way to create a value to be overwritten, so we impl `NewForOverwrite`
     // directly.
@@ -810,86 +802,87 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
     };
 
     let expanded = quote! {
-        impl #impl_generics #ident #ty_generics #where_clause {
-            #[doc=#is_valid_doc]
-            pub fn is_valid(value: u32) -> bool {
-                #[forbid(unreachable_patterns)]
-                match value {
-                    #(#is_valid,)*
-                    _ => false,
-                }
-            }
-        }
-
-        impl #impl_generics ::core::convert::From<#ident #ty_generics> for u32 #where_clause {
-            fn from(value: #ident) -> u32 {
-                match value {
+        impl #impl_generics ::bilrost::Enumeration for #ident #ty_generics #where_clause {
+            #[inline]
+            fn to_number(&self) -> u32 {
+                match self {
                     #(#to_u32,)*
                 }
             }
-        }
 
-        impl #impl_generics ::core::convert::TryFrom<u32> for #ident #ty_generics #where_clause {
-            type Error = u32;
-
-            fn try_from(value: u32) -> ::core::result::Result<#ident, u32> {
+            #[inline]
+            fn try_from_number(value: u32) -> ::core::result::Result<#ident, u32> {
                 #[forbid(unreachable_patterns)]
                 ::core::result::Result::Ok(match value {
                     #(#try_from,)*
                     _ => ::core::result::Result::Err(value)?,
                 })
             }
+
+            #[inline]
+            fn is_valid(__n: u32) -> bool {
+                #[forbid(unreachable_patterns)]
+                match __n {
+                    #(#is_valid,)*
+                    _ => false,
+                }
+            }
         }
 
         #creation_impl
 
-        impl #impl_generics ::bilrost::encoding::Wiretyped<#ident #ty_generics>
-        for ::bilrost::encoding::General #where_clause {
+        impl #impl_generics ::bilrost::encoding::Wiretyped<::bilrost::encoding::General>
+        for #ident #ty_generics #where_clause {
             const WIRE_TYPE: ::bilrost::encoding::WireType = ::bilrost::encoding::WireType::Varint;
         }
 
-        impl #impl_generics ::bilrost::encoding::ValueEncoder<#ident #ty_generics>
-        for ::bilrost::encoding::General #where_clause {
+        impl #impl_generics ::bilrost::encoding::ValueEncoder<::bilrost::encoding::General>
+        for #ident #ty_generics #where_clause {
             #[inline]
-            fn encode_value<B: ::bilrost::bytes::BufMut + ?Sized>(value: &#ident, buf: &mut B) {
-                ::bilrost::encoding::encode_varint(u32::from(value.clone()) as u64, buf);
+            fn encode_value<__B: ::bilrost::bytes::BufMut + ?Sized>(value: &Self, buf: &mut __B) {
+                ::bilrost::encoding::encode_varint(
+                    ::bilrost::Enumeration::to_number(value) as u64,
+                    buf,
+                );
             }
 
             #[inline]
-            fn value_encoded_len(value: &#ident #ty_generics) -> usize {
-                ::bilrost::encoding::encoded_len_varint(u32::from(value.clone()) as u64)
+            fn value_encoded_len(value: &Self) -> usize {
+                ::bilrost::encoding::encoded_len_varint(
+                    ::bilrost::encoding::Enumeration::to_number(value) as u64
+                )
             }
 
             #[inline]
-            fn decode_value<B: ::bilrost::bytes::Buf + ?Sized>(
-                value: &mut #ident #ty_generics,
-                mut buf: ::bilrost::encoding::Capped<B>,
+            fn decode_value<__B: ::bilrost::bytes::Buf + ?Sized>(
+                value: &mut Self,
+                mut buf: ::bilrost::encoding::Capped<__B>,
                 _ctx: ::bilrost::encoding::DecodeContext,
             ) -> Result<(), ::bilrost::DecodeError> {
-                if let ::core::result::Result::Ok(int_value) =
-                    <u32 as ::core::convert::TryFrom<_>>::try_from(buf.decode_varint()?)
-                {
-                    if let ::core::result::Result::Ok(converted) =
-                        <#ident #ty_generics as ::core::convert::TryFrom<_>>::try_from(int_value)
-                    {
-                        *value = converted;
-                        return Ok(());
-                    }
-                }
-                Err(::bilrost::DecodeError::new(::bilrost::DecodeErrorKind::OutOfDomainValue))
+                let decoded = buf.decode_varint()?;
+                let in_range = u32::try_from(decoded)
+                    .map_err(|_| ::bilrost::DecodeErrorKind::OutOfDomainValue)?;
+                *value = <Self as ::bilrost::Enumeration>::try_from_number(in_range)
+                    .map_err(|_| ::bilrost::DecodeErrorKind::OutOfDomainValue)?;
+                Ok(())
             }
         }
 
-        impl #impl_generics ::bilrost::encoding::DistinguishedValueEncoder<#ident #ty_generics>
-        for ::bilrost::encoding::General #where_clause {
+        impl #impl_generics
+        ::bilrost::encoding::DistinguishedValueEncoder<::bilrost::encoding::General>
+        for #ident #ty_generics #where_clause {
             #[inline]
-            fn decode_value_distinguished<B: ::bilrost::bytes::Buf + ?Sized>(
-                value: &mut #ident,
-                buf: ::bilrost::encoding::Capped<B>,
+            fn decode_value_distinguished<__B: ::bilrost::bytes::Buf + ?Sized>(
+                value: &mut Self,
+                buf: ::bilrost::encoding::Capped<__B>,
                 allow_empty: bool,
                 ctx: ::bilrost::encoding::DecodeContext,
             ) -> Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
-                <Self as ::bilrost::encoding::ValueEncoder<#ident>>::decode_value(value, buf, ctx)?;
+                ::bilrost::encoding::ValueEncoder::<::bilrost::encoding::General>::decode_value(
+                    value,
+                    buf,
+                    ctx,
+                )?;
                 #check_empty
                 Ok(::bilrost::Canonicity::Canonical)
             }
@@ -1059,9 +1052,6 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         quote!(#ident::#variant_ident #with_value => #encoded_len)
     });
 
-    let impl_wrapper_const_ident =
-        parse_str::<Ident>(&("__BILROST_DERIVED_IMPL_ONEOF_FOR_".to_owned() + &ident.to_string()))?;
-    let aliases = encoder_alias_header();
     let expanded = if let Some(empty_ident) = empty_variant {
         let current_tag = fields.iter().map(|(variant_ident, field)| {
             let tag = field.tags()[0];
@@ -1095,77 +1085,73 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         });
 
         quote! {
-            const #impl_wrapper_const_ident: () = {
-                #aliases
+            impl #impl_generics ::bilrost::encoding::Oneof
+            for #ident #ty_generics #where_clause
+            {
+                const FIELD_TAGS: &'static [u32] = &[#(#sorted_tags),*];
 
-                impl #impl_generics ::bilrost::encoding::Oneof
-                for #ident #ty_generics #where_clause
-                {
-                    const FIELD_TAGS: &'static [u32] = &[#(#sorted_tags),*];
-
-                    fn oneof_encode<__B: ::bilrost::bytes::BufMut + ?Sized>(
-                        &self,
-                        buf: &mut __B,
-                        tw: &mut ::bilrost::encoding::TagWriter,
-                    ) {
-                        match self {
-                            #ident::#empty_ident => {}
-                            #(#encode,)*
-                        }
-                    }
-
-                    fn oneof_encoded_len(
-                        &self,
-                        tm: &mut ::bilrost::encoding::TagMeasurer,
-                    ) -> usize {
-                        match self {
-                            #ident::#empty_ident => 0,
-                            #(#encoded_len,)*
-                        }
-                    }
-
-                    fn oneof_current_tag(&self) -> ::core::option::Option<u32> {
-                        match self {
-                            #ident::#empty_ident => ::core::option::Option::None,
-                            #(#current_tag,)*
-                        }
-                    }
-
-                    fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
-                        &mut self,
-                        tag: u32,
-                        wire_type: ::bilrost::encoding::WireType,
-                        duplicated: bool,
-                        buf: ::bilrost::encoding::Capped<__B>,
-                        ctx: ::bilrost::encoding::DecodeContext,
-                    ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
-                        match tag {
-                            #(#decode,)*
-                            _ => unreachable!(
-                                concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                            ),
-                        }
+                fn oneof_encode<__B: ::bilrost::bytes::BufMut + ?Sized>(
+                    &self,
+                    buf: &mut __B,
+                    tw: &mut ::bilrost::encoding::TagWriter,
+                ) {
+                    match self {
+                        #ident::#empty_ident => {}
+                        #(#encode,)*
                     }
                 }
 
-                impl #impl_generics ::bilrost::encoding::EmptyState
-                for #ident #ty_generics #where_clause {
-                    #[inline]
-                    fn empty() -> Self {
-                        #ident::#empty_ident
-                    }
-
-                    #[inline]
-                    fn is_empty(&self) -> bool {
-                        matches!(self, #ident::#empty_ident)
-                    }
-
-                    #[inline]
-                    fn clear(&mut self) {
-                        *self = Self::empty();
+                fn oneof_encoded_len(
+                    &self,
+                    tm: &mut ::bilrost::encoding::TagMeasurer,
+                ) -> usize {
+                    match self {
+                        #ident::#empty_ident => 0,
+                        #(#encoded_len,)*
                     }
                 }
-            };
+
+                fn oneof_current_tag(&self) -> ::core::option::Option<u32> {
+                    match self {
+                        #ident::#empty_ident => ::core::option::Option::None,
+                        #(#current_tag,)*
+                    }
+                }
+
+                fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
+                    &mut self,
+                    tag: u32,
+                    wire_type: ::bilrost::encoding::WireType,
+                    duplicated: bool,
+                    buf: ::bilrost::encoding::Capped<__B>,
+                    ctx: ::bilrost::encoding::DecodeContext,
+                ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
+                    match tag {
+                        #(#decode,)*
+                        _ => unreachable!(
+                            concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
+                        ),
+                    }
+                }
+            }
+
+            impl #impl_generics ::bilrost::encoding::EmptyState
+            for #ident #ty_generics #where_clause {
+                #[inline]
+                fn empty() -> Self {
+                    #ident::#empty_ident
+                }
+
+                #[inline]
+                fn is_empty(&self) -> bool {
+                    matches!(self, #ident::#empty_ident)
+                }
+
+                #[inline]
+                fn clear(&mut self) {
+                    *self = Self::empty();
+                }
+            }
         }
     } else {
         // The oneof enum has no "empty" unit variant, so we implement the "non-empty" trait.
@@ -1201,60 +1187,63 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         });
 
         quote! {
-            const #impl_wrapper_const_ident: () = {
-                #aliases
+            impl #impl_generics ::bilrost::encoding::NonEmptyOneof
+            for #ident #ty_generics #where_clause
+            {
+                const FIELD_TAGS: &'static [u32] = &[#(#sorted_tags),*];
 
-                impl #impl_generics ::bilrost::encoding::NonEmptyOneof
-                for #ident #ty_generics #where_clause
-                {
-                    const FIELD_TAGS: &'static [u32] = &[#(#sorted_tags),*];
-
-                    fn oneof_encode<__B: ::bilrost::bytes::BufMut + ?Sized>(
-                        &self,
-                        buf: &mut __B,
-                        tw: &mut ::bilrost::encoding::TagWriter,
-                    ) {
-                        match self {
-                            #(#encode,)*
-                        }
-                    }
-
-                    fn oneof_encoded_len(
-                        &self,
-                        tm: &mut ::bilrost::encoding::TagMeasurer,
-                    ) -> usize {
-                        match self {
-                            #(#encoded_len,)*
-                        }
-                    }
-
-                    fn oneof_current_tag(&self) -> u32 {
-                        match self {
-                            #(#current_tag,)*
-                        }
-                    }
-
-                    fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
-                        field: &mut ::core::option::Option<Self>,
-                        tag: u32,
-                        wire_type: ::bilrost::encoding::WireType,
-                        duplicated: bool,
-                        buf: ::bilrost::encoding::Capped<__B>,
-                        ctx: ::bilrost::encoding::DecodeContext,
-                    ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
-                        match tag {
-                            #(#decode,)*
-                            _ => unreachable!(
-                                concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                            ),
-                        }
+                fn oneof_encode<__B: ::bilrost::bytes::BufMut + ?Sized>(
+                    &self,
+                    buf: &mut __B,
+                    tw: &mut ::bilrost::encoding::TagWriter,
+                ) {
+                    match self {
+                        #(#encode,)*
                     }
                 }
-            };
+
+                fn oneof_encoded_len(
+                    &self,
+                    tm: &mut ::bilrost::encoding::TagMeasurer,
+                ) -> usize {
+                    match self {
+                        #(#encoded_len,)*
+                    }
+                }
+
+                fn oneof_current_tag(&self) -> u32 {
+                    match self {
+                        #(#current_tag,)*
+                    }
+                }
+
+                fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
+                    field: &mut ::core::option::Option<Self>,
+                    tag: u32,
+                    wire_type: ::bilrost::encoding::WireType,
+                    duplicated: bool,
+                    buf: ::bilrost::encoding::Capped<__B>,
+                    ctx: ::bilrost::encoding::DecodeContext,
+                ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
+                    match tag {
+                        #(#decode,)*
+                        _ => unreachable!(
+                            concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
+                        ),
+                    }
+                }
+            }
         }
     };
 
-    Ok(expanded)
+    let aliases = encoder_alias_header();
+    Ok(quote! {
+        const _: () = {
+            #aliases
+
+            #expanded
+        };
+    })
 }
 
 #[proc_macro_derive(Oneof, attributes(bilrost))]
@@ -1375,12 +1364,9 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         }
     };
 
-    let impl_wrapper_const_ident = parse_str::<Ident>(
-        &("__BILROST_DERIVED_IMPL_DISTINGUISHED_ONEOF_FOR_".to_owned() + &ident.to_string()),
-    )?;
     let aliases = encoder_alias_header();
     let expanded = quote! {
-        const #impl_wrapper_const_ident: () = {
+        const _: () = {
             #aliases
 
             #expanded
@@ -1458,7 +1444,7 @@ mod test {
                 #[bilrost(tag = "1")] bool,
                 #[bilrost(oneof = "2, 3")] B,
                 #[bilrost(tag = "4")] u32,
-                #[bilrost(tag = "5", encoder = "::custom<Z>")] String,
+                #[bilrost(tag = "5", encoding = "::custom<Z>")] String,
                 #[bilrost(tag = "1000")] i64,
                 #[bilrost(tag = "1001")] bool,
             );
@@ -1470,7 +1456,7 @@ mod test {
                 bool,
                 #[bilrost(oneof = "2, 3")] B,
                 #[bilrost(4)] u32,
-                #[bilrost(encoder(::custom< Z >))] String,
+                #[bilrost(encoding(::custom< Z >))] String,
                 #[bilrost(tag = 1000)] i64,
                 bool,
             );
@@ -1482,7 +1468,7 @@ mod test {
                 #[bilrost(tag(1))] bool,
                 #[bilrost(oneof(2, 3))] B,
                 u32,
-                #[bilrost(encoder = "::custom <Z>")] String,
+                #[bilrost(encoding = "::custom <Z>")] String,
                 #[bilrost(tag(1000))] i64,
                 bool,
             );
@@ -1494,7 +1480,7 @@ mod test {
                 #[bilrost(1)] bool,
                 #[bilrost(oneof(2, 3))] B,
                 u32,
-                #[bilrost(encoder(::custom<Z>))] String,
+                #[bilrost(encoding(::custom<Z>))] String,
                 #[bilrost(1000)] i64,
                 #[bilrost()] bool,
             );
@@ -1506,7 +1492,7 @@ mod test {
                 bool,
                 #[bilrost(oneof(2, 3))] B,
                 u32,
-                #[bilrost(encoder(::custom<Z>))] String,
+                #[bilrost(encoding(::custom<Z>))] String,
                 #[bilrost(1000)] i64,
                 bool,
             );
@@ -1588,7 +1574,7 @@ mod test {
     fn test_rejects_meaningless_empty_variant_attrs() {
         let output = try_oneof(quote!(
             enum AB {
-                #[bilrost(tag = 0, encoder(usize), anything_else)]
+                #[bilrost(tag = 0, encoding(usize), anything_else)]
                 Empty,
                 #[bilrost(1)]
                 A(bool),
@@ -1600,7 +1586,7 @@ mod test {
             output
                 .expect_err("unknown attrs on empty variant not detected")
                 .to_string(),
-            "Unknown attribute(s) on empty Oneof variant: tag = 0 , encoder (usize) , anything_else"
+            "Unknown attribute(s) on empty Oneof variant: tag = 0 , encoding (usize) , anything_else"
         );
     }
 
@@ -1610,7 +1596,7 @@ mod test {
             enum AB {
                 #[bilrost(1)]
                 A(u32),
-                #[bilrost(encoder(packed))]
+                #[bilrost(encoding(packed))]
                 B(Vec<String>),
             }
         ));

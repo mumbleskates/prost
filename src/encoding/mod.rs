@@ -26,7 +26,8 @@ mod value_traits;
 mod varint;
 
 pub use value_traits::{
-    Collection, DistinguishedCollection, DistinguishedMapping, EmptyState, Mapping, NewForOverwrite,
+    Collection, DistinguishedCollection, DistinguishedMapping, EmptyState, Enumeration, Mapping,
+    NewForOverwrite,
 };
 
 /// Fixed-size encoder. Encodes integers in fixed-size format.
@@ -555,19 +556,19 @@ pub fn skip_field<B: Buf + ?Sized>(
 }
 
 /// The core trait for encoding and decoding bilrost data.
-pub trait Encoder<T> {
+pub trait Encoder<E> {
     /// Encodes the a field with the given tag and value.
-    fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut TagWriter);
+    fn encode<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter);
     // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
     //  emit-reversed
     /// Returns the encoded length of the field, including the key.
-    fn encoded_len(tag: u32, value: &T, tm: &mut TagMeasurer) -> usize;
+    fn encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
     /// Decodes a field with the given wire type; the field's key should have already been consumed
     /// from the buffer.
     fn decode<B: Buf + ?Sized>(
         wire_type: WireType,
         duplicated: bool,
-        value: &mut T,
+        value: &mut Self,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError>;
@@ -576,12 +577,12 @@ pub trait Encoder<T> {
 /// Extension trait for canonical encoding and decoding. Distinguished decoding is available via
 /// this trait, and any type that implements this trait is guaranteed to always emit canonical data
 /// via `Encoder`.
-pub trait DistinguishedEncoder<T>: Encoder<T> {
+pub trait DistinguishedEncoder<E>: Encoder<E> {
     /// Decodes a field for the value, returning a value indicating how canonical the encoding was.
     fn decode_distinguished<B: Buf + ?Sized>(
         wire_type: WireType,
         duplicated: bool,
-        value: &mut T,
+        value: &mut Self,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError>;
@@ -1105,27 +1106,27 @@ mod with_canonicity {
 /// distinguished decoding without also implementing the corresponding expedient encoding, but
 /// this means that it can become a typo to use the relaxed decoding functions by accident when
 /// implementing the distinguished encoders, which could cause serious mishaps.
-pub trait Wiretyped<T> {
+pub trait Wiretyped<E> {
     const WIRE_TYPE: WireType;
 }
 
 /// Trait for encoding implementations for raw values that always encode to a single value. Used as
 /// the basis for all the other plain, optional, and repeated encodings.
-pub trait ValueEncoder<T>: Wiretyped<T> {
+pub trait ValueEncoder<E>: Wiretyped<E> {
     /// Encodes the given value unconditionally. This is guaranteed to emit data to the buffer.
-    fn encode_value<B: BufMut + ?Sized>(value: &T, buf: &mut B);
+    fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B);
 
     // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
     //  emit-reversed
     /// Returns the number of bytes the given value would be encoded as.
-    fn value_encoded_len(value: &T) -> usize;
+    fn value_encoded_len(value: &Self) -> usize;
 
     /// Returns the number of total bytes to encode all the values in the given container.
     #[inline]
     fn many_values_encoded_len<I>(values: I) -> usize
     where
         I: ExactSizeIterator,
-        I::Item: Deref<Target = T>,
+        I::Item: Deref<Target = Self>,
     {
         let len = values.len();
         Self::WIRE_TYPE.fixed_size().map_or_else(
@@ -1136,21 +1137,21 @@ pub trait ValueEncoder<T>: Wiretyped<T> {
 
     /// Decodes a field assuming the encoder's wire type directly from the buffer.
     fn decode_value<B: Buf + ?Sized>(
-        value: &mut T,
+        value: &mut Self,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError>;
 }
 
-pub trait DistinguishedValueEncoder<T>: Wiretyped<T>
+pub trait DistinguishedValueEncoder<E>: Wiretyped<E>
 where
-    T: Eq,
+    Self: Eq,
 {
     /// Decodes a field assuming the encoder's wire type directly from the buffer, also performing
     /// any additional validation required to guarantee that the value would be re-encoded into the
     /// exact same bytes.
     fn decode_value_distinguished<B: Buf + ?Sized>(
-        value: &mut T,
+        value: &mut Self,
         buf: Capped<B>,
         allow_empty: bool,
         ctx: DecodeContext,
@@ -1159,37 +1160,37 @@ where
 
 /// Affiliated helper trait for ValueEncoder that provides obligate implementations for handling
 /// field keys and wire types.
-pub trait FieldEncoder<T> {
+pub trait FieldEncoder<E> {
     /// Encodes exactly one field with the given tag and value into the buffer.
-    fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut TagWriter);
+    fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter);
     /// Returns the encoded length of the field including its key.
-    fn field_encoded_len(tag: u32, value: &T, tm: &mut TagMeasurer) -> usize;
+    fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
     /// Decodes a field directly from the buffer, also checking the wire type.
     fn decode_field<B: Buf + ?Sized>(
         wire_type: WireType,
-        value: &mut T,
+        value: &mut Self,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError>;
 }
 
-impl<T, E> FieldEncoder<T> for E
+impl<T, E> FieldEncoder<E> for T
 where
-    E: ValueEncoder<T>,
+    Self: ValueEncoder<E>,
 {
     #[inline]
-    fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut TagWriter) {
+    fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter) {
         tw.encode_key(tag, Self::WIRE_TYPE, buf);
         Self::encode_value(value, buf);
     }
     #[inline]
-    fn field_encoded_len(tag: u32, value: &T, tm: &mut TagMeasurer) -> usize {
+    fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize {
         tm.key_len(tag) + Self::value_encoded_len(value)
     }
     #[inline]
     fn decode_field<B: Buf + ?Sized>(
         wire_type: WireType,
-        value: &mut T,
+        value: &mut Self,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
@@ -1200,21 +1201,20 @@ where
 
 /// Affiliated helper trait for DistinguishedValueEncoder that provides obligate implementations for
 /// handling field keys and wire types.
-pub trait DistinguishedFieldEncoder<T> {
+pub trait DistinguishedFieldEncoder<E> {
     /// Decodes a field directly from the buffer, also checking the wire type.
     fn decode_field_distinguished<B: Buf + ?Sized>(
         wire_type: WireType,
-        value: &mut T,
+        value: &mut Self,
         buf: Capped<B>,
         allow_empty: bool,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError>;
 }
 
-impl<T, E> DistinguishedFieldEncoder<T> for E
+impl<T, E> DistinguishedFieldEncoder<E> for T
 where
-    E: DistinguishedValueEncoder<T>,
-    T: Eq,
+    Self: DistinguishedValueEncoder<E> + Eq,
 {
     #[inline]
     fn decode_field_distinguished<B: Buf + ?Sized>(
@@ -1233,22 +1233,21 @@ where
 /// values wrapped in Option are always encoded the same.
 // TODO(widders): this would need to be broken up if a value type that may be encoded with different
 //  wire-types is implemented.
-impl<T, E> Encoder<Option<T>> for E
+impl<T, E> Encoder<E> for Option<T>
 where
-    E: ValueEncoder<T>,
-    T: NewForOverwrite,
+    T: NewForOverwrite + ValueEncoder<E>,
 {
     #[inline]
-    fn encode<B: BufMut + ?Sized>(tag: u32, value: &Option<T>, buf: &mut B, tw: &mut TagWriter) {
+    fn encode<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter) {
         if let Some(value) = value {
-            Self::encode_field(tag, value, buf, tw);
+            <T as FieldEncoder<E>>::encode_field(tag, value, buf, tw);
         }
     }
 
     #[inline]
-    fn encoded_len(tag: u32, value: &Option<T>, tm: &mut TagMeasurer) -> usize {
+    fn encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize {
         if let Some(value) = value {
-            Self::field_encoded_len(tag, value, tm)
+            <T as FieldEncoder<E>>::field_encoded_len(tag, value, tm)
         } else {
             0
         }
@@ -1258,14 +1257,14 @@ where
     fn decode<B: Buf + ?Sized>(
         wire_type: WireType,
         duplicated: bool,
-        value: &mut Option<T>,
+        value: &mut Self,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
         }
-        Self::decode_field(
+        <T as FieldEncoder<E>>::decode_field(
             wire_type,
             value.get_or_insert_with(T::new_for_overwrite),
             buf,
@@ -1276,10 +1275,10 @@ where
 
 /// Distinguished decoding for Option<T> is only different in that it calls the distinguished
 /// decoding codepath.
-impl<T, E> DistinguishedEncoder<Option<T>> for E
+impl<T, E> DistinguishedEncoder<E> for Option<T>
 where
-    E: DistinguishedValueEncoder<T> + Encoder<Option<T>>,
-    T: NewForOverwrite + Eq,
+    Self: Encoder<E>,
+    T: DistinguishedValueEncoder<E> + NewForOverwrite + Eq,
 {
     #[inline]
     fn decode_distinguished<B: Buf + ?Sized>(
@@ -1292,7 +1291,7 @@ where
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
         }
-        Self::decode_field_distinguished(
+        <T as DistinguishedFieldEncoder<E>>::decode_field_distinguished(
             wire_type,
             value.get_or_insert_with(T::new_for_overwrite),
             buf,
@@ -1445,33 +1444,33 @@ pub trait EnumerationHelper<FieldType> {
 
 impl<T> EnumerationHelper<u32> for T
 where
-    T: Into<u32> + TryFrom<u32, Error = u32>,
+    T: Enumeration,
 {
     type Input = T;
     type Output = Result<T, u32>;
 
     fn help_set(enum_val: Self) -> u32 {
-        enum_val.into()
+        enum_val.to_number()
     }
 
     fn help_get(field_val: u32) -> Result<T, u32> {
-        T::try_from(field_val)
+        T::try_from_number(field_val)
     }
 }
 
 impl<T> EnumerationHelper<Option<u32>> for T
 where
-    T: Into<u32> + TryFrom<u32, Error = u32>,
+    T: Enumeration,
 {
     type Input = Option<T>;
     type Output = Option<Result<T, u32>>;
 
     fn help_set(enum_val: Option<T>) -> Option<u32> {
-        enum_val.map(Into::into)
+        enum_val.map(|e| e.to_number())
     }
 
     fn help_get(field_val: Option<u32>) -> Option<Result<T, u32>> {
-        field_val.map(TryFrom::try_from)
+        field_val.map(Enumeration::try_from_number)
     }
 }
 
@@ -1482,9 +1481,9 @@ macro_rules! delegate_encoding {
         $(with where clause ($($where_clause:tt)*))?
         $(with generics ($($value_generics:tt)*))?
     ) => {
-        impl$(<$($value_generics)*>)? $crate::encoding::Encoder<$value_ty> for $from_ty
+        impl$(<$($value_generics)*>)? $crate::encoding::Encoder<$from_ty> for $value_ty
         where
-            $to_ty: $crate::encoding::Encoder<$value_ty>,
+            Self: $crate::encoding::Encoder<$to_ty>,
             $($($where_clause)*)?
         {
             #[inline]
@@ -1494,7 +1493,7 @@ macro_rules! delegate_encoding {
                 buf: &mut B,
                 tw: &mut $crate::encoding::TagWriter,
             ) {
-                <$to_ty>::encode(tag, value, buf, tw)
+                $crate::encoding::Encoder::<$to_ty>::encode(tag, value, buf, tw)
             }
 
             #[inline]
@@ -1503,7 +1502,7 @@ macro_rules! delegate_encoding {
                 value: &$value_ty,
                 tm: &mut $crate::encoding::TagMeasurer,
             ) -> usize {
-                <$to_ty>::encoded_len(tag, value, tm)
+                $crate::encoding::Encoder::<$to_ty>::encoded_len(tag, value, tm)
             }
 
             #[inline]
@@ -1514,7 +1513,13 @@ macro_rules! delegate_encoding {
                 buf: $crate::encoding::Capped<B>,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<(), DecodeError> {
-                <$to_ty>::decode(wire_type, duplicated, value, buf, ctx)
+                $crate::encoding::Encoder::<$to_ty>::decode(
+                    wire_type,
+                    duplicated,
+                    value,
+                    buf,
+                    ctx,
+                )
             }
         }
     };
@@ -1530,11 +1535,11 @@ macro_rules! delegate_encoding {
             $(with generics ($($value_generics)*))?
         );
 
-        impl$(<$($value_generics)*>)? $crate::encoding::DistinguishedEncoder<$value_ty>
-        for $from_ty
+        impl$(<$($value_generics)*>)? $crate::encoding::DistinguishedEncoder<$from_ty>
+        for $value_ty
         where
-            $to_ty: $crate::encoding::DistinguishedEncoder<$value_ty>,
-            Self: $crate::encoding::Encoder<$value_ty>,
+            Self: $crate::encoding::DistinguishedEncoder<$to_ty>
+                + $crate::encoding::Encoder<$to_ty>,
             $($($where_clause)*)?
         {
             #[inline]
@@ -1545,7 +1550,13 @@ macro_rules! delegate_encoding {
                 buf: $crate::encoding::Capped<B>,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
-                <$to_ty>::decode_distinguished(wire_type, duplicated, value, buf, ctx)
+                $crate::encoding::DistinguishedEncoder::<$to_ty>::decode_distinguished(
+                    wire_type,
+                    duplicated,
+                    value,
+                    buf,
+                    ctx,
+                )
             }
         }
     };
@@ -1559,28 +1570,28 @@ macro_rules! delegate_value_encoding {
         $(with where clause ($($where_clause:tt)+))?
         $(with generics ($($value_generics:tt)*))?
     ) => {
-        impl$(<$($value_generics)*>)? $crate::encoding::Wiretyped<$value_ty> for $from_ty
+        impl$(<$($value_generics)*>)? $crate::encoding::Wiretyped<$from_ty> for $value_ty
         where
-            $to_ty: $crate::encoding::Wiretyped<$value_ty>,
+            Self: $crate::encoding::Wiretyped<$to_ty>,
             $($($where_clause)+ ,)?
         {
             const WIRE_TYPE: $crate::encoding::WireType =
-                <$to_ty as $crate::encoding::Wiretyped<$value_ty>>::WIRE_TYPE;
+                <Self as $crate::encoding::Wiretyped<$to_ty>>::WIRE_TYPE;
         }
 
-        impl$(<$($value_generics)*>)? $crate::encoding::ValueEncoder<$value_ty> for $from_ty
+        impl$(<$($value_generics)*>)? $crate::encoding::ValueEncoder<$from_ty> for $value_ty
         where
-            $to_ty: $crate::encoding::ValueEncoder<$value_ty>,
+            Self: $crate::encoding::ValueEncoder<$to_ty>,
             $($($where_clause)+ ,)?
         {
             #[inline]
             fn encode_value<B: $crate::bytes::BufMut + ?Sized>(value: &$value_ty, buf: &mut B) {
-                <$to_ty>::encode_value(value, buf)
+                $crate::encoding::ValueEncoder::<$to_ty>::encode_value(value, buf)
             }
 
             #[inline]
             fn value_encoded_len(value: &$value_ty) -> usize {
-                <$to_ty>::value_encoded_len(value)
+                $crate::encoding::ValueEncoder::<$to_ty>::value_encoded_len(value)
             }
 
             #[inline]
@@ -1589,7 +1600,7 @@ macro_rules! delegate_value_encoding {
                 I: ExactSizeIterator,
                 I::Item: core::ops::Deref<Target = $value_ty>,
             {
-                <$to_ty>::many_values_encoded_len(values)
+                $crate::encoding::ValueEncoder::<$to_ty>::many_values_encoded_len(values)
             }
 
             #[inline]
@@ -1598,7 +1609,7 @@ macro_rules! delegate_value_encoding {
                 buf: $crate::encoding::Capped<B>,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<(), $crate::DecodeError> {
-                <$to_ty>::decode_value(value, buf, ctx)
+                $crate::encoding::ValueEncoder::<$to_ty>::decode_value(value, buf, ctx)
             }
         }
     };
@@ -1615,10 +1626,10 @@ macro_rules! delegate_value_encoding {
             $(with generics ($($value_generics)*))?
         );
 
-        impl$(<$($value_generics)*>)? $crate::encoding::DistinguishedValueEncoder<$value_ty>
-        for $from_ty
+        impl$(<$($value_generics)*>)? $crate::encoding::DistinguishedValueEncoder<$from_ty>
+        for $value_ty
         where
-            $to_ty: $crate::encoding::DistinguishedValueEncoder<$value_ty>,
+            Self: $crate::encoding::DistinguishedValueEncoder<$to_ty>,
             $($($expedient_where)+ ,)?
             $($($distinguished_where)+ ,)?
         {
@@ -1629,7 +1640,12 @@ macro_rules! delegate_value_encoding {
                 allow_empty: bool,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
-                <$to_ty>::decode_value_distinguished(value, buf, allow_empty, ctx)
+                DistinguishedValueEncoder::<$to_ty>::decode_value_distinguished(
+                    value,
+                    buf,
+                    allow_empty,
+                    ctx,
+                )
             }
         }
     };
@@ -1641,28 +1657,29 @@ pub(crate) use delegate_value_encoding;
 /// alternate wire-types in expedient mode.
 macro_rules! encoder_where_value_encoder {
     (
-        $encoder:ty
+        $encoding:ty
         $(, with where clause ($($where_clause:tt)*))?
         $(, with generics ($($generics:tt)*))?
     ) => {
         /// Encodes plain values only when they are non-default.
-        impl<T $(, $($generics)*)?> Encoder<T> for $encoder
+        impl<T $(, $($generics)*)?> Encoder<$encoding> for T
         where
-            $encoder: ValueEncoder<T>,
-            T: crate::encoding::value_traits::EmptyState,
+            T: $crate::encoding::EmptyState + ValueEncoder<$encoding>,
             $($($where_clause)*)?
         {
             #[inline]
             fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut TagWriter) {
-                if !crate::encoding::value_traits::EmptyState::is_empty(value) {
-                    <Self as crate::encoding::FieldEncoder<T>>::encode_field(tag, value, buf, tw);
+                if !$crate::encoding::EmptyState::is_empty(value) {
+                    $crate::encoding::FieldEncoder::<$encoding>::encode_field(
+                        tag, value, buf, tw);
                 }
             }
 
             #[inline]
             fn encoded_len(tag: u32, value: &T, tm: &mut TagMeasurer) -> usize {
-                if !crate::encoding::value_traits::EmptyState::is_empty(value) {
-                    <Self as crate::encoding::FieldEncoder<T>>::field_encoded_len(tag, value, tm)
+                if !$crate::encoding::EmptyState::is_empty(value) {
+                    $crate::encoding::FieldEncoder::<$encoding>::field_encoded_len(
+                        tag, value, tm)
                 } else {
                     0
                 }
@@ -1675,22 +1692,25 @@ macro_rules! encoder_where_value_encoder {
                 value: &mut T,
                 buf: Capped<B>,
                 ctx: DecodeContext,
-            ) -> Result<(), crate::DecodeError> {
+            ) -> Result<(), $crate::DecodeError> {
                 if duplicated {
                     return Err(
-                        crate::DecodeError::new(crate::DecodeErrorKind::UnexpectedlyRepeated)
+                        $crate::DecodeError::new($crate::DecodeErrorKind::UnexpectedlyRepeated)
                     );
                 }
-                <Self as crate::encoding::FieldEncoder<T>>::decode_field(wire_type, value, buf, ctx)
+                $crate::encoding::FieldEncoder::<$encoding>::decode_field(
+                    wire_type, value, buf, ctx)
             }
         }
 
         /// Distinguished encoding for plain values forbids encoding defaulted values. This includes
         /// directly-nested message types, which are not emitted when all their fields are default.
-        impl<T $(, $($generics)*)?> DistinguishedEncoder<T> for $encoder
+        impl<T $(, $($generics)*)?> $crate::encoding::DistinguishedEncoder<$encoding> for T
         where
-            $encoder: DistinguishedValueEncoder<T> + Encoder<T>,
-            T: Eq + crate::encoding::value_traits::EmptyState,
+            T: Eq
+                + $crate::encoding::EmptyState
+                + $crate::encoding::DistinguishedValueEncoder<$encoding>
+                + $crate::encoding::Encoder<$encoding>,
             $($($where_clause)*)?
         {
             #[inline]
@@ -1700,19 +1720,20 @@ macro_rules! encoder_where_value_encoder {
                 value: &mut T,
                 buf: Capped<B>,
                 ctx: DecodeContext,
-            ) -> Result<crate::Canonicity, crate::DecodeError> {
+            ) -> Result<$crate::Canonicity, $crate::DecodeError> {
                 if duplicated {
                     return Err(
-                        crate::DecodeError::new(crate::DecodeErrorKind::UnexpectedlyRepeated)
+                        $crate::DecodeError::new(crate::DecodeErrorKind::UnexpectedlyRepeated)
                     );
                 }
-                <Self as crate::encoding::DistinguishedFieldEncoder<T>>::decode_field_distinguished(
-                    wire_type,
-                    value,
-                    buf,
-                    false, // decoding a bare value, empty values are unacceptable
-                    ctx,
-                )
+                $crate::encoding::DistinguishedFieldEncoder::<$encoding>
+                    ::decode_field_distinguished(
+                        wire_type,
+                        value,
+                        buf,
+                        false, // decoding a bare value, empty values are unacceptable
+                        ctx,
+                    )
             }
         }
     };
@@ -1836,13 +1857,16 @@ mod test {
 
                 pub fn check_type<T, E>(value: T, tag: u32, wire_type: WireType) -> TestCaseResult
                 where
-                    T: Debug + NewForOverwrite + PartialEq,
-                    E: $encoder_trait<T>,
+                    T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
                 {
-                    let expected_len = E::encoded_len(tag, &value, &mut TagMeasurer::new());
+                    let expected_len = <T as Encoder<E>>::encoded_len(
+                        tag,
+                        &value,
+                        &mut TagMeasurer::new(),
+                    );
 
                     let mut buf = BytesMut::with_capacity(expected_len);
-                    E::encode(tag, &value, &mut buf, &mut TagWriter::new());
+                    <T as Encoder<E>>::encode(tag, &value, &mut buf, &mut TagWriter::new());
 
                     let buf = &mut buf.freeze();
                     let mut buf = Capped::new(buf);
@@ -1883,7 +1907,7 @@ mod test {
                     check_legal_remaining(tag, wire_type, buf.remaining())?;
 
                     let mut roundtrip_value = T::new_for_overwrite();
-                    E::$decode(
+                    <T as $encoder_trait<E>>::$decode(
                         wire_type,
                         false,
                         &mut roundtrip_value,
@@ -1910,13 +1934,16 @@ mod test {
                     wire_type: WireType,
                 ) -> TestCaseResult
                 where
-                    T: Debug + NewForOverwrite + PartialEq,
-                    E: $encoder_trait<T>,
+                    T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
                 {
-                    let expected_len = E::encoded_len(tag, value.borrow(), &mut TagMeasurer::new());
+                    let expected_len = <T as Encoder<E>>::encoded_len(
+                        tag,
+                        value.borrow(),
+                        &mut TagMeasurer::new(),
+                    );
 
                     let mut buf = BytesMut::with_capacity(expected_len);
-                    E::encode(tag, value.borrow(), &mut buf, &mut TagWriter::new());
+                    <T as Encoder<E>>::encode(tag, value.borrow(), &mut buf, &mut TagWriter::new());
 
                     let mut tr = TagReader::new();
                     let buf = &mut buf.freeze();
@@ -1953,7 +1980,7 @@ mod test {
                             decoded_wire_type
                         );
 
-                        E::$decode(
+                        <T as $encoder_trait<E>>::$decode(
                             wire_type,
                             not_first,
                             &mut roundtrip_value,
@@ -1976,104 +2003,99 @@ mod test {
     check_type!(distinguished, DistinguishedEncoder, decode_distinguished,
         enforce with canonical);
 
-    fn present_and_defaulted_errs<T, E>()
+    fn present_empty_not_canon<T, E>()
     where
-        T: Default + Eq,
-        E: Encoder<Option<T>> + DistinguishedEncoder<T>,
+        T: EmptyState + Eq + DistinguishedEncoder<E> + ValueEncoder<E>,
     {
         let mut encoded = <Vec<u8>>::new();
-        <E as Encoder<Option<T>>>::encode(
-            123,
-            &Some(T::default()),
-            &mut encoded,
-            &mut TagWriter::new(),
-        );
+        Encoder::<E>::encode(123, &Some(T::empty()), &mut encoded, &mut TagWriter::new());
         let mut buf = &*encoded;
         let mut capped = Capped::new(&mut buf);
         let (tag, wire_type) = TagReader::new().decode_key(capped.lend()).unwrap();
         assert_eq!(tag, 123);
+        let mut decoded = T::new_for_overwrite();
         assert_eq!(
-            E::decode_distinguished(
+            DistinguishedEncoder::<E>::decode_distinguished(
                 wire_type,
                 false,
-                &mut T::default(),
+                &mut decoded,
                 capped,
                 DecodeContext::default(),
             )
             .expect("decoding a plain field with an encoded defaulted value should succeed"),
             Canonicity::NotCanonical
         );
+        assert!(decoded.is_empty());
     }
 
     #[test]
-    fn test_present_and_defaulted() {
+    fn test_present_and_empty() {
         // Any value that's present not in an `Option` that is not omitted must err when decoded in
         // distinguished mode
-        present_and_defaulted_errs::<u32, General>();
-        present_and_defaulted_errs::<u64, General>();
-        present_and_defaulted_errs::<i32, General>();
-        present_and_defaulted_errs::<i64, General>();
-        present_and_defaulted_errs::<u32, Fixed>();
-        present_and_defaulted_errs::<u64, Fixed>();
-        present_and_defaulted_errs::<i32, Fixed>();
-        present_and_defaulted_errs::<i64, Fixed>();
-        present_and_defaulted_errs::<bool, General>();
-        present_and_defaulted_errs::<String, General>();
-        present_and_defaulted_errs::<Blob, General>();
-        present_and_defaulted_errs::<Vec<u8>, PlainBytes>();
+        present_empty_not_canon::<u32, General>();
+        present_empty_not_canon::<u64, General>();
+        present_empty_not_canon::<i32, General>();
+        present_empty_not_canon::<i64, General>();
+        present_empty_not_canon::<u32, Fixed>();
+        present_empty_not_canon::<u64, Fixed>();
+        present_empty_not_canon::<i32, Fixed>();
+        present_empty_not_canon::<i64, Fixed>();
+        present_empty_not_canon::<bool, General>();
+        present_empty_not_canon::<String, General>();
+        present_empty_not_canon::<Blob, General>();
+        present_empty_not_canon::<Vec<u8>, PlainBytes>();
 
-        present_and_defaulted_errs::<Vec<u32>, Packed<General>>();
-        present_and_defaulted_errs::<Vec<u64>, Packed<General>>();
-        present_and_defaulted_errs::<Vec<i32>, Packed<General>>();
-        present_and_defaulted_errs::<Vec<i64>, Packed<General>>();
-        present_and_defaulted_errs::<Vec<u32>, Packed<Fixed>>();
-        present_and_defaulted_errs::<Vec<u64>, Packed<Fixed>>();
-        present_and_defaulted_errs::<Vec<i32>, Packed<Fixed>>();
-        present_and_defaulted_errs::<Vec<i64>, Packed<Fixed>>();
-        present_and_defaulted_errs::<Vec<bool>, Packed<General>>();
-        present_and_defaulted_errs::<Vec<String>, Packed<General>>();
-        present_and_defaulted_errs::<Vec<Blob>, Packed<General>>();
-        present_and_defaulted_errs::<Vec<Vec<u8>>, Packed<PlainBytes>>();
+        present_empty_not_canon::<Vec<u32>, Packed<General>>();
+        present_empty_not_canon::<Vec<u64>, Packed<General>>();
+        present_empty_not_canon::<Vec<i32>, Packed<General>>();
+        present_empty_not_canon::<Vec<i64>, Packed<General>>();
+        present_empty_not_canon::<Vec<u32>, Packed<Fixed>>();
+        present_empty_not_canon::<Vec<u64>, Packed<Fixed>>();
+        present_empty_not_canon::<Vec<i32>, Packed<Fixed>>();
+        present_empty_not_canon::<Vec<i64>, Packed<Fixed>>();
+        present_empty_not_canon::<Vec<bool>, Packed<General>>();
+        present_empty_not_canon::<Vec<String>, Packed<General>>();
+        present_empty_not_canon::<Vec<Blob>, Packed<General>>();
+        present_empty_not_canon::<Vec<Vec<u8>>, Packed<PlainBytes>>();
 
-        present_and_defaulted_errs::<BTreeSet<u32>, Packed<General>>();
-        present_and_defaulted_errs::<BTreeSet<u64>, Packed<General>>();
-        present_and_defaulted_errs::<BTreeSet<i32>, Packed<General>>();
-        present_and_defaulted_errs::<BTreeSet<i64>, Packed<General>>();
-        present_and_defaulted_errs::<BTreeSet<u32>, Packed<Fixed>>();
-        present_and_defaulted_errs::<BTreeSet<u64>, Packed<Fixed>>();
-        present_and_defaulted_errs::<BTreeSet<i32>, Packed<Fixed>>();
-        present_and_defaulted_errs::<BTreeSet<i64>, Packed<Fixed>>();
-        present_and_defaulted_errs::<BTreeSet<bool>, Packed<General>>();
-        present_and_defaulted_errs::<BTreeSet<String>, Packed<General>>();
-        present_and_defaulted_errs::<BTreeSet<Blob>, Packed<General>>();
-        present_and_defaulted_errs::<BTreeSet<Vec<u8>>, Packed<PlainBytes>>();
+        present_empty_not_canon::<BTreeSet<u32>, Packed<General>>();
+        present_empty_not_canon::<BTreeSet<u64>, Packed<General>>();
+        present_empty_not_canon::<BTreeSet<i32>, Packed<General>>();
+        present_empty_not_canon::<BTreeSet<i64>, Packed<General>>();
+        present_empty_not_canon::<BTreeSet<u32>, Packed<Fixed>>();
+        present_empty_not_canon::<BTreeSet<u64>, Packed<Fixed>>();
+        present_empty_not_canon::<BTreeSet<i32>, Packed<Fixed>>();
+        present_empty_not_canon::<BTreeSet<i64>, Packed<Fixed>>();
+        present_empty_not_canon::<BTreeSet<bool>, Packed<General>>();
+        present_empty_not_canon::<BTreeSet<String>, Packed<General>>();
+        present_empty_not_canon::<BTreeSet<Blob>, Packed<General>>();
+        present_empty_not_canon::<BTreeSet<Vec<u8>>, Packed<PlainBytes>>();
 
-        present_and_defaulted_errs::<BTreeMap<u32, u32>, Map<General, General>>();
-        present_and_defaulted_errs::<BTreeMap<u64, u64>, Map<General, General>>();
-        present_and_defaulted_errs::<BTreeMap<i32, i32>, Map<General, General>>();
-        present_and_defaulted_errs::<BTreeMap<i64, i64>, Map<General, General>>();
-        present_and_defaulted_errs::<BTreeMap<u32, u32>, Map<Fixed, Fixed>>();
-        present_and_defaulted_errs::<BTreeMap<u64, u64>, Map<Fixed, Fixed>>();
-        present_and_defaulted_errs::<BTreeMap<i32, i32>, Map<Fixed, Fixed>>();
-        present_and_defaulted_errs::<BTreeMap<i64, i64>, Map<Fixed, Fixed>>();
-        present_and_defaulted_errs::<BTreeMap<bool, bool>, Map<General, General>>();
-        present_and_defaulted_errs::<BTreeMap<String, String>, Map<General, General>>();
-        present_and_defaulted_errs::<BTreeMap<Blob, Blob>, Map<General, General>>();
-        present_and_defaulted_errs::<BTreeMap<Vec<u8>, Vec<u8>>, Map<PlainBytes, PlainBytes>>();
+        present_empty_not_canon::<BTreeMap<u32, u32>, Map<General, General>>();
+        present_empty_not_canon::<BTreeMap<u64, u64>, Map<General, General>>();
+        present_empty_not_canon::<BTreeMap<i32, i32>, Map<General, General>>();
+        present_empty_not_canon::<BTreeMap<i64, i64>, Map<General, General>>();
+        present_empty_not_canon::<BTreeMap<u32, u32>, Map<Fixed, Fixed>>();
+        present_empty_not_canon::<BTreeMap<u64, u64>, Map<Fixed, Fixed>>();
+        present_empty_not_canon::<BTreeMap<i32, i32>, Map<Fixed, Fixed>>();
+        present_empty_not_canon::<BTreeMap<i64, i64>, Map<Fixed, Fixed>>();
+        present_empty_not_canon::<BTreeMap<bool, bool>, Map<General, General>>();
+        present_empty_not_canon::<BTreeMap<String, String>, Map<General, General>>();
+        present_empty_not_canon::<BTreeMap<Blob, Blob>, Map<General, General>>();
+        present_empty_not_canon::<BTreeMap<Vec<u8>, Vec<u8>>, Map<PlainBytes, PlainBytes>>();
 
-        present_and_defaulted_errs::<Vec<BTreeMap<u32, u32>>, Packed<Map<General, General>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<u64, u64>>, Packed<Map<General, General>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<i32, i32>>, Packed<Map<General, General>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<i64, i64>>, Packed<Map<General, General>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<u32, u32>>, Packed<Map<Fixed, Fixed>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<u64, u64>>, Packed<Map<Fixed, Fixed>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<i32, i32>>, Packed<Map<Fixed, Fixed>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<i64, i64>>, Packed<Map<Fixed, Fixed>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<bool, bool>>, Packed<Map<General, General>>>();
-        present_and_defaulted_errs::<Vec<BTreeMap<String, String>>, Packed<Map<General, General>>>(
-        );
-        present_and_defaulted_errs::<Vec<BTreeMap<Blob, Blob>>, Packed<Map<General, General>>>();
-        present_and_defaulted_errs::<
+        present_empty_not_canon::<Vec<BTreeMap<u32, u32>>, Packed<Map<General, General>>>();
+        present_empty_not_canon::<Vec<BTreeMap<u64, u64>>, Packed<Map<General, General>>>();
+        present_empty_not_canon::<Vec<BTreeMap<i32, i32>>, Packed<Map<General, General>>>();
+        present_empty_not_canon::<Vec<BTreeMap<i64, i64>>, Packed<Map<General, General>>>();
+        present_empty_not_canon::<Vec<BTreeMap<u32, u32>>, Packed<Map<Fixed, Fixed>>>();
+        present_empty_not_canon::<Vec<BTreeMap<u64, u64>>, Packed<Map<Fixed, Fixed>>>();
+        present_empty_not_canon::<Vec<BTreeMap<i32, i32>>, Packed<Map<Fixed, Fixed>>>();
+        present_empty_not_canon::<Vec<BTreeMap<i64, i64>>, Packed<Map<Fixed, Fixed>>>();
+        present_empty_not_canon::<Vec<BTreeMap<bool, bool>>, Packed<Map<General, General>>>();
+        present_empty_not_canon::<Vec<BTreeMap<String, String>>, Packed<Map<General, General>>>();
+        present_empty_not_canon::<Vec<BTreeMap<Blob, Blob>>, Packed<Map<General, General>>>();
+        present_empty_not_canon::<
             Vec<BTreeMap<Vec<u8>, Vec<u8>>>,
             Packed<Map<PlainBytes, PlainBytes>>,
         >();
@@ -2087,7 +2109,7 @@ mod test {
         buf.extend([1; 12]);
 
         let mut parsed = Vec::<u64>::new();
-        let res = <Packed<Fixed>>::decode_value(
+        let res = ValueEncoder::<Packed<Fixed>>::decode_value(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
             DecodeContext::default(),
@@ -2097,7 +2119,7 @@ mod test {
                 .kind(),
             Truncated
         );
-        let res = <Packed<Fixed>>::decode_value_distinguished(
+        let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
             true,
@@ -2118,7 +2140,7 @@ mod test {
         buf.extend([1; 17]);
 
         let mut parsed = Vec::<u32>::new();
-        let res = <Packed<Fixed>>::decode_value(
+        let res = ValueEncoder::<Packed<Fixed>>::decode_value(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
             DecodeContext::default(),
@@ -2128,7 +2150,7 @@ mod test {
                 .kind(),
             Truncated
         );
-        let res = <Packed<Fixed>>::decode_value_distinguished(
+        let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
             true,
@@ -2152,7 +2174,7 @@ mod test {
 
         // The entries for this map always consume 12 bytes each.
         let mut parsed = BTreeMap::<u32, u64>::new();
-        let res = <Map<Fixed, Fixed>>::decode_value(
+        let res = ValueEncoder::<Map<Fixed, Fixed>>::decode_value(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
             DecodeContext::default(),
@@ -2162,7 +2184,7 @@ mod test {
                 .kind(),
             Truncated
         );
-        let res = <Map<Fixed, Fixed>>::decode_value_distinguished(
+        let res = DistinguishedValueEncoder::<Map<Fixed, Fixed>>::decode_value_distinguished(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
             true,
@@ -2180,7 +2202,7 @@ mod test {
         let mut s = String::new();
         let buf = b"\x02\x80\x80";
 
-        let r = General::decode_value(
+        let r = ValueEncoder::<General>::decode_value(
             &mut s,
             Capped::new(&mut buf.as_slice()),
             DecodeContext::default(),
@@ -2416,10 +2438,10 @@ mod test {
         );
     }
 
-    fn check_rejects_wrong_wire_type<T: NewForOverwrite, E: Encoder<T>>(wire_type: WireType) {
+    fn check_rejects_wrong_wire_type<T: NewForOverwrite + Encoder<E>, E>(wire_type: WireType) {
         let mut out = T::new_for_overwrite();
         assert_eq!(
-            E::decode(
+            <T as Encoder<E>>::decode(
                 wire_type,
                 false,
                 &mut out,
@@ -2431,14 +2453,14 @@ mod test {
     }
 
     fn check_rejects_wrong_wire_type_distinguished<
-        T: NewForOverwrite,
-        E: DistinguishedEncoder<T>,
+        T: NewForOverwrite + DistinguishedEncoder<E>,
+        E,
     >(
         wire_type: WireType,
     ) {
         let mut out = T::new_for_overwrite();
         assert_eq!(
-            E::decode_distinguished(
+            <T as DistinguishedEncoder<E>>::decode_distinguished(
                 wire_type,
                 false,
                 &mut out,
@@ -2502,9 +2524,9 @@ mod test {
         #[test]
         fn u32_in_u64(value: u32) {
             let mut buf = Vec::<u8>::new();
-            General::encode_value(&value, &mut buf);
+            ValueEncoder::<General>::encode_value(&value, &mut buf);
             let mut out = 0u64;
-            prop_assert!(General::decode_value(
+            prop_assert!(ValueEncoder::<General>::decode_value(
                 &mut out,
                 Capped::new(&mut &*buf),
                 DecodeContext::default(),
@@ -2515,9 +2537,9 @@ mod test {
         #[test]
         fn i32_in_i64(value: i32) {
             let mut buf = Vec::<u8>::new();
-            General::encode_value(&value, &mut buf);
+            ValueEncoder::<General>::encode_value(&value, &mut buf);
             let mut out = 0i64;
-            prop_assert!(General::decode_value(
+            prop_assert!(ValueEncoder::<General>::decode_value(
                 &mut out,
                 Capped::new(&mut &*buf),
                 DecodeContext::default(),
@@ -2529,9 +2551,9 @@ mod test {
         fn u64_in_u32(value: u32) {
             let value = value as u64;
             let mut buf = Vec::<u8>::new();
-            General::encode_value(&value, &mut buf);
+            ValueEncoder::<General>::encode_value(&value, &mut buf);
             let mut out = 0u32;
-            prop_assert!(General::decode_value(
+            prop_assert!(ValueEncoder::<General>::decode_value(
                 &mut out,
                 Capped::new(&mut &*buf),
                 DecodeContext::default(),
@@ -2543,9 +2565,9 @@ mod test {
         fn i64_in_i32(value: i32) {
             let value = value as i64;
             let mut buf = Vec::<u8>::new();
-            General::encode_value(&value, &mut buf);
+            ValueEncoder::<General>::encode_value(&value, &mut buf);
             let mut out = 0i32;
-            prop_assert!(General::decode_value(
+            prop_assert!(ValueEncoder::<General>::decode_value(
                 &mut out,
                 Capped::new(&mut &*buf),
                 DecodeContext::default(),
@@ -2556,10 +2578,10 @@ mod test {
         #[test]
         fn u32_out_of_range(value in u32::MAX as u64 + 1..) {
             let mut buf = Vec::<u8>::new();
-            General::encode_value(&value, &mut buf);
+            ValueEncoder::<General>::encode_value(&value, &mut buf);
             let mut out = 0u32;
             prop_assert_eq!(
-                General::decode_value(
+                ValueEncoder::<General>::decode_value(
                     &mut out,
                     Capped::new(&mut &*buf),
                     DecodeContext::default(),
@@ -2575,10 +2597,10 @@ mod test {
         ) {
             for value in [low_value, high_value] {
                 let mut buf = Vec::<u8>::new();
-                General::encode_value(&value, &mut buf);
+                ValueEncoder::<General>::encode_value(&value, &mut buf);
                 let mut out = 0i32;
                 prop_assert_eq!(
-                    General::decode_value(
+                    ValueEncoder::<General>::decode_value(
                         &mut out,
                         Capped::new(&mut &*buf),
                         DecodeContext::default(),
@@ -2591,10 +2613,10 @@ mod test {
         #[test]
         fn u16_out_of_range(value in u16::MAX as u64 + 1..) {
             let mut buf = Vec::<u8>::new();
-            General::encode_value(&value, &mut buf);
+            ValueEncoder::<General>::encode_value(&value, &mut buf);
             let mut out = 0u16;
             prop_assert_eq!(
-                General::decode_value(
+                ValueEncoder::<General>::decode_value(
                     &mut out,
                     Capped::new(&mut &*buf),
                     DecodeContext::default(),
@@ -2610,10 +2632,10 @@ mod test {
         ) {
             for value in [low_value, high_value] {
                 let mut buf = Vec::<u8>::new();
-                General::encode_value(&value, &mut buf);
+                ValueEncoder::<General>::encode_value(&value, &mut buf);
                 let mut out = 0i16;
                 prop_assert_eq!(
-                    General::decode_value(
+                    ValueEncoder::<General>::decode_value(
                         &mut out,
                         Capped::new(&mut &*buf),
                         DecodeContext::default(),
@@ -2626,10 +2648,10 @@ mod test {
         #[test]
         fn u8_out_of_range(value in u8::MAX as u64 + 1..) {
             let mut buf = Vec::<u8>::new();
-            Varint::encode_value(&value, &mut buf);
+            ValueEncoder::<Varint>::encode_value(&value, &mut buf);
             let mut out = 0u8;
             prop_assert_eq!(
-                Varint::decode_value(
+                ValueEncoder::<Varint>::decode_value(
                     &mut out,
                     Capped::new(&mut &*buf),
                     DecodeContext::default(),
@@ -2645,10 +2667,10 @@ mod test {
         ) {
             for value in [low_value, high_value] {
                 let mut buf = Vec::<u8>::new();
-                Varint::encode_value(&value, &mut buf);
+                ValueEncoder::<Varint>::encode_value(&value, &mut buf);
                 let mut out = 0i8;
                 prop_assert_eq!(
-                    Varint::decode_value(
+                    ValueEncoder::<Varint>::decode_value(
                         &mut out,
                         Capped::new(&mut &*buf),
                         DecodeContext::default(),
@@ -2664,7 +2686,7 @@ mod test {
             encode_varint(varint, &mut buf);
             let mut out = false;
             prop_assert_eq!(
-                General::decode_value(
+                ValueEncoder::<General>::decode_value(
                     &mut out,
                     Capped::new(&mut &*buf),
                     DecodeContext::default(),

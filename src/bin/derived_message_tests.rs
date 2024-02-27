@@ -17,9 +17,8 @@ mod derived_message_tests {
 
     use bilrost::encoding::opaque::{OpaqueMessage, OpaqueValue as OV};
     use bilrost::encoding::{
-        encode_varint, Collection, DistinguishedEncoder, DistinguishedOneof,
-        DistinguishedValueEncoder, EmptyState, Encoder, General, Mapping, Oneof, Packed,
-        ValueEncoder,
+        self, encode_varint, Collection, DistinguishedOneof, EmptyState, Fixed, General, Mapping,
+        Oneof, Packed,
     };
     use bilrost::Canonicity::{HasExtensions, NotCanonical};
     use bilrost::DecodeErrorKind::{
@@ -29,59 +28,59 @@ mod derived_message_tests {
     use bilrost::{DecodeErrorKind, DistinguishedMessage, Enumeration, Message, Oneof};
     use bilrost_derive::DistinguishedOneof;
 
-    trait IntoOpaqueMessage {
-        fn into_opaque_message(self) -> OpaqueMessage;
+    trait IntoOpaqueMessage<'a> {
+        fn into_opaque_message(self) -> OpaqueMessage<'a>;
     }
 
-    impl<T> IntoOpaqueMessage for &T
+    impl<'a, T> IntoOpaqueMessage<'a> for &T
     where
-        T: Clone + IntoOpaqueMessage,
+        T: Clone + IntoOpaqueMessage<'a>,
     {
-        fn into_opaque_message(self) -> OpaqueMessage {
+        fn into_opaque_message(self) -> OpaqueMessage<'a> {
             self.clone().into_opaque_message()
         }
     }
 
-    impl<const N: usize> IntoOpaqueMessage for [(u32, OV); N] {
-        fn into_opaque_message(self) -> OpaqueMessage {
+    impl<'a, const N: usize> IntoOpaqueMessage<'a> for [(u32, OV<'a>); N] {
+        fn into_opaque_message(self) -> OpaqueMessage<'a> {
             OpaqueMessage::from_iter(self)
         }
     }
 
-    impl IntoOpaqueMessage for &[(u32, OV)] {
-        fn into_opaque_message(self) -> OpaqueMessage {
+    impl<'a> IntoOpaqueMessage<'a> for &[(u32, OV<'a>)] {
+        fn into_opaque_message(self) -> OpaqueMessage<'a> {
             OpaqueMessage::from_iter(self.iter().cloned())
         }
     }
 
-    impl IntoOpaqueMessage for Vec<u8> {
-        fn into_opaque_message(self) -> OpaqueMessage {
+    impl IntoOpaqueMessage<'static> for Vec<u8> {
+        fn into_opaque_message(self) -> OpaqueMessage<'static> {
             <() as Message>::decode(self.as_slice()).expect("did not decode with ignore unit");
             OpaqueMessage::decode(self.as_slice()).expect("did not decode")
         }
     }
 
-    impl IntoOpaqueMessage for OpaqueMessage {
-        fn into_opaque_message(self) -> OpaqueMessage {
+    impl<'a> IntoOpaqueMessage<'a> for OpaqueMessage<'a> {
+        fn into_opaque_message(self) -> OpaqueMessage<'a> {
             self
         }
     }
 
-    impl<I, F> IntoOpaqueMessage for iter::Map<I, F>
+    impl<'a, I, F> IntoOpaqueMessage<'a> for iter::Map<I, F>
     where
-        Self: Iterator<Item = (u32, OV)>,
+        Self: Iterator<Item = (u32, OV<'a>)>,
     {
-        fn into_opaque_message(self) -> OpaqueMessage {
+        fn into_opaque_message(self) -> OpaqueMessage<'a> {
             self.collect()
         }
     }
 
     trait FromOpaque {
-        fn from_opaque(from: impl IntoOpaqueMessage) -> Self;
+        fn from_opaque<'a>(from: impl IntoOpaqueMessage<'a>) -> Self;
     }
 
     impl<T: Message> FromOpaque for T {
-        fn from_opaque(from: impl IntoOpaqueMessage) -> Self {
+        fn from_opaque<'a>(from: impl IntoOpaqueMessage<'a>) -> Self {
             Self::decode(&*from.into_opaque_message().encode_to_vec()).expect("failed to decode")
         }
     }
@@ -91,7 +90,7 @@ mod derived_message_tests {
         use bilrost::Canonicity;
         use bilrost::Canonicity::Canonical;
 
-        pub(super) fn decodes<M>(from: impl IntoOpaqueMessage, into: M)
+        pub(super) fn decodes<'a, M>(from: impl IntoOpaqueMessage<'a>, into: M)
         where
             M: Message + Debug + PartialEq + EmptyState,
         {
@@ -102,7 +101,7 @@ mod derived_message_tests {
             assert_eq!(&to_replace, &into);
         }
 
-        pub(super) fn doesnt_decode<M>(from: impl IntoOpaqueMessage, err: DecodeErrorKind)
+        pub(super) fn doesnt_decode<'a, M>(from: impl IntoOpaqueMessage<'a>, err: DecodeErrorKind)
         where
             M: Message + Debug + EmptyState,
         {
@@ -123,7 +122,7 @@ mod derived_message_tests {
             );
         }
 
-        pub(super) fn decodes_distinguished<M>(from: impl IntoOpaqueMessage, into: M)
+        pub(super) fn decodes_distinguished<'a, M>(from: impl IntoOpaqueMessage<'a>, into: M)
         where
             M: DistinguishedMessage + Debug + Eq + EmptyState,
         {
@@ -153,8 +152,8 @@ mod derived_message_tests {
             assert_eq!(into.encoded_len(), encoded.len(), "encoded_len was wrong");
         }
 
-        pub(super) fn decodes_non_canonically<M>(
-            from: impl IntoOpaqueMessage,
+        pub(super) fn decodes_non_canonically<'a, M>(
+            from: impl IntoOpaqueMessage<'a>,
             into: M,
             expected_canon: Canonicity,
         ) where
@@ -193,7 +192,7 @@ mod derived_message_tests {
             );
         }
 
-        pub(super) fn never_decodes<M>(from: impl IntoOpaqueMessage, err: DecodeErrorKind)
+        pub(super) fn never_decodes<'a, M>(from: impl IntoOpaqueMessage<'a>, err: DecodeErrorKind)
         where
             M: DistinguishedMessage + Debug + EmptyState,
         {
@@ -228,7 +227,7 @@ mod derived_message_tests {
             );
         }
 
-        pub(super) fn encodes<M: Message>(value: M, becomes: impl IntoOpaqueMessage) {
+        pub(super) fn encodes<'a, M: Message>(value: M, becomes: impl IntoOpaqueMessage<'a>) {
             let encoded = value.encode_to_vec();
             assert_eq!(
                 OpaqueMessage::decode(&*encoded),
@@ -689,9 +688,9 @@ mod derived_message_tests {
 
         #[derive(Debug, PartialEq, Message)]
         struct Clearable<'a> {
-            #[bilrost(encoder(varint))]
+            #[bilrost(encoding(varint))]
             a: u8,
-            #[bilrost(encoder(varint))]
+            #[bilrost(encoding(varint))]
             b: i8,
             c: u16,
             d: i16,
@@ -704,7 +703,7 @@ mod derived_message_tests {
             k: f64,
             string: String,
             blob: Blob,
-            #[bilrost(encoder(plainbytes))]
+            #[bilrost(encoding(plainbytes))]
             byte_arr: [u8; 1],
             hmm: Hmm,
             nested: Nested,
@@ -719,9 +718,9 @@ mod derived_message_tests {
             bytes: Bytes,
             #[cfg(feature = "bytestring")]
             bytestring: ByteString,
-            #[bilrost(encoder(plainbytes))]
+            #[bilrost(encoding(plainbytes))]
             cow_bytes_borrowed: Cow<'a, [u8]>,
-            #[bilrost(encoder(plainbytes))]
+            #[bilrost(encoding(plainbytes))]
             cow_bytes_owned: Cow<'a, [u8]>,
             cow_str_borrowed: Cow<'a, str>,
             cow_str_owned: Cow<'a, str>,
@@ -843,8 +842,8 @@ mod derived_message_tests {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Foo(
             bool,
-            #[bilrost(encoder(varint))] u8,
-            #[bilrost(encoder(varint))] i8,
+            #[bilrost(encoding(varint))] u8,
+            #[bilrost(encoding(varint))] i8,
             u16,
             i16,
             u32,
@@ -945,10 +944,10 @@ mod derived_message_tests {
     fn parsing_fixed_width_ints() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Foo(
-            #[bilrost(encoder(fixed))] u32,
-            #[bilrost(encoder(fixed))] i32,
-            #[bilrost(encoder(fixed))] u64,
-            #[bilrost(encoder(fixed))] i64,
+            #[bilrost(encoding(fixed))] u32,
+            #[bilrost(encoding(fixed))] i32,
+            #[bilrost(encoding(fixed))] u64,
+            #[bilrost(encoding(fixed))] i64,
         );
 
         assert::decodes_distinguished([], Foo::empty());
@@ -981,8 +980,8 @@ mod derived_message_tests {
 
         #[derive(Debug, Message)]
         struct Bar(
-            #[bilrost(encoder(fixed))] f32,
-            #[bilrost(encoder(fixed))] f64,
+            #[bilrost(encoding(fixed))] f32,
+            #[bilrost(encoding(fixed))] f64,
         );
 
         for wrong_size_value in &[[(1, OV::f64(1.0))], [(2, OV::f32(2.0))]] {
@@ -1035,8 +1034,8 @@ mod derived_message_tests {
 
         #[derive(Debug, PartialEq, Message)]
         struct Bar(
-            #[bilrost(encoder(fixed))] f32,
-            #[bilrost(encoder(fixed))] f64,
+            #[bilrost(encoding(fixed))] f32,
+            #[bilrost(encoding(fixed))] f64,
         );
 
         assert::encodes(Bar(0.0, 0.0), []);
@@ -1089,18 +1088,21 @@ mod derived_message_tests {
         #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
         enum A<T> {
             Empty,
-            #[bilrost(tag(1), encoder(fixed))]
+            #[bilrost(tag(1), encoding(fixed))]
             One(T),
         }
 
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-        struct Foo<T>(#[bilrost(oneof(1))] A<T>, #[bilrost(encoder(fixed))] T);
+        struct Foo<T>(#[bilrost(oneof(1))] A<T>, #[bilrost(encoding(fixed))] T);
 
         fn check_fixed_truncation<T>(val: OV)
         where
-            T: Debug + Eq + EmptyState,
-            bilrost::encoding::Fixed:
-                DistinguishedEncoder<T> + ValueEncoder<T> + DistinguishedValueEncoder<T>,
+            T: Debug
+                + Eq
+                + EmptyState
+                + encoding::DistinguishedEncoder<Fixed>
+                + encoding::DistinguishedValueEncoder<Fixed>
+                + encoding::ValueEncoder<Fixed>,
         {
             let mut direct = [(1, val.clone())].into_opaque_message().encode_to_vec();
             let mut in_oneof = [(2, val.clone())].into_opaque_message().encode_to_vec();
@@ -1122,13 +1124,13 @@ mod derived_message_tests {
             struct Outer<T>(Foo<T>, String);
 
             let direct_nested = [
-                (1, OV::blob(direct)),
+                (1, OV::byte_slice(&direct)),
                 (2, OV::string("more data after that")),
             ]
             .into_opaque_message()
             .encode_to_vec();
             let in_oneof_nested = [
-                (1, OV::blob(in_oneof)),
+                (1, OV::byte_slice(&in_oneof)),
                 (2, OV::string("more data after that")),
             ]
             .into_opaque_message()
@@ -1158,13 +1160,15 @@ mod derived_message_tests {
 
     fn parsing_string_type<'a, T>()
     where
-        T: 'a + Debug + Eq + From<&'a str> + EmptyState,
-        General: DistinguishedEncoder<T>,
+        T: 'a + Debug + Eq + From<&'a str> + EmptyState + encoding::DistinguishedEncoder<General>,
     {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Foo<T>(T);
 
-        assert::decodes_distinguished([(1, OV::string("hello world"))], Foo("hello world".into()));
+        assert::decodes_distinguished(
+            [(1, OV::string("hello world"))],
+            Foo::<T>("hello world".into()),
+        );
         let mut invalid_strings = Vec::<Vec<u8>>::from([
             b"bad byte: \xff can't appear in utf-8".as_slice().into(),
             b"non-canonical representation \xc0\x80 of nul byte"
@@ -1192,7 +1196,7 @@ mod derived_message_tests {
         invalid_strings.push(surrogate_pair);
 
         for invalid_string in invalid_strings {
-            assert::never_decodes::<Foo<T>>([(1, OV::blob(&*invalid_string))], InvalidValue);
+            assert::never_decodes::<Foo<T>>([(1, OV::byte_slice(&*invalid_string))], InvalidValue);
         }
     }
 
@@ -1231,7 +1235,7 @@ mod derived_message_tests {
     #[test]
     fn parsing_vec_blob() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-        struct Foo(#[bilrost(encoder(plainbytes))] Vec<u8>);
+        struct Foo(#[bilrost(encoding(plainbytes))] Vec<u8>);
         assert::decodes_distinguished(
             [(1, OV::string("hello world"))],
             Foo(b"hello world"[..].into()),
@@ -1241,7 +1245,7 @@ mod derived_message_tests {
     #[test]
     fn parsing_cow_blob() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-        struct Foo<'a>(#[bilrost(encoder(plainbytes))] Cow<'a, [u8]>);
+        struct Foo<'a>(#[bilrost(encoding(plainbytes))] Cow<'a, [u8]>);
         assert::decodes_distinguished(
             [(1, OV::string("hello world"))],
             Foo(b"hello world"[..].into()),
@@ -1261,24 +1265,24 @@ mod derived_message_tests {
     #[test]
     fn parsing_byte_arrays() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-        struct Foo<const N: usize>(#[bilrost(encoder(plainbytes))] [u8; N]);
+        struct Foo<const N: usize>(#[bilrost(encoding(plainbytes))] [u8; N]);
 
         assert::decodes_distinguished([], Foo([]));
-        assert::decodes_non_canonically([(1, OV::blob([]))], Foo([]), NotCanonical);
-        assert::never_decodes::<Foo<0>>([(1, OV::blob([1]))], InvalidValue);
+        assert::decodes_non_canonically([(1, OV::bytes([]))], Foo([]), NotCanonical);
+        assert::never_decodes::<Foo<0>>([(1, OV::bytes([1]))], InvalidValue);
 
-        assert::decodes_distinguished([(1, OV::blob([1, 2, 3, 4]))], Foo([1, 2, 3, 4]));
-        assert::decodes_non_canonically([(1, OV::blob([0; 4]))], Foo([0; 4]), NotCanonical);
-        assert::never_decodes::<Foo<4>>([(1, OV::blob([1; 3]))], InvalidValue);
-        assert::never_decodes::<Foo<4>>([(1, OV::blob([1; 5]))], InvalidValue);
+        assert::decodes_distinguished([(1, OV::bytes([1, 2, 3, 4]))], Foo([1, 2, 3, 4]));
+        assert::decodes_non_canonically([(1, OV::bytes([0; 4]))], Foo([0; 4]), NotCanonical);
+        assert::never_decodes::<Foo<4>>([(1, OV::bytes([1; 3]))], InvalidValue);
+        assert::never_decodes::<Foo<4>>([(1, OV::bytes([1; 5]))], InvalidValue);
         assert::never_decodes::<Foo<4>>([(1, OV::fixed_u32(1))], WrongWireType);
 
-        assert::decodes_distinguished([(1, OV::blob([13; 13]))], Foo([13; 13]));
-        assert::decodes_non_canonically([(1, OV::blob([0; 13]))], Foo([0; 13]), NotCanonical);
+        assert::decodes_distinguished([(1, OV::bytes([13; 13]))], Foo([13; 13]));
+        assert::decodes_non_canonically([(1, OV::bytes([0; 13]))], Foo([0; 13]), NotCanonical);
 
         // Fixed-size wire types are implemented for appropriately sized u8 arrays
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-        struct Bar<const N: usize>(#[bilrost(encoder(fixed))] [u8; N]);
+        struct Bar<const N: usize>(#[bilrost(encoding(fixed))] [u8; N]);
 
         static_assertions::assert_not_impl_any!(Bar<0>: Message, DistinguishedMessage);
         static_assertions::assert_not_impl_any!(Bar<2>: Message, DistinguishedMessage);
@@ -1287,7 +1291,7 @@ mod derived_message_tests {
         assert::decodes_non_canonically([(1, OV::fixed_u32(0))], Bar([0; 4]), NotCanonical);
         assert::decodes_distinguished([(1, OV::SixtyFourBit([8; 8]))], Bar([8; 8]));
         assert::decodes_non_canonically([(1, OV::SixtyFourBit([0; 8]))], Bar([0; 8]), NotCanonical);
-        assert::never_decodes::<Bar<8>>([(1, OV::blob([8; 8]))], WrongWireType);
+        assert::never_decodes::<Bar<8>>([(1, OV::bytes([8; 8]))], WrongWireType);
     }
 
     // Repeated field tests
@@ -1312,9 +1316,9 @@ mod derived_message_tests {
     #[test]
     fn duplicated_packed_decoding() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-        struct Foo(#[bilrost(encoder = "packed")] Vec<bool>);
+        struct Foo(#[bilrost(encoding = "packed")] Vec<bool>);
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-        struct Bar(#[bilrost(encoder = "unpacked")] Vec<bool>);
+        struct Bar(#[bilrost(encoding = "unpacked")] Vec<bool>);
 
         assert::decodes_distinguished([(1, OV::packed([OV::bool(true)]))], Foo(vec![true]));
         assert::decodes_non_canonically(
@@ -1470,8 +1474,7 @@ mod derived_message_tests {
 
     fn truncated_bool_string_map<T>()
     where
-        T: Debug + EmptyState + Mapping<Key = bool, Value = String>,
-        General: Encoder<T>,
+        T: Debug + EmptyState + Mapping<Key = bool, Value = String> + encoding::Encoder<General>,
     {
         #[derive(Debug, PartialEq, Message)]
         struct Foo<T>(T, String);
@@ -1486,7 +1489,7 @@ mod derived_message_tests {
         };
         assert::doesnt_decode::<Foo<T>>(
             [
-                (1, OV::blob(&map_value[..map_value.len() - 1])),
+                (1, OV::byte_slice(&map_value[..map_value.len() - 1])),
                 (2, OV::string("another field after that")),
             ],
             Truncated,
@@ -1495,8 +1498,7 @@ mod derived_message_tests {
 
     fn truncated_string_int_map<T>()
     where
-        T: Debug + EmptyState + Mapping<Key = String, Value = u64>,
-        General: Encoder<T>,
+        T: Debug + EmptyState + Mapping<Key = String, Value = u64> + encoding::Encoder<General>,
     {
         #[derive(Debug, PartialEq, Message)]
         struct Foo<T>(T, String);
@@ -1511,7 +1513,7 @@ mod derived_message_tests {
         };
         assert::doesnt_decode::<Foo<T>>(
             [
-                (1, OV::blob(&map_value[..map_value.len() - 1])),
+                (1, OV::byte_slice(&map_value[..map_value.len() - 1])),
                 (2, OV::string("another field after that")),
             ],
             Truncated,
@@ -1545,8 +1547,8 @@ mod derived_message_tests {
     fn decoding_vecs() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Foo<T>(
-            #[bilrost(encoder(packed))] T,
-            #[bilrost(encoder(unpacked))] T,
+            #[bilrost(encoding(packed))] T,
+            #[bilrost(encoding(unpacked))] T,
         );
 
         let values = [
@@ -1614,8 +1616,8 @@ mod derived_message_tests {
     fn decoding_vecs_with_swapped_packedness() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Oof<T>(
-            #[bilrost(encoder(unpacked))] T, // Fields have swapped packedness from `Foo` above
-            #[bilrost(encoder(packed))] T,
+            #[bilrost(encoding(unpacked))] T, // Fields have swapped packedness from `Foo` above
+            #[bilrost(encoding(packed))] T,
         );
 
         let values = [
@@ -1696,8 +1698,8 @@ mod derived_message_tests {
     fn decoding_sets() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Foo<T>(
-            #[bilrost(encoder(packed))] T,
-            #[bilrost(encoder(unpacked))] T,
+            #[bilrost(encoding(packed))] T,
+            #[bilrost(encoding(unpacked))] T,
         );
 
         let valid_set_items = [OV::string("bar"), OV::string("baz"), OV::string("foo")];
@@ -1797,8 +1799,8 @@ mod derived_message_tests {
     fn decoding_sets_with_swapped_packedness() {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Oof<T>(
-            #[bilrost(encoder(unpacked))] T, // Fields have swapped packedness from `Foo` above
-            #[bilrost(encoder(packed))] T,
+            #[bilrost(encoding(unpacked))] T, // Fields have swapped packedness from `Foo` above
+            #[bilrost(encoding(packed))] T,
         );
 
         let valid_set_items = [OV::u32(1), OV::u32(2), OV::u32(3)];
@@ -1875,12 +1877,14 @@ mod derived_message_tests {
 
     fn truncated_packed_string<T>()
     where
-        T: Debug + EmptyState + Collection<Item = String>,
-        General: Encoder<T>,
-        Packed: Encoder<T>,
+        T: Debug
+            + EmptyState
+            + Collection<Item = String>
+            + encoding::Encoder<General>
+            + encoding::Encoder<Packed>,
     {
         #[derive(Debug, PartialEq, Message)]
-        struct Foo<T>(#[bilrost(encoder(packed))] T, String);
+        struct Foo<T>(#[bilrost(encoding(packed))] T, String);
 
         let OV::LengthDelimited(set_value) =
             OV::packed([OV::string("fooble"), OV::string("barbaz")])
@@ -1889,7 +1893,7 @@ mod derived_message_tests {
         };
         assert::doesnt_decode::<Foo<T>>(
             [
-                (1, OV::blob(&set_value[..set_value.len() - 1])),
+                (1, OV::byte_slice(&set_value[..set_value.len() - 1])),
                 (2, OV::string("another field after that")),
             ],
             Truncated,
@@ -1898,19 +1902,18 @@ mod derived_message_tests {
 
     fn truncated_packed_int<T>()
     where
-        T: Debug + EmptyState + Collection<Item = u64>,
-        General: Encoder<T>,
+        T: Debug + EmptyState + Collection<Item = u64> + encoding::Encoder<General>,
     {
         #[derive(Debug, PartialEq, Message)]
         struct Foo<T>(T, String);
 
-        let OV::LengthDelimited(map_value) = OV::packed([OV::u64(0), OV::u64(999999999999999)])
-        else {
+        let packed = OV::packed([OV::u64(0), OV::u64(999999999999999)]);
+        let OV::LengthDelimited(map_value) = packed else {
             unreachable!()
         };
         assert::doesnt_decode::<Foo<T>>(
             [
-                (1, OV::blob(&map_value[..map_value.len() - 1])),
+                (1, OV::byte_slice(&map_value[..map_value.len() - 1])),
                 (2, OV::string("another field after that")),
             ],
             Truncated,
@@ -1997,7 +2000,7 @@ mod derived_message_tests {
             A(String),
             #[bilrost(2)]
             B { named: u32 },
-            #[bilrost(tag = 3, encoder = "packed")]
+            #[bilrost(tag = 3, encoding = "packed")]
             C(Vec<bool>),
         }
         use Abc::*;
@@ -2042,7 +2045,7 @@ mod derived_message_tests {
             B {
                 named: u32,
             },
-            #[bilrost(tag = 3, encoder = "packed")]
+            #[bilrost(tag = 3, encoding = "packed")]
             C(Vec<bool>),
         }
         use Abc::*;
@@ -2189,9 +2192,9 @@ mod derived_message_tests {
         #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
         struct Bar(Foo);
 
-        assert_eq!(u32::from(Foo::A), 0);
-        assert_eq!(u32::from(Foo::Z), u32::MAX);
-        assert_eq!(Foo::try_from(u32::MAX), Ok(Foo::Z));
+        assert_eq!(Foo::A.to_number(), 0);
+        assert_eq!(Foo::Z.to_number(), u32::MAX);
+        assert_eq!(Foo::try_from_number(u32::MAX), Ok(Foo::Z));
         assert_eq!(Foo::Z as u8, 255);
         assert::decodes_distinguished([], Bar(Foo::A));
         assert::decodes_non_canonically([(1, OV::u32(0))], Bar(Foo::A), NotCanonical);
@@ -2311,7 +2314,7 @@ mod derived_message_tests {
             .encode_to_vec();
         assert::never_decodes::<Foo>(
             [
-                (1, OV::blob(&inner[..inner.len() - 1])),
+                (1, OV::byte_slice(&inner[..inner.len() - 1])),
                 (2, OV::string("moo")),
             ],
             Truncated,
