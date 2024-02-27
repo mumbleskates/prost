@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::cmp::min;
+use core::cmp::max;
 use core::marker::PhantomData;
 use core::mem::{self, transmute, MaybeUninit};
 use core::ptr;
@@ -111,8 +111,8 @@ impl ReverseBuf {
             } else {
                 // We planned a minimum size for the new chunk. Choose the actual size for that
                 // allocation, planning to at least double in size.
-                min(
-                    min(MIN_CHUNK_SIZE, self.capacity),
+                max(
+                    max(MIN_CHUNK_SIZE, self.capacity),
                     self.planned_capacity.unsigned_abs(),
                 )
             };
@@ -138,7 +138,10 @@ impl ReverseBuf {
             copy_data(&mut data, unsafe {
                 new_chunk.get_unchecked_mut(new_front..)
             });
-            debug_assert!(old_front < self.front_chunk_mut().len());
+            debug_assert!(self
+                .chunks
+                .last()
+                .map_or(true, |old_front_chunk| old_front < old_front_chunk.len()));
             copy_data(&mut data, unsafe {
                 self.front_chunk_mut().get_unchecked_mut(..old_front)
             });
@@ -205,10 +208,14 @@ impl Buf for ReverseBuf {
         self.front += cnt;
         // Pop chunks off the front of the buffer until the new front doesn't overflow the front
         // chunk
-        while self.front >= self.front_chunk_mut().len() {
-            let removed_capacity = self.chunks.pop().unwrap().len();
-            self.capacity -= removed_capacity;
-            self.front -= removed_capacity;
+        while let Some(front_chunk) = self.chunks.last() {
+            let front_chunk_size = front_chunk.len();
+            if self.front < front_chunk_size {
+                break;
+            }
+            drop(self.chunks.pop());
+            self.capacity -= front_chunk_size;
+            self.front -= front_chunk_size;
         }
     }
 }
@@ -248,16 +255,42 @@ impl Buf for ReverseBufReader<'_> {
             panic!("advanced past end");
         };
         self.front += cnt;
-        loop {
-            let last_chunk_size = self.chunks.last().unwrap().len();
-            if self.front < last_chunk_size {
+        while let Some(front_chunk) = self.chunks.last() {
+            if self.front < front_chunk.len() {
                 break;
             }
             // Snip off the first chunk from the end of the slice (chunks are in reverse order,
             // remember)
             self.chunks = &self.chunks[..self.chunks.len() - 1];
-            self.front -= last_chunk_size;
-            self.capacity -= last_chunk_size;
+            self.front -= front_chunk.len();
+            self.capacity -= front_chunk.len();
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::ReverseBuf;
+    use alloc::vec::Vec;
+    use bytes::{Buf, BufMut};
+
+    fn compare_buf(buf: impl Buf, expected: &[u8]) {
+        let mut read = Vec::new();
+        read.put(buf);
+        assert_eq!(read, expected);
+    }
+
+    fn check_read(buf: ReverseBuf, expected: &[u8]) {
+        compare_buf(buf.reader(), expected);
+        compare_buf(buf, expected);
+    }
+
+    #[test]
+    fn build_and_read() {
+        let mut buf = ReverseBuf::new();
+        buf.prepend(b"!".as_slice());
+        buf.prepend(b"world".as_slice());
+        buf.prepend(b"hello ".as_slice());
+        check_read(buf, b"hello world!");
     }
 }
