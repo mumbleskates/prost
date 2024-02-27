@@ -9,6 +9,7 @@ use bytes::Buf;
 
 const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 
+/// A `bytes`-compatible, exponentially-growing, prepend-only byte rope.
 pub struct ReverseBuf {
     /// Chunks of owned items in reverse order.
     chunks: Vec<Box<[MaybeUninit<u8>]>>,
