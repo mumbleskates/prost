@@ -43,6 +43,17 @@ impl ReverseBuf {
         self.capacity - self.front
     }
 
+    /// Returns `true` if the buffer is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        // Front should be zero any time the buf is empty
+        debug_assert!(!(self.chunks.is_empty() && self.front > 0));
+        // If there are no chunks capacity should also be zero, and chunks should always have
+        // nonzero size.
+        debug_assert_eq!(self.chunks.is_empty(), self.capacity == 0);
+        self.chunks.is_empty()
+    }
+
     /// Returns the number of bytes this buffer currently has allocated capacity for.
     #[inline]
     pub fn capacity(&self) -> usize {
@@ -300,8 +311,24 @@ mod test {
     }
 
     fn check_read(buf: ReverseBuf, expected: &[u8]) {
+        assert_eq!(buf.len(), expected.len());
+        assert_eq!(buf.is_empty(), buf.len() == 0);
         compare_buf(buf.reader(), expected);
         compare_buf(buf, expected);
+    }
+
+    #[test]
+    fn fresh() {
+        check_read(ReverseBuf::new(), b"");
+    }
+
+    #[test]
+    fn fresh_with_plan_still_empty() {
+        let mut buf = ReverseBuf::new();
+        buf.plan_reservation(100);
+        assert!(buf.is_empty());
+        assert_eq!(buf.len(), 0);
+        check_read(buf, b"");
     }
 
     #[test]
