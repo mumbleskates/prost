@@ -64,6 +64,23 @@ pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
     }
 }
 
+/// Prepends an integer value in LEB128-bijective format to the given buffer.
+#[inline(always)]
+pub fn prepend_varint<B: ReverseBuf>(mut value: u64, buf: &mut B) {
+    let mut varint_data = [0u8; 9];
+    for (i, b) in varint_data.iter_mut().enumerate() {
+        if value < 0x80 {
+            *b = value as u8;
+            buf.prepend_slice(&varint_data[..=i]);
+            return;
+        } else {
+            *b = ((value & 0x7F) | 0x80) as u8;
+            value = (value >> 7) - 1;
+        }
+    }
+    buf.prepend_slice(&varint_data);
+}
+
 /// Decodes a LEB128-bijective-encoded variable length integer from the buffer.
 #[inline(always)]
 pub fn decode_varint<B: Buf + ?Sized>(buf: &mut B) -> Result<u64, DecodeError> {
@@ -354,6 +371,46 @@ impl TagWriter {
             .expect("fields encoded out of order");
         self.last_tag = tag;
         encode_varint(((tag_delta as u64) << 2) | (wire_type as u64), buf);
+    }
+}
+
+/// Writes keys for the provided tags into a prepend-only buffer.
+#[derive(Default)]
+pub struct TagRevWriter {
+    current_key: Option<(u32, WireType)>,
+}
+
+impl TagRevWriter {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Encode the key delta to the given key into the buffer.
+    ///
+    /// All fields must be encoded in order; this is enforced in the encoding by encoding each
+    /// field's tag as a non-negative delta from the previously encoded field's tag. The tag delta
+    /// is encoded in the bits above the lowest two bits in the key delta, which encode the wire
+    /// type. When decoding, the wire type is taken as-is, and the tag delta added to the tag of the
+    /// last field decoded.
+    #[inline(always)]
+    pub fn begin_field<B: ReverseBuf>(&mut self, tag: u32, wire_type: WireType, buf: &mut B) {
+        if let Some((current_tag, current_wire_type)) = self.current_key {
+            let tag_delta = current_tag
+                .checked_sub(tag)
+                .expect("fields prepended out of order");
+            prepend_varint(((tag_delta as u64) << 2) | (current_wire_type as u64), buf);
+        }
+        self.current_key = Some((tag, wire_type));
+    }
+
+    /// Finishes writing the current message by encoding the key of the first field that appeared.
+    #[inline(always)]
+    pub fn finalize<B: ReverseBuf>(&mut self, buf: &mut B) {
+        let Some((tag_delta, wire_type)) = self.current_key else {
+            return;
+        };
+        prepend_varint(((tag_delta as u64) << 2) | (wire_type as u64), buf);
+        self.current_key = None;
     }
 }
 
