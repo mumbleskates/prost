@@ -115,7 +115,11 @@ impl ReverseBuffer {
     /// Returns the number of bytes written into this buffer so far.
     #[inline]
     pub fn len(&self) -> usize {
-        debug_assert!(self.capacity > self.front);
+        // Front should be zero any time the buf is empty
+        debug_assert!(!(self.chunks.is_empty() && self.front > 0));
+        // If there are no chunks capacity should also be zero, and chunks should always have
+        // nonzero size.
+        debug_assert_eq!(self.chunks.is_empty(), self.capacity == 0);
         self.capacity - self.front
     }
 
