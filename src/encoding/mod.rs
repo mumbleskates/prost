@@ -30,7 +30,8 @@ pub use value_traits::{
     NewForOverwrite,
 };
 
-pub use buf::{ReverseBuf, ReverseBufReader};
+/// Traits and types for writing prepend-only data.
+pub use buf::{ReverseBuf, ReverseBuffer, ReverseBufferReader};
 /// Fixed-size encoder. Encodes integers in fixed-size format.
 pub use fixed::Fixed;
 /// General encoder. Encodes strings and byte blobs, numbers as varints, floats as fixed size,

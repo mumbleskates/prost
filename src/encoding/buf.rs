@@ -9,12 +9,20 @@ use bytes::Buf;
 
 const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 
+/// A prepend-only byte buffer.
+pub trait ReverseBuf: Buf {
+    /// Prepends bytes to the buffer. These bytes will still be in the order they appear in the
+    /// provided `Buf` when they are read back, but they will appear immediately before any bytes
+    /// already written to the buffer.
+    fn prepend<B: Buf>(&mut self, data: B);
+}
+
 /// A `bytes`-compatible, exponentially-growing, prepend-only byte buffer.
 ///
 /// `ReverseBuf` is rope-like in that it stores its data non-contiguously, but does not (yet)
 /// support any rope-like operations.
 #[derive(Clone)]
-pub struct ReverseBuf {
+pub struct ReverseBuffer {
     /// Chunks of owned items in reverse order.
     chunks: Vec<Box<[MaybeUninit<u8>]>>,
     /// Index of the first item in the front chunk (at the end of `self.chunks`). Invariant: Always
@@ -30,7 +38,7 @@ pub struct ReverseBuf {
     _phantom_data: PhantomData<u8>,
 }
 
-impl ReverseBuf {
+impl ReverseBuffer {
     /// Creates a new empty buffer.
     pub fn new() -> Self {
         Self {
@@ -100,11 +108,20 @@ impl ReverseBuf {
         self.chunks.last_mut().map(Box::as_mut).unwrap_or(&mut [])
     }
 
-    /// Prepends bytes to the buffer. These bytes will still be in the order they appear in the
-    /// provided `Buf` when they are read back, but they will appear immediately before any bytes
-    /// already written to the buffer.
+    /// Returns a reader that references this buf's value, which implements `bytes::Buf` without
+    /// draining bytes from the buffer.
+    pub fn reader(&self) -> ReverseBufferReader {
+        ReverseBufferReader {
+            chunks: self.chunks.as_slice(),
+            front: self.front,
+            capacity: self.capacity,
+        }
+    }
+}
+
+impl ReverseBuf for ReverseBuffer {
     #[inline]
-    pub fn prepend<B: Buf>(&mut self, mut data: B) {
+    fn prepend<B: Buf>(&mut self, mut data: B) {
         let copy_data = |data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]| {
             while !dest_chunk.is_empty() {
                 let src = data.chunk();
@@ -187,19 +204,9 @@ impl ReverseBuf {
             self.planned_capacity = 0; // reset planned capacity since we already allocated
         }
     }
-
-    /// Returns a reader that references this buf's value, which implements `bytes::Buf` without
-    /// draining bytes from the buffer.
-    pub fn reader(&self) -> ReverseBufReader {
-        ReverseBufReader {
-            chunks: self.chunks.as_slice(),
-            front: self.front,
-            capacity: self.capacity,
-        }
-    }
 }
 
-impl Default for ReverseBuf {
+impl Default for ReverseBuffer {
     fn default() -> Self {
         Self::new()
     }
@@ -207,7 +214,7 @@ impl Default for ReverseBuf {
 
 /// The implementation of `bytes::Buf` for `ReverseBuf` drains bytes from the buffer as they are
 /// advanced past. Calls to `bytes::Buf::advance` undo any planned reservations.
-impl Buf for ReverseBuf {
+impl Buf for ReverseBuffer {
     #[inline]
     fn remaining(&self) -> usize {
         self.len()
@@ -253,7 +260,7 @@ impl Buf for ReverseBuf {
 }
 
 /// Non-draining reader-by-reference for `ReverseBuf`, implementing `bytes::Buf`.
-pub struct ReverseBufReader<'a> {
+pub struct ReverseBufferReader<'a> {
     /// Buffer being read
     chunks: &'a [Box<[MaybeUninit<u8>]>],
     /// Index of the front byte in the front chunk (the last in the slice). If chunks is non-empty,
@@ -263,7 +270,7 @@ pub struct ReverseBufReader<'a> {
     capacity: usize,
 }
 
-impl Buf for ReverseBufReader<'_> {
+impl Buf for ReverseBufferReader<'_> {
     #[inline]
     fn remaining(&self) -> usize {
         self.capacity - self.front
@@ -308,7 +315,7 @@ impl Buf for ReverseBufReader<'_> {
 
 #[cfg(test)]
 mod test {
-    use super::ReverseBuf;
+    use super::{ReverseBuf, ReverseBuffer};
     use alloc::vec::Vec;
     use bytes::{Buf, BufMut};
 
@@ -318,7 +325,7 @@ mod test {
         assert_eq!(read, expected);
     }
 
-    fn check_read(buf: ReverseBuf, expected: &[u8]) {
+    fn check_read(buf: ReverseBuffer, expected: &[u8]) {
         assert_eq!(buf.len(), expected.len());
         assert_eq!(buf.is_empty(), buf.len() == 0);
         compare_buf(buf.reader(), expected);
@@ -327,12 +334,12 @@ mod test {
 
     #[test]
     fn fresh() {
-        check_read(ReverseBuf::new(), b"");
+        check_read(ReverseBuffer::new(), b"");
     }
 
     #[test]
     fn fresh_with_plan_still_empty() {
-        let mut buf = ReverseBuf::new();
+        let mut buf = ReverseBuffer::new();
         buf.plan_reservation(100);
         assert!(buf.is_empty());
         assert_eq!(buf.len(), 0);
@@ -341,7 +348,7 @@ mod test {
 
     #[test]
     fn build_and_read() {
-        let mut buf = ReverseBuf::new();
+        let mut buf = ReverseBuffer::new();
         buf.prepend(b"!".as_slice());
         buf.prepend(b"world".as_slice());
         buf.prepend(b"hello ".as_slice());
@@ -350,11 +357,11 @@ mod test {
 
     #[test]
     fn build_bigger_and_read() {
-        let mut buf = ReverseBuf::new();
+        let mut buf = ReverseBuffer::new();
         buf.prepend(b"!".as_slice());
         buf.prepend(b"world".as_slice());
         buf.prepend(b"hello ".as_slice());
-        let mut buf2 = ReverseBuf::new();
+        let mut buf2 = ReverseBuffer::new();
         buf2.prepend(buf.reader()); // 1
         buf.prepend(buf2.reader()); // 2
         buf2.prepend(buf.reader()); // 3
@@ -371,12 +378,12 @@ mod test {
 
     #[test]
     fn build_with_planned_reservation() {
-        let mut buf = ReverseBuf::new();
+        let mut buf = ReverseBuffer::new();
         buf.prepend(b"!".as_slice());
         buf.prepend(b"world".as_slice());
         buf.prepend(b"hello ".as_slice());
         buf.plan_reservation(b"hello world!".len() * 12);
-        let mut buf2 = ReverseBuf::new();
+        let mut buf2 = ReverseBuffer::new();
         buf2.prepend(buf.reader()); // 1
         buf.prepend(buf2.reader()); // 2
         buf2.prepend(buf.reader()); // 3
@@ -396,12 +403,12 @@ mod test {
 
     #[test]
     fn build_with_initial_planned_reservation() {
-        let mut buf = ReverseBuf::new();
+        let mut buf = ReverseBuffer::new();
         buf.plan_reservation(b"hello world!".len() * 13);
         buf.prepend(b"!".as_slice());
         buf.prepend(b"world".as_slice());
         buf.prepend(b"hello ".as_slice());
-        let mut buf2 = ReverseBuf::new();
+        let mut buf2 = ReverseBuffer::new();
         buf2.prepend(buf.reader()); // 1
         buf.prepend(buf2.reader()); // 2
         buf2.prepend(buf.reader()); // 3
@@ -419,7 +426,7 @@ mod test {
 
     #[test]
     fn build_with_exact_planned_reservation() {
-        let mut buf = ReverseBuf::new();
+        let mut buf = ReverseBuffer::new();
         buf.plan_reservation_exact(b"hello world!".len());
         buf.prepend(b"!".as_slice());
         buf.prepend(b"world".as_slice());
