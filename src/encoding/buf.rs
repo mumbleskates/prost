@@ -170,6 +170,57 @@ impl ReverseBuffer {
         self.chunks.last_mut().map(Box::as_mut).unwrap_or(&mut [])
     }
 
+    fn grow_and_copy<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
+        self.plan_reservation(prepending_len);
+
+        let new_chunk_size = if self.planned_capacity > 0 {
+            // We planned an explicit exact size for the next allocation.
+            self.planned_capacity as usize
+        } else {
+            // We planned a minimum size for the new chunk. Choose the actual size for that
+            // allocation, planning to at least double in size.
+            max(
+                max(MIN_CHUNK_SIZE, self.capacity),
+                self.planned_capacity.unsigned_abs(),
+            )
+        };
+
+        // Create the ownership of the new chunk
+        let mut new_chunk: Box<[MaybeUninit<u8>]>;
+        unsafe {
+            let new_allocation =
+                alloc::alloc::alloc(alloc::alloc::Layout::array::<u8>(new_chunk_size).unwrap())
+                    as *mut MaybeUninit<u8>;
+            new_chunk = Box::from_raw(ptr::slice_from_raw_parts_mut(
+                new_allocation,
+                new_chunk_size,
+            ));
+        };
+
+        // Copy bytes from the provided buffer into our two slices, the early half at the end of
+        // the new chunk we just allocated, and the rest at the beginning of the "current" front
+        // chunk.
+        let old_front = self.front;
+        let new_front = new_chunk_size + self.front - prepending_len;
+        debug_assert!(new_front < new_chunk.len());
+        copy_data(&mut data, unsafe {
+            new_chunk.get_unchecked_mut(new_front..)
+        });
+        debug_assert!(self
+            .chunks
+            .last()
+            .map_or(true, |old_front_chunk| old_front < old_front_chunk.len()));
+        copy_data(&mut data, unsafe {
+            self.front_chunk_mut().get_unchecked_mut(..old_front)
+        });
+        debug_assert_eq!(data.remaining(), 0);
+        // Data is all written; update our state.
+        self.chunks.push(new_chunk); // new_chunk becomes the new front chunk
+        self.front = new_front; // front now points to the first initialized index there
+        self.capacity += new_chunk_size; // update our capacity
+        self.planned_capacity = 0; // reset planned capacity since we already allocated
+    }
+
     /// Returns a reader that references this buf's value, which implements `bytes::Buf` without
     /// draining bytes from the buffer.
     pub fn reader(&self) -> ReverseBufferReader {
@@ -181,26 +232,26 @@ impl ReverseBuffer {
     }
 }
 
-impl ReverseBuf for ReverseBuffer {
-    #[inline]
-    fn prepend<B: Buf>(&mut self, mut data: B) {
-        let copy_data = |data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]| {
-            while !dest_chunk.is_empty() {
-                let src = data.chunk();
-                let copy_size = min(src.len(), dest_chunk.len());
-                // SAFETY: we are initializing dest_chunk with bytes from `data`.
-                unsafe {
-                    ptr::copy_nonoverlapping(
-                        src.as_ptr(),
-                        dest_chunk.as_mut_ptr() as *mut u8,
-                        copy_size,
-                    );
-                }
-                dest_chunk = &mut dest_chunk[copy_size..];
-                data.advance(copy_size);
-            }
-        };
+/// Copies bytes out of a `bytes::Buf` directly into a slice of uninitialized bytes, filling it. The
+/// source must have enough bytes to fill the destination.
+#[inline(always)]
+fn copy_data<B: Buf>(data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]) {
+    debug_assert!(data.remaining() >= dest_chunk.len());
+    while !dest_chunk.is_empty() {
+        let src = data.chunk();
+        let copy_size = min(src.len(), dest_chunk.len());
+        // SAFETY: we are initializing dest_chunk with bytes from `data`.
+        unsafe {
+            ptr::copy_nonoverlapping(src.as_ptr(), dest_chunk.as_mut_ptr() as *mut u8, copy_size);
+        }
+        dest_chunk = &mut dest_chunk[copy_size..];
+        data.advance(copy_size);
+    }
+}
 
+impl ReverseBuf for ReverseBuffer {
+    #[inline(always)]
+    fn prepend<B: Buf>(&mut self, mut data: B) {
         let prepending_len = data.remaining();
         if prepending_len == 0 {
             return;
@@ -216,54 +267,7 @@ impl ReverseBuf for ReverseBuffer {
             debug_assert_eq!(data.remaining(), 0);
             self.front = new_front; // Those bytes are now initialized.
         } else {
-            self.plan_reservation(prepending_len);
-
-            let new_chunk_size = if self.planned_capacity > 0 {
-                // We planned an explicit exact size for the next allocation.
-                self.planned_capacity as usize
-            } else {
-                // We planned a minimum size for the new chunk. Choose the actual size for that
-                // allocation, planning to at least double in size.
-                max(
-                    max(MIN_CHUNK_SIZE, self.capacity),
-                    self.planned_capacity.unsigned_abs(),
-                )
-            };
-
-            // Create the ownership of the new chunk
-            let mut new_chunk: Box<[MaybeUninit<u8>]>;
-            unsafe {
-                let new_allocation =
-                    alloc::alloc::alloc(alloc::alloc::Layout::array::<u8>(new_chunk_size).unwrap())
-                        as *mut MaybeUninit<u8>;
-                new_chunk = Box::from_raw(ptr::slice_from_raw_parts_mut(
-                    new_allocation,
-                    new_chunk_size,
-                ));
-            };
-
-            // Copy bytes from the provided buffer into our two slices, the early half at the end of
-            // the new chunk we just allocated, and the rest at the beginning of the "current" front
-            // chunk.
-            let old_front = self.front;
-            let new_front = new_chunk_size + self.front - prepending_len;
-            debug_assert!(new_front < new_chunk.len());
-            copy_data(&mut data, unsafe {
-                new_chunk.get_unchecked_mut(new_front..)
-            });
-            debug_assert!(self
-                .chunks
-                .last()
-                .map_or(true, |old_front_chunk| old_front < old_front_chunk.len()));
-            copy_data(&mut data, unsafe {
-                self.front_chunk_mut().get_unchecked_mut(..old_front)
-            });
-            debug_assert_eq!(data.remaining(), 0);
-            // Data is all written; update our state.
-            self.chunks.push(new_chunk); // new_chunk becomes the new front chunk
-            self.front = new_front; // front now points to the first initialized index there
-            self.capacity += new_chunk_size; // update our capacity
-            self.planned_capacity = 0; // reset planned capacity since we already allocated
+            self.grow_and_copy(data, prepending_len);
         }
     }
 }
