@@ -10,11 +10,73 @@ use bytes::Buf;
 const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 
 /// A prepend-only byte buffer.
+///
+/// It is not guaranteed to be efficient to interleave reads via `bytes::Buf` and writes via
+/// `ReverseBuf::prepend`.
 pub trait ReverseBuf: Buf {
     /// Prepends bytes to the buffer. These bytes will still be in the order they appear in the
     /// provided `Buf` when they are read back, but they will appear immediately before any bytes
     /// already written to the buffer.
     fn prepend<B: Buf>(&mut self, data: B);
+
+    // --- Provided: ---
+
+    #[inline]
+    fn prepend_slice(&mut self, data: &[u8]) {
+        self.prepend(data)
+    }
+
+    #[inline]
+    fn prepend_u8(&mut self, n: u8) {
+        let src = [n];
+        self.prepend(src.as_slice());
+    }
+
+    #[inline]
+    fn prepend_i8(&mut self, n: i8) {
+        let src = [n as u8];
+        self.prepend(src.as_slice());
+    }
+
+    #[inline]
+    fn prepend_u16_le(&mut self, n: u16) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
+
+    #[inline]
+    fn prepend_i16_le(&mut self, n: i16) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
+
+    #[inline]
+    fn prepend_u32_le(&mut self, n: u32) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
+
+    #[inline]
+    fn prepend_i32_le(&mut self, n: i32) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
+
+    #[inline]
+    fn prepend_u64_le(&mut self, n: u64) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
+
+    #[inline]
+    fn prepend_i64_le(&mut self, n: i64) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
+
+    #[inline]
+    fn prepend_f32_le(&mut self, n: f32) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
+
+    #[inline]
+    fn prepend_f64_le(&mut self, n: f64) {
+        self.prepend_slice(&n.to_le_bytes())
+    }
 }
 
 /// A `bytes`-compatible, exponentially-growing, prepend-only byte buffer.
