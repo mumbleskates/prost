@@ -44,6 +44,7 @@ impl ReverseBuf {
     /// Returns the number of bytes written into this buffer so far.
     #[inline]
     pub fn len(&self) -> usize {
+        debug_assert!(self.capacity > self.front);
         self.capacity - self.front
     }
 
@@ -234,9 +235,9 @@ impl Buf for ReverseBuf {
         };
         // Un-plan any particular growth.
         self.planned_capacity = 0;
-        // Front becomes the number of bytes from the front that the buffer will end. This
-        // temporarily breaks our invariant that front must always be a valid index in the front
-        // chunk, so we will be removing chunks and subtracting from front until it fits.
+        // `front` becomes the number of bytes from the front that the new front of the buffer will
+        // be. This temporarily breaks our invariant that `front` must always be a valid index in
+        // the front chunk, so we will be removing chunks and subtracting from front until it fits.
         self.front += cnt;
         // Pop chunks off the front of the buffer until the new front doesn't overflow the front
         // chunk
@@ -259,7 +260,7 @@ pub struct ReverseBufReader<'a> {
     /// Index of the front byte in the front chunk (the last in the slice). If chunks is non-empty,
     /// front is always a valid index inside it.
     front: usize,
-    /// Total size of all the boxes covered by chunks.
+    /// Total size of all the boxes covered by chunks
     capacity: usize,
 }
 
@@ -288,7 +289,11 @@ impl Buf for ReverseBufReader<'_> {
         if cnt > self.remaining() {
             panic!("advanced past end");
         };
+        // `front` becomes the number of bytes from the front that the new front of the buffer will
+        // be. This temporarily breaks our invariant that `front` must always be a valid index in
+        // the front chunk, so we will be removing chunks and subtracting from front until it fits.
         self.front += cnt;
+        // Pop chunks off until the new front doesn't overflow the front chunk
         while let Some(front_chunk) = self.chunks.last() {
             if self.front < front_chunk.len() {
                 break;
