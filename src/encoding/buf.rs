@@ -13,6 +13,7 @@ const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 ///
 /// `ReverseBuf` is rope-like in that it stores its data non-contiguously, but does not (yet)
 /// support any rope-like operations.
+#[derive(Clone)]
 pub struct ReverseBuf {
     /// Chunks of owned items in reverse order.
     chunks: Vec<Box<[MaybeUninit<u8>]>>,
@@ -203,8 +204,6 @@ impl Default for ReverseBuf {
         Self::new()
     }
 }
-
-// TODO(widders): clone
 
 /// The implementation of `bytes::Buf` for `ReverseBuf` drains bytes from the buffer as they are
 /// advanced past. Calls to `bytes::Buf::advance` undo any planned reservations.
