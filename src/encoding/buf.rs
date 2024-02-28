@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::{max, min};
 use core::marker::PhantomData;
@@ -96,18 +97,39 @@ pub struct ReverseBuffer {
     /// Advisory size value for when the next chunk is allocated. If this value is positive it is an
     /// exact size for the next allocation(s); otherwise it is a negated minimum added capacity that
     /// was requested.
-    planned_capacity: isize,
+    planned_allocation: usize,
+    planned_exact: bool,
+    keep_back: bool,
     _phantom_data: PhantomData<u8>,
 }
 
 impl ReverseBuffer {
-    /// Creates a new empty buffer.
+    /// Creates a new empty buffer. This buffer will not allocate until data is added.
     pub fn new() -> Self {
         Self {
             chunks: Vec::new(),
             front: 0,
             capacity: 0,
-            planned_capacity: 0,
+            planned_allocation: 0,
+            planned_exact: false,
+            keep_back: false,
+            _phantom_data: PhantomData,
+        }
+    }
+
+    /// Creates a new buffer with a given base capacity. If the capacity is nonzero, it will always
+    /// retain at least that much capacity even when fully read or cleared.
+    pub fn with_capacity(capacity: usize) -> Self {
+        if capacity == 0 {
+            return Self::new();
+        }
+        Self {
+            chunks: vec![Self::allocate_chunk(capacity)],
+            front: capacity,
+            capacity,
+            planned_allocation: 0,
+            planned_exact: false,
+            keep_back: true,
             _phantom_data: PhantomData,
         }
     }
@@ -136,6 +158,18 @@ impl ReverseBuffer {
         self.chunks.is_empty()
     }
 
+    /// Clears the data from the buffer, including any additional allocations.
+    pub fn clear(&mut self) {
+        if self.keep_back {
+            self.chunks.truncate(1);
+            self.front = self.chunks[0].len();
+            self.capacity = self.front;
+            (self.planned_allocation, self.planned_exact) = (0, false);
+        } else {
+            *self = Self::new()
+        }
+    }
+
     /// Returns the number of bytes this buffer currently has allocated capacity for.
     #[inline]
     pub fn capacity(&self) -> usize {
@@ -149,15 +183,17 @@ impl ReverseBuffer {
         let Some(more_needed) = additional.checked_sub(self.front) else {
             return; // There is already enough capacity for `additional` more bytes.
         };
-        if self.planned_capacity.unsigned_abs() > more_needed {
+        if self.planned_allocation > more_needed {
             return; // Next planned allocation is already greater than the requested amount.
         }
-        self.planned_capacity = -(more_needed as isize);
+        (self.planned_allocation, self.planned_exact) = (more_needed, false);
     }
 
     /// Ensures that the buffer will, upon its next allocation, reserve enough space to fit this
     /// many more bytes than are in the buffer at present. If there is already enough additional
-    /// capacity to fit this many more bytes, this method has no effect.
+    /// capacity to fit this many more bytes, this method has no effect. If the requested capacity
+    /// is not already met and there is already a set plan for the size of the next allocation, it
+    /// will be overridden by this request.
     ///
     /// If this method is repeatedly called interleaved with calls to `prepend` that trigger new
     /// allocations, the buffer may become very fragmented as this method can be used to control the
@@ -167,7 +203,7 @@ impl ReverseBuffer {
         let Some(more_needed) = additional.checked_sub(self.front) else {
             return;
         };
-        self.planned_capacity = (self.capacity + more_needed) as isize;
+        (self.planned_allocation, self.planned_exact) = (self.capacity + more_needed, true);
     }
 
     /// Returns the slice of bytes ordered at the front of the buffer.
@@ -176,32 +212,34 @@ impl ReverseBuffer {
         self.chunks.last_mut().map(Box::as_mut).unwrap_or(&mut [])
     }
 
-    fn grow_and_copy<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
-        self.plan_reservation(prepending_len);
-
-        let new_chunk_size = if self.planned_capacity > 0 {
-            // We planned an explicit exact size for the next allocation.
-            self.planned_capacity as usize
-        } else {
-            // We planned a minimum size for the new chunk. Choose the actual size for that
-            // allocation, planning to at least double in size.
-            max(
-                max(MIN_CHUNK_SIZE, self.capacity),
-                self.planned_capacity.unsigned_abs(),
-            )
-        };
-
-        // Create the ownership of the new chunk
-        let mut new_chunk: Box<[MaybeUninit<u8>]>;
+    #[inline]
+    fn allocate_chunk(new_chunk_size: usize) -> Box<[MaybeUninit<u8>]> {
+        debug_assert!(new_chunk_size > 0);
         unsafe {
             let new_allocation =
                 alloc::alloc::alloc(alloc::alloc::Layout::array::<u8>(new_chunk_size).unwrap())
                     as *mut MaybeUninit<u8>;
-            new_chunk = Box::from_raw(ptr::slice_from_raw_parts_mut(
+            Box::from_raw(ptr::slice_from_raw_parts_mut(
                 new_allocation,
                 new_chunk_size,
-            ));
+            ))
+        }
+    }
+
+    fn grow_and_copy<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
+        self.plan_reservation(prepending_len);
+
+        let new_chunk_size = if self.planned_allocation > 0 {
+            // We planned an explicit exact size for the next allocation.
+            self.planned_allocation
+        } else {
+            // We planned a minimum size for the new chunk. Choose the actual size for that
+            // allocation, planning to at least double in size.
+            max(max(MIN_CHUNK_SIZE, self.capacity), self.planned_allocation)
         };
+
+        // Create the ownership of the new chunk
+        let mut new_chunk = Self::allocate_chunk(new_chunk_size);
 
         // Copy bytes from the provided buffer into our two slices, the early half at the end of
         // the new chunk we just allocated, and the rest at the beginning of the "current" front
@@ -224,7 +262,8 @@ impl ReverseBuffer {
         self.chunks.push(new_chunk); // new_chunk becomes the new front chunk
         self.front = new_front; // front now points to the first initialized index there
         self.capacity += new_chunk_size; // update our capacity
-        self.planned_capacity = 0; // reset planned capacity since we already allocated
+                                         // Reset the planned allocation since we already allocated
+        (self.planned_allocation, self.planned_exact) = (0, false);
     }
 
     /// Returns a reader that references this buf's value, which implements `bytes::Buf` without
@@ -285,7 +324,7 @@ impl Default for ReverseBuffer {
 }
 
 /// The implementation of `bytes::Buf` for `ReverseBuf` drains bytes from the buffer as they are
-/// advanced past. Calls to `bytes::Buf::advance` undo any planned reservations.
+/// advanced past.
 impl Buf for ReverseBuffer {
     #[inline]
     fn remaining(&self) -> usize {
@@ -311,8 +350,6 @@ impl Buf for ReverseBuffer {
         if cnt > self.len() {
             panic!("advanced past end");
         };
-        // Un-plan any particular growth.
-        self.planned_capacity = 0;
         // `front` becomes the number of bytes from the front that the new front of the buffer will
         // be. This temporarily breaks our invariant that `front` must always be a valid index in
         // the front chunk, so we will be removing chunks and subtracting from front until it fits.
@@ -324,9 +361,12 @@ impl Buf for ReverseBuffer {
             if self.front < front_chunk_size {
                 break;
             }
+            // TODO(widders): keep the back chunk if we do that
             drop(self.chunks.pop());
             self.capacity -= front_chunk_size;
             self.front -= front_chunk_size;
+            // Now that the buffer has shrunk, unplan any future allocations.
+            (self.planned_allocation, self.planned_exact) = (0, false);
         }
     }
 }
