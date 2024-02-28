@@ -126,6 +126,8 @@ impl ReverseBuffer {
     /// Returns `true` if the buffer is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
+        // TODO(widders): allow resetting without discarding the final allocation so the buffer can
+        //  be reused
         // Front should be zero any time the buf is empty
         debug_assert!(!(self.chunks.is_empty() && self.front > 0));
         // If there are no chunks capacity should also be zero, and chunks should always have
