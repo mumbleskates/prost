@@ -30,13 +30,13 @@ pub trait ReverseBuf: Buf {
     #[inline]
     fn prepend_u8(&mut self, n: u8) {
         let src = [n];
-        self.prepend(src.as_slice());
+        self.prepend_slice(&src);
     }
 
     #[inline]
     fn prepend_i8(&mut self, n: i8) {
         let src = [n as u8];
-        self.prepend(src.as_slice());
+        self.prepend_slice(&src);
     }
 
     #[inline]
@@ -148,14 +148,7 @@ impl ReverseBuffer {
     /// Returns `true` if the buffer is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        // TODO(widders): allow resetting without discarding the final allocation so the buffer can
-        //  be reused
-        // Front should be zero any time the buf is empty
-        debug_assert!(!(self.chunks.is_empty() && self.front > 0));
-        // If there are no chunks capacity should also be zero, and chunks should always have
-        // nonzero size.
-        debug_assert_eq!(self.chunks.is_empty(), self.capacity == 0);
-        self.chunks.is_empty()
+        self.len() == 0
     }
 
     /// Clears the data from the buffer, including any additional allocations.
@@ -229,8 +222,9 @@ impl ReverseBuffer {
     fn grow_and_copy<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
         self.plan_reservation(prepending_len);
 
-        let new_chunk_size = if self.planned_allocation > 0 {
+        let new_chunk_size = if self.planned_exact {
             // We planned an explicit exact size for the next allocation.
+            debug_assert_ne!(self.planned_allocation, 0);
             self.planned_allocation
         } else {
             // We planned a minimum size for the new chunk. Choose the actual size for that
@@ -361,7 +355,11 @@ impl Buf for ReverseBuffer {
             if self.front < front_chunk_size {
                 break;
             }
-            // TODO(widders): keep the back chunk if we do that
+            // If we have exactly one chunk left and we are retaining the back chunk, don't drop it.
+            if self.keep_back && self.chunks.len() == 1 {
+                debug_assert!(self.capacity == self.front);
+                break;
+            }
             drop(self.chunks.pop());
             self.capacity -= front_chunk_size;
             self.front -= front_chunk_size;
@@ -461,18 +459,18 @@ mod test {
     #[test]
     fn build_and_read() {
         let mut buf = ReverseBuffer::new();
-        buf.prepend(b"!".as_slice());
-        buf.prepend(b"world".as_slice());
-        buf.prepend(b"hello ".as_slice());
+        buf.prepend_slice(b"!");
+        buf.prepend_slice(b"world");
+        buf.prepend_slice(b"hello ");
         check_read(buf, b"hello world!");
     }
 
     #[test]
     fn build_bigger_and_read() {
         let mut buf = ReverseBuffer::new();
-        buf.prepend(b"!".as_slice());
-        buf.prepend(b"world".as_slice());
-        buf.prepend(b"hello ".as_slice());
+        buf.prepend_slice(b"!");
+        buf.prepend_slice(b"world");
+        buf.prepend_slice(b"hello ");
         let mut buf2 = ReverseBuffer::new();
         buf2.prepend(buf.reader()); // 1
         buf.prepend(buf2.reader()); // 2
@@ -481,6 +479,11 @@ mod test {
         buf2.prepend(buf.reader()); // 8
         buf.prepend(buf2.reader()); // 13
         assert_eq!(buf.chunks.len(), 3);
+        check_read(
+            buf.clone(),
+            b"hello world!hello world!hello world!hello world!hello world!hello world!\
+            hello world!hello world!hello world!hello world!hello world!hello world!hello world!",
+        );
         check_read(
             buf,
             b"hello world!hello world!hello world!hello world!hello world!hello world!\
@@ -491,9 +494,9 @@ mod test {
     #[test]
     fn build_with_planned_reservation() {
         let mut buf = ReverseBuffer::new();
-        buf.prepend(b"!".as_slice());
-        buf.prepend(b"world".as_slice());
-        buf.prepend(b"hello ".as_slice());
+        buf.prepend_slice(b"!");
+        buf.prepend_slice(b"world");
+        buf.prepend_slice(b"hello ");
         buf.plan_reservation(b"hello world!".len() * 12);
         let mut buf2 = ReverseBuffer::new();
         buf2.prepend(buf.reader()); // 1
@@ -517,9 +520,9 @@ mod test {
     fn build_with_initial_planned_reservation() {
         let mut buf = ReverseBuffer::new();
         buf.plan_reservation(b"hello world!".len() * 13);
-        buf.prepend(b"!".as_slice());
-        buf.prepend(b"world".as_slice());
-        buf.prepend(b"hello ".as_slice());
+        buf.prepend_slice(b"!");
+        buf.prepend_slice(b"world");
+        buf.prepend_slice(b"hello ");
         let mut buf2 = ReverseBuffer::new();
         buf2.prepend(buf.reader()); // 1
         buf.prepend(buf2.reader()); // 2
@@ -540,11 +543,43 @@ mod test {
     fn build_with_exact_planned_reservation() {
         let mut buf = ReverseBuffer::new();
         buf.plan_reservation_exact(b"hello world!".len());
-        buf.prepend(b"!".as_slice());
-        buf.prepend(b"world".as_slice());
-        buf.prepend(b"hello ".as_slice());
+        buf.prepend_slice(b"!");
+        buf.prepend_slice(b"world");
+        buf.prepend_slice(b"hello ");
         assert_eq!(buf.chunks.len(), 1); // Only one chunk was allocated in total
         assert_eq!(buf.capacity() - buf.len(), 0); // No extra capacity exists in the buffer
         check_read(buf, b"hello world!");
+    }
+
+    #[test]
+    fn build_with_capacity() {
+        let mut buf = ReverseBuffer::with_capacity(b"hello world!".len());
+        assert_eq!(buf.capacity(), b"hello world!".len());
+        assert!(buf.is_empty());
+        assert_eq!(buf.chunks.len(), 1);
+        buf.prepend_slice(b"!");
+        buf.prepend_slice(b"world");
+        buf.prepend_slice(b"hello ");
+        assert_eq!(buf.capacity(), b"hello world!".len());
+        assert_eq!(buf.len(), buf.capacity());
+        assert_eq!(buf.chunks.len(), 1);
+        buf.prepend_slice(b"12345");
+        assert_eq!(buf.chunks.len(), 2);
+        assert!(buf.capacity() > buf.len());
+        check_read(buf, b"12345hello world!");
+    }
+
+    #[test]
+    fn single_prepend_allocates_once() {
+        let mut buf = ReverseBuffer::with_capacity(4);
+        buf.prepend_slice(b"aa");
+        buf.prepend_slice(&[0; 100]);
+        assert_eq!(buf.len(), 102);
+        assert_eq!(buf.capacity(), buf.len());
+        assert_eq!(buf.chunks.len(), 2);
+        buf.clear();
+        assert_eq!(buf.chunks.len(), 1);
+        assert_eq!(buf.capacity(), 4);
+        assert!(buf.is_empty());
     }
 }
