@@ -72,6 +72,7 @@ pub fn prepend_varint<B: ReverseBuf>(mut value: u64, buf: &mut B) {
         return;
     }
     let mut varint_data = [0u8; 9];
+    // TODO(widders): try unrolling this
     for (i, b) in varint_data.iter_mut().enumerate() {
         if value < 0x80 {
             *b = value as u8;
