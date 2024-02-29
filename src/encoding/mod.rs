@@ -67,6 +67,10 @@ pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
 /// Prepends an integer value in LEB128-bijective format to the given buffer.
 #[inline(always)]
 pub fn prepend_varint<B: ReverseBuf>(mut value: u64, buf: &mut B) {
+    if value < 0x80 {
+        buf.prepend_u8(value as u8);
+        return;
+    }
     let mut varint_data = [0u8; 9];
     for (i, b) in varint_data.iter_mut().enumerate() {
         if value < 0x80 {
