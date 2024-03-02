@@ -66,24 +66,55 @@ pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
 
 /// Prepends an integer value in LEB128-bijective format to the given buffer.
 #[inline(always)]
-pub fn prepend_varint<B: ReverseBuf>(mut value: u64, buf: &mut B) {
-    if value < 0x80 {
-        buf.prepend_u8(value as u8);
-        return;
-    }
-    let mut varint_data = [0u8; 9];
-    // TODO(widders): try unrolling this
-    for (i, b) in varint_data.iter_mut().enumerate() {
-        if value < 0x80 {
-            *b = value as u8;
-            buf.prepend_slice(&varint_data[..=i]);
-            return;
-        } else {
+pub fn prepend_varint<B: ReverseBuf>(value: u64, buf: &mut B) {
+    const LIMIT: [u64; 9] = [
+        0,
+        0x80,
+        0x4080,
+        0x20_4080,
+        0x1020_4080,
+        0x8_1020_4080,
+        0x408_1020_4080,
+        0x2_0408_1020_4080,
+        0x102_0408_1020_4080,
+    ];
+
+    #[inline(always)]
+    fn prepend_varint_inner<const N: usize>(mut value: u64, buf: &mut impl ReverseBuf) {
+        let mut varint_data = [0u8; N];
+        for b in &mut varint_data[..N - 1] {
             *b = ((value & 0x7F) | 0x80) as u8;
             value = (value >> 7) - 1;
         }
+        varint_data[N - 1] = value as u8;
+        buf.prepend_slice(&varint_data);
     }
-    buf.prepend_slice(&varint_data);
+
+    if value < LIMIT[1] {
+        prepend_varint_inner::<1>(value, buf);
+    } else if value < LIMIT[5] {
+        if value < LIMIT[3] {
+            if value < LIMIT[2] {
+                prepend_varint_inner::<2>(value, buf);
+            } else {
+                prepend_varint_inner::<3>(value, buf);
+            }
+        } else if value < LIMIT[4] {
+            prepend_varint_inner::<4>(value, buf);
+        } else {
+            prepend_varint_inner::<5>(value, buf);
+        }
+    } else if value < LIMIT[7] {
+        if value < LIMIT[6] {
+            prepend_varint_inner::<6>(value, buf);
+        } else {
+            prepend_varint_inner::<7>(value, buf);
+        }
+    } else if value < LIMIT[8] {
+        prepend_varint_inner::<8>(value, buf);
+    } else {
+        prepend_varint_inner::<9>(value, buf);
+    }
 }
 
 /// Decodes a LEB128-bijective-encoded variable length integer from the buffer.
@@ -627,6 +658,10 @@ pub trait Encoder<E> {
     //  emit-reversed
     /// Returns the encoded length of the field, including the key.
     fn encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
+
+    ///
+    // fn prepend_encode<B: Buf>(&mut self, data: B, tw: &mut TagRevWriter);
+
     /// Decodes a field with the given wire type; the field's key should have already been consumed
     /// from the buffer.
     fn decode<B: Buf + ?Sized>(
