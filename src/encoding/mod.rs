@@ -91,7 +91,7 @@ pub fn prepend_varint<B: ReverseBuf>(value: u64, buf: &mut B) {
     }
 
     if value < LIMIT[1] {
-        prepend_varint_inner::<1>(value, buf);
+        buf.prepend_u8(value as u8);
     } else if value < LIMIT[5] {
         if value < LIMIT[3] {
             if value < LIMIT[2] {
