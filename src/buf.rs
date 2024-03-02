@@ -219,12 +219,9 @@ impl ReverseBuffer {
         }
     }
 
-    #[inline(never)]
-    #[cold]
-    fn grow_and_copy_buf<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
-        self.plan_reservation(prepending_len);
-
-        let new_chunk_size = if self.planned_exact {
+    #[inline]
+    fn new_allocation_size(&self) -> usize {
+        if self.planned_exact {
             // We planned an explicit exact size for the next allocation.
             debug_assert_ne!(self.planned_allocation, 0);
             self.planned_allocation
@@ -232,9 +229,35 @@ impl ReverseBuffer {
             // We planned a minimum size for the new chunk. Choose the actual size for that
             // allocation, planning to at least double in size.
             max(max(MIN_CHUNK_SIZE, self.capacity), self.planned_allocation)
-        };
+        }
+    }
+
+    /// Allocates a new chunk, adding it to `chunks` and adding its length to `front`. The front
+    /// offset will need to be corrected after this call so it refers to a valid index inside this
+    /// new front chunk in order to maintain invariants unless the buffer was completely empty.
+    #[inline(never)]
+    #[cold]
+    fn grow_slow(&mut self) {
+        self.grow();
+    }
+
+    #[inline]
+    fn grow(&mut self) {
+        let new_chunk_size = self.new_allocation_size();
+        self.chunks.push(Self::allocate_chunk(new_chunk_size)); // new_chunk becomes the new front chunk
+        self.front += new_chunk_size; // front now points to the first initialized index there
+        self.capacity += new_chunk_size;
+        // Reset the planned allocation
+        (self.planned_allocation, self.planned_exact) = (0, false);
+    }
+
+    #[inline(never)]
+    #[cold]
+    fn grow_and_copy_buf<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
+        self.plan_reservation(prepending_len);
 
         // Create the ownership of the new chunk
+        let new_chunk_size = self.new_allocation_size();
         let mut new_chunk = Self::allocate_chunk(new_chunk_size);
 
         // Copy bytes from the provided buffer into our two slices, the early half at the end of
@@ -260,6 +283,52 @@ impl ReverseBuffer {
         self.capacity += new_chunk_size;
         // Reset the planned allocation since we already allocated
         (self.planned_allocation, self.planned_exact) = (0, false);
+    }
+
+    #[inline(never)]
+    #[cold]
+    fn grow_and_copy_slice(&mut self, data: &[u8]) {
+        self.plan_reservation(data.len());
+        let new_front;
+        if self.front == 0 {
+            // We are growing and copying the whole thing once into the back of the new chunk.
+            self.grow();
+            new_front = self.front - data.len();
+            // SAFETY: we are initializing the end of the new front chunk from `data`.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    data.as_ptr(),
+                    &mut self.front_chunk_mut()[new_front..] as *mut _ as *mut u8,
+                    data.len(),
+                );
+            }
+        } else {
+            // The prepended data will be split across the current and new front chunk.
+            let (data_front, data_back) = data.split_at(data.len() - self.front);
+            // SAFETY: we are initializing the range of the front chunk before the current front
+            // with bytes from the back part of `data`.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    data_back.as_ptr(),
+                    self.front_chunk_mut() as *mut _ as *mut u8,
+                    self.front,
+                );
+            }
+            // add a new chunk
+            self.grow();
+            new_front = self.front - data.len();
+            debug_assert_eq!(new_front + data_front.len(), self.front_chunk_mut().len());
+            // SAFETY: we are initializing the end of the new front chunk from the front part of
+            // `data`.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    data_front.as_ptr(),
+                    &mut self.front_chunk_mut()[new_front..] as *mut _ as *mut u8,
+                    data_front.len(),
+                );
+            }
+        }
+        self.front = new_front;
     }
 
     /// Returns a reader that references this buf's value, which implements `bytes::Buf` without
@@ -311,7 +380,34 @@ impl ReverseBuf for ReverseBuffer {
             self.grow_and_copy_buf(data, prepending_len);
         }
     }
-    // TODO(widders): try specializing provided methods and cheaper copies here
+
+    #[inline(always)]
+    fn prepend_slice(&mut self, data: &[u8]) {
+        if let Some(new_front) = self.front.checked_sub(data.len()) {
+            // SAFETY: we are initializing the range of the front chunk before the front with bytes
+            // from `data`.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    data.as_ptr(),
+                    self.front_chunk_mut()[new_front..].as_mut_ptr() as *mut u8,
+                    data.len(),
+                );
+            }
+            self.front = new_front;
+        } else {
+            self.grow_and_copy_slice(data);
+        }
+    }
+
+    #[inline(always)]
+    fn prepend_u8(&mut self, byte: u8) {
+        if self.front == 0 {
+            self.grow_slow();
+        }
+        let new_front = self.front - 1;
+        self.front_chunk_mut()[new_front].write(byte);
+        self.front = new_front;
+    }
 }
 
 impl Default for ReverseBuffer {
