@@ -1,8 +1,8 @@
 use std::mem;
 
+use bilrost::buf::ReverseBuffer;
 use bilrost::encoding::{
-    decode_varint, encode_varint, encoded_len_varint, prepend_varint, Capped, ReverseBuffer,
-    TagReader, WireType,
+    decode_varint, encode_varint, encoded_len_varint, prepend_varint, Capped, TagReader, WireType,
 };
 use bilrost::DecodeError;
 use bytes::Buf;

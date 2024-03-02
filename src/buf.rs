@@ -309,6 +309,7 @@ impl ReverseBuf for ReverseBuffer {
             self.grow_and_copy(data, prepending_len);
         }
     }
+    // TODO(widders): try specializing provided methods and cheaper copies here
 }
 
 impl Default for ReverseBuffer {

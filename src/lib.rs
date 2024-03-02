@@ -13,6 +13,7 @@ pub use bytes;
 #[doc(hidden)]
 pub use bilrost_derive::{DistinguishedMessage, DistinguishedOneof, Enumeration, Message, Oneof};
 
+pub mod buf;
 mod error;
 mod message;
 mod types;

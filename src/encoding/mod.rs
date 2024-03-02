@@ -6,13 +6,13 @@ use core::ops::{Deref, DerefMut};
 use bytes::buf::Take;
 use bytes::{Buf, BufMut};
 
+use crate::buf::{ReverseBuf, ReverseBuffer, ReverseBufferReader};
 use crate::DecodeErrorKind::{
     InvalidVarint, NotCanonical, TagOverflowed, Truncated, UnexpectedlyRepeated, UnknownField,
     WrongWireType,
 };
 use crate::{decode_length_delimiter, DecodeError, DecodeErrorKind};
 
-mod buf;
 mod fixed;
 mod general;
 mod map;
@@ -30,8 +30,6 @@ pub use value_traits::{
     NewForOverwrite,
 };
 
-/// Traits and types for writing prepend-only data.
-pub use buf::{ReverseBuf, ReverseBuffer, ReverseBufferReader};
 /// Fixed-size encoder. Encodes integers in fixed-size format.
 pub use fixed::Fixed;
 /// General encoder. Encodes strings and byte blobs, numbers as varints, floats as fixed size,
