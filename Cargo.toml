@@ -71,6 +71,7 @@ static_assertions = "1"
 
 [profile.bench]
 debug = true
+lto = "fat"
 
 [[bench]]
 name = "varint"
