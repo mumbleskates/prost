@@ -219,7 +219,9 @@ impl ReverseBuffer {
         }
     }
 
-    fn grow_and_copy<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
+    #[inline(never)]
+    #[cold]
+    fn grow_and_copy_buf<B: Buf>(&mut self, mut data: B, prepending_len: usize) {
         self.plan_reservation(prepending_len);
 
         let new_chunk_size = if self.planned_exact {
@@ -255,8 +257,8 @@ impl ReverseBuffer {
         // Data is all written; update our state.
         self.chunks.push(new_chunk); // new_chunk becomes the new front chunk
         self.front = new_front; // front now points to the first initialized index there
-        self.capacity += new_chunk_size; // update our capacity
-                                         // Reset the planned allocation since we already allocated
+        self.capacity += new_chunk_size;
+        // Reset the planned allocation since we already allocated
         (self.planned_allocation, self.planned_exact) = (0, false);
     }
 
@@ -306,7 +308,7 @@ impl ReverseBuf for ReverseBuffer {
             debug_assert_eq!(data.remaining(), 0);
             self.front = new_front; // Those bytes are now initialized.
         } else {
-            self.grow_and_copy(data, prepending_len);
+            self.grow_and_copy_buf(data, prepending_len);
         }
     }
     // TODO(widders): try specializing provided methods and cheaper copies here
