@@ -375,7 +375,7 @@ impl ReverseBuf for ReverseBuffer {
             let new_front = self.front - prepending_len;
             if prepending_len <= MAX_SELF_COPY {
                 let mut data_to_slice = [0; MAX_SELF_COPY];
-                data.copy_to_slice(&mut data_to_slice);
+                data.copy_to_slice(&mut data_to_slice[..prepending_len]);
                 let old_front = self.front;
                 for (from, to) in data_to_slice[..prepending_len]
                     .iter()
@@ -708,5 +708,13 @@ mod test {
         assert_eq!(buf.chunks.len(), 1);
         assert_eq!(buf.capacity(), 4);
         assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn prepending_small_bufs() {
+        let mut buf = ReverseBuffer::new();
+        buf.prepend("hello".as_bytes());
+        buf.prepend("why ".as_bytes());
+        check_read(buf, b"why hello");
     }
 }
