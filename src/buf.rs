@@ -8,7 +8,9 @@ use core::ptr;
 
 use bytes::Buf;
 
-// Prepends larger than this size will delegate to standard ptr data copying.
+// Flag for platform-specific optimization that avoids large slowdowns on some architectures.
+const ENABLE_SELF_COPY_OPTIMIZATION: bool = cfg!(target_arch = "x86_64");
+// Prepends larger than this size will always delegate to standard ptr data copying.
 const MAX_SELF_COPY: usize = 8;
 // Default first allocation size.
 const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
@@ -373,7 +375,7 @@ impl ReverseBuf for ReverseBuffer {
             // The data fits in our current front chunk; copy it into there and update the front
             // index.
             let new_front = self.front - prepending_len;
-            if prepending_len <= MAX_SELF_COPY {
+            if ENABLE_SELF_COPY_OPTIMIZATION && prepending_len <= MAX_SELF_COPY {
                 let mut data_to_slice = [0; MAX_SELF_COPY];
                 data.copy_to_slice(&mut data_to_slice[..prepending_len]);
                 let old_front = self.front;
@@ -400,8 +402,8 @@ impl ReverseBuf for ReverseBuffer {
     #[inline(always)]
     fn prepend_slice(&mut self, data: &[u8]) {
         if let Some(new_front) = self.front.checked_sub(data.len()) {
-            if data.len() < MAX_SELF_COPY {
-                // For ?reasons?, doing this copy backwards is way, way, way faster.
+            if ENABLE_SELF_COPY_OPTIMIZATION && data.len() <= MAX_SELF_COPY {
+                // For ?reasons?, doing this copy backwards is way, way, way faster on many x86 cpus
                 let old_front = self.front;
                 for (from, to) in data
                     .iter()
