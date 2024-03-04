@@ -8,6 +8,9 @@ use core::ptr;
 
 use bytes::Buf;
 
+// Prepends larger than this size will delegate to standard ptr data copying.
+const MAX_SELF_COPY: usize = 8;
+// Default first allocation size.
 const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 
 /// A prepend-only byte buffer.
@@ -266,14 +269,14 @@ impl ReverseBuffer {
         let old_front = self.front;
         let new_front = new_chunk_size + self.front - prepending_len;
         debug_assert!(new_front < new_chunk.len());
-        copy_data(&mut data, unsafe {
+        copy_buf(&mut data, unsafe {
             new_chunk.get_unchecked_mut(new_front..)
         });
         debug_assert!(self
             .chunks
             .last()
             .map_or(true, |old_front_chunk| old_front < old_front_chunk.len()));
-        copy_data(&mut data, unsafe {
+        copy_buf(&mut data, unsafe {
             self.front_chunk_mut().get_unchecked_mut(..old_front)
         });
         debug_assert_eq!(data.remaining(), 0);
@@ -345,7 +348,7 @@ impl ReverseBuffer {
 /// Copies bytes out of a `bytes::Buf` directly into a slice of uninitialized bytes, filling it. The
 /// source must have enough bytes to fill the destination.
 #[inline(always)]
-fn copy_data<B: Buf>(data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]) {
+fn copy_buf<B: Buf>(data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]) {
     debug_assert!(data.remaining() >= dest_chunk.len());
     while !dest_chunk.is_empty() {
         let src = data.chunk();
@@ -370,11 +373,17 @@ impl ReverseBuf for ReverseBuffer {
             // The data fits in our current front chunk; copy it into there and update the front
             // index.
             let new_front = self.front - prepending_len;
-            let dest_range = new_front..self.front;
-            // SAFETY: We have a nonzero `front`, therefore we must have a front chunk.
-            copy_data(&mut data, &mut self.front_chunk_mut()[dest_range]);
-            // Copy each chunk of `data` into this uninitialized destination.
-            debug_assert_eq!(data.remaining(), 0);
+            if prepending_len <= MAX_SELF_COPY {
+                let mut data_to_slice = [0; MAX_SELF_COPY];
+                data.copy_to_slice(&mut data_to_slice);
+                self.prepend_slice(&data_to_slice[..prepending_len]);
+            } else {
+                let dest_range = new_front..self.front;
+                // We have a nonzero `front`, therefore we must have a front chunk.
+                copy_buf(&mut data, &mut self.front_chunk_mut()[dest_range]);
+                // Copy each chunk of `data` into this uninitialized destination.
+                debug_assert_eq!(data.remaining(), 0);
+            }
             self.front = new_front; // Those bytes are now initialized.
         } else {
             self.grow_and_copy_buf(data, prepending_len);
@@ -384,14 +393,25 @@ impl ReverseBuf for ReverseBuffer {
     #[inline(always)]
     fn prepend_slice(&mut self, data: &[u8]) {
         if let Some(new_front) = self.front.checked_sub(data.len()) {
-            // SAFETY: we are initializing the range of the front chunk before the front with bytes
-            // from `data`.
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    data.as_ptr(),
-                    self.front_chunk_mut()[new_front..].as_mut_ptr() as *mut u8,
-                    data.len(),
-                );
+            if data.len() < MAX_SELF_COPY {
+                // For ?reasons?, doing this copy backwards is way, way, way faster.
+                for (from, to) in data
+                    .iter()
+                    .rev()
+                    .zip(self.front_chunk_mut()[new_front..].iter_mut().rev())
+                {
+                    *to = MaybeUninit::new(*from);
+                }
+            } else {
+                // SAFETY: we are initializing the range of the front chunk before the front with
+                // bytes from `data`.
+                unsafe {
+                    ptr::copy_nonoverlapping(
+                        data.as_ptr(),
+                        self.front_chunk_mut()[new_front..].as_mut_ptr() as *mut u8,
+                        data.len(),
+                    );
+                }
             }
             self.front = new_front;
         } else {
