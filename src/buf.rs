@@ -376,10 +376,11 @@ impl ReverseBuf for ReverseBuffer {
             if prepending_len <= MAX_SELF_COPY {
                 let mut data_to_slice = [0; MAX_SELF_COPY];
                 data.copy_to_slice(&mut data_to_slice);
+                let old_front = self.front;
                 for (from, to) in data_to_slice[..prepending_len]
                     .iter()
                     .rev()
-                    .zip(self.front_chunk_mut()[new_front..].iter_mut().rev())
+                    .zip(self.front_chunk_mut()[..old_front].iter_mut().rev())
                 {
                     *to = MaybeUninit::new(*from);
                 }
@@ -401,10 +402,11 @@ impl ReverseBuf for ReverseBuffer {
         if let Some(new_front) = self.front.checked_sub(data.len()) {
             if data.len() < MAX_SELF_COPY {
                 // For ?reasons?, doing this copy backwards is way, way, way faster.
+                let old_front = self.front;
                 for (from, to) in data
                     .iter()
                     .rev()
-                    .zip(self.front_chunk_mut()[new_front..].iter_mut().rev())
+                    .zip(self.front_chunk_mut()[..old_front].iter_mut().rev())
                 {
                     *to = MaybeUninit::new(*from);
                 }
