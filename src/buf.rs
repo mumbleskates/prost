@@ -376,7 +376,13 @@ impl ReverseBuf for ReverseBuffer {
             if prepending_len <= MAX_SELF_COPY {
                 let mut data_to_slice = [0; MAX_SELF_COPY];
                 data.copy_to_slice(&mut data_to_slice);
-                self.prepend_slice(&data_to_slice[..prepending_len]);
+                for (from, to) in data_to_slice[..prepending_len]
+                    .iter()
+                    .rev()
+                    .zip(self.front_chunk_mut()[new_front..].iter_mut().rev())
+                {
+                    *to = MaybeUninit::new(*from);
+                }
             } else {
                 let dest_range = new_front..self.front;
                 // We have a nonzero `front`, therefore we must have a front chunk.
