@@ -36,19 +36,39 @@ exclude = [
 bench = false
 
 [features]
-default = ["derive", "detailed-errors", "std"]
-bytestring = ["dep:bytestring"]
+default = ["auto-optimize", "derive", "detailed-errors", "std"]
 derive = ["dep:bilrost-derive"]
 detailed-errors = ["dep:thin-vec"]
 extended-diagnostics = ["dep:const_panic"]
-hashbrown = ["dep:hashbrown"]
 no-recursion-limit = []
 opaque = ["dep:btreemultimap"]
-pprof = []
-smallvec = ["dep:smallvec"]
 std = []
+
+third-party-type-support = [
+    "bytestring",
+    "hashbrown",
+    "smallvec",
+    "thin-vec",
+    "tinyvec",
+]
+bytestring = ["dep:bytestring"]
+hashbrown = ["dep:hashbrown"]
+smallvec = ["dep:smallvec"]
 thin-vec = ["dep:thin-vec"]
 tinyvec = ["dep:tinyvec"]
+
+# Optimization controls
+auto-optimize = ["auto-self-copy-optimization"]
+auto-self-copy-optimization = []
+force-self-copy-optimization = []
+
+full-test-suite = [
+    "derive",
+    "detailed-errors",
+    "extended-diagnostics",
+    "opaque",
+    "third-party-type-support",
+]
 
 [dependencies]
 bilrost-derive = { version = "0.1004.0-dev", path = "bilrost-derive", optional = true }
@@ -61,10 +81,12 @@ smallvec = { version = ">=1.6.1", features = ["const_generics"], optional = true
 thin-vec = { version = ">=0.2", optional = true }
 tinyvec = { version = ">=1", features = ["alloc"], optional = true }
 
+# pprof prevents building on windows, so must be an optional feature
+pprof = { version = "0.13", features = ["flamegraph"], optional = true }
+
 [dev-dependencies]
 criterion = { version = "0.5", default-features = false }
 itertools = "0.12"
-pprof = { version = "0.13", features = ["flamegraph"] }
 proptest = "1"
 rand = "0.8"
 static_assertions = "1"

@@ -9,7 +9,12 @@ use core::ptr;
 use bytes::Buf;
 
 // Flag for platform-specific optimization that avoids large slowdowns on some architectures.
-const ENABLE_SELF_COPY_OPTIMIZATION: bool = cfg!(target_arch = "x86_64");
+const ENABLE_SELF_COPY_OPTIMIZATION: bool = cfg!(
+    any(
+        all(feature = "auto-self-copy-optimization", target_arch = "x86_64"),
+        feature = "force-self-copy-optimization"
+    )
+);
 // Prepends larger than this size will always delegate to standard ptr data copying.
 const MAX_SELF_COPY: usize = 8;
 // Default first allocation size.
