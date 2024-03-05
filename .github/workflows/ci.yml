@@ -12,6 +12,7 @@ jobs:
           components: clippy, rustfmt
       - run: cargo clippy --all --all-targets --features full-test-suite
       - run: cargo clippy --all --all-targets --features full-test-suite --no-default-features
+      - run: cargo clippy --all --all-targets --no-default-features
       - run: cargo fmt --all --check
 
   test:
@@ -38,10 +39,14 @@ jobs:
         run: cargo test --workspace --all-targets --features full-test-suite
       - name: test no-default-features
         run: cargo test --workspace --all-targets --features full-test-suite --no-default-features
+      - name: test minimal features
+        run: cargo test --workspace --all-targets --no-default-features
       - name: test doc
         run: cargo test --workspace --doc --features full-test-suite
       - name: test doc no-default-features
         run: cargo test --workspace --doc --features full-test-suite --no-default-features
+      - name: test doc minimal features
+        run: cargo test --workspace --doc --no-default-features
 
   kani:
     runs-on: ubuntu-latest
