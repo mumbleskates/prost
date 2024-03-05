@@ -6,7 +6,7 @@ use core::ops::{Deref, DerefMut};
 use bytes::buf::Take;
 use bytes::{Buf, BufMut};
 
-use crate::buf::{ReverseBuf, ReverseBuffer, ReverseBufferReader};
+use crate::buf::ReverseBuf;
 use crate::DecodeErrorKind::{
     InvalidVarint, NotCanonical, TagOverflowed, Truncated, UnexpectedlyRepeated, UnknownField,
     WrongWireType,
