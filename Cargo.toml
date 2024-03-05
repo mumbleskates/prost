@@ -51,11 +51,7 @@ third-party-type-support = [
     "thin-vec",
     "tinyvec",
 ]
-bytestring = ["dep:bytestring"]
-hashbrown = ["dep:hashbrown"]
-smallvec = ["dep:smallvec"]
 thin-vec = ["dep:thin-vec"]
-tinyvec = ["dep:tinyvec"]
 
 # Optimization controls
 auto-optimize = ["auto-self-copy-optimization"]
