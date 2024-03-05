@@ -570,6 +570,7 @@ mod test {
         assert_eq!(read, expected);
     }
 
+    #[allow(clippy::len_zero)]
     fn check_read(buf: ReverseBuffer, expected: &[u8]) {
         assert_eq!(buf.len(), expected.len());
         assert_eq!(buf.is_empty(), buf.len() == 0);
