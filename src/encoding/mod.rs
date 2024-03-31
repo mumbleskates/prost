@@ -1483,6 +1483,9 @@ pub trait Oneof: EmptyState {
     /// Encodes the fields of the oneof into the given buffer.
     fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter);
 
+    /// Prepends the fields of the oneof into the given buffer.
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter);
+
     /// Measures the number of bytes that would encode this oneof.
     fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize;
 
@@ -1508,6 +1511,9 @@ pub trait NonEmptyOneof: Sized {
     /// Encodes the fields of the oneof into the given buffer.
     fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter);
 
+    /// Prepends the fields of the oneof into the given buffer.
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter);
+
     /// Measures the number of bytes that would encode this oneof.
     fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize;
 
@@ -1531,12 +1537,21 @@ where
 {
     const FIELD_TAGS: &'static [u32] = T::FIELD_TAGS;
 
+    #[inline]
     fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter) {
         if let Some(value) = self {
             value.oneof_encode(buf, tw);
         }
     }
 
+    #[inline]
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter) {
+        if let Some(value) = self {
+            value.oneof_prepend(buf, tw);
+        }
+    }
+
+    #[inline]
     fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize {
         if let Some(value) = self {
             value.oneof_encoded_len(tm)
@@ -1545,10 +1560,12 @@ where
         }
     }
 
+    #[inline]
     fn oneof_current_tag(&self) -> Option<u32> {
         self.as_ref().map(NonEmptyOneof::oneof_current_tag)
     }
 
+    #[inline]
     fn oneof_decode_field<B: Buf + ?Sized>(
         &mut self,
         tag: u32,
@@ -1594,6 +1611,7 @@ where
     T: NonEmptyDistinguishedOneof,
     Self: Oneof,
 {
+    #[inline]
     fn oneof_decode_field_distinguished<B: Buf + ?Sized>(
         &mut self,
         tag: u32,
