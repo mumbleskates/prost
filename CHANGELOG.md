@@ -1,4 +1,24 @@
-## v0.1004.0-dev
+## v0.1005.0-dev
+
+### Breaking changes
+
+### New features
+
+* New `reserved_tags` attribute on messages to prevent tags from being used,
+  even by accident.
+* Both the new `reserved_tags` and the old `oneof` attributes can now specify
+  inclusive ranges of tag numbers instead of only single tags. For now, in
+  `oneof` this is limited to 100 tags per range because more than that is just
+  too many.
+* `bilrost-derive`, which contains the derive macros, is now `no_std`. This
+  doesn't really change what it's capable of at all but it does make it easier
+  to prove it doesn't accidentally preclude using `std`.
+
+### Fixes
+
+### Cleanups
+
+## v0.1004.0
 
 ### Breaking changes
 
@@ -6,6 +26,9 @@
   reads better and makes more sense, better to do it now.
 * Conversion to & from `u32` now uses the `Enumeration` trait rather than
   `Into<u32>` and `TryFrom<u32>`.
+* The "opaque" types, `bilrost::encoding::opaque::{OpaqueMessage, OpaqueValue}`
+  now use `Cow` under the hood instead of `Vec`, allowing them to hold borrowed
+  data rather than only owned.
 
 ### New features
 
@@ -19,7 +42,9 @@
 ### Cleanups
 
 * Large refactor that changes the underlying `Encoder` traits from
-  `impl Encoder<Value> for Encoding` to `impl Encoder<Encoding> for Value`.
+  `impl Encoder<Value> for Encoding` to `impl Encoder<Encoding> for Value`. This
+  avoids issues with a new "non_local_definitions" lint which fires when trait
+  implementations are derived for a function-local type.
 
 ## v0.1003.1
 

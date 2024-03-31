@@ -1,9 +1,15 @@
+use alloc::format;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+
 use anyhow::{bail, Error};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{parse_str, Index, Meta, Type};
 
-use super::{named_attr, set_bool, set_option, tag_attr, word_attr};
+use crate::attrs::{named_attr, tag_attr, word_attr};
+use crate::field::{set_bool, set_option};
 
 /// A scalar protobuf field.
 #[derive(Clone)]

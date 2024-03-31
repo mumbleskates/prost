@@ -88,7 +88,7 @@ are added or removed over time the fields that remain in common will still be
 mutually intelligible between the two versions of the schema. In this way,
 Bilrost is very similar to [protobuf][pb]. See also:
 [Design philosophy](#design-philosophy), [Comparisons to other encodings](
-#comparisons-to-other-encodings).
+#comparisons-to-other-encodings), and the [Encoding specification](#encoding-specification).
 
 Bilrost also has the ability to encode and decode data that is guaranteed to be
 canonically represented: see the section on [distinguished decoding](
@@ -306,7 +306,7 @@ To use `bilrost`, we first add it as a dependency in `Cargo.toml`, either with
 `cargo add bilrost` or manually:
 
 ```toml
-bilrost = "0.1004.0-dev"
+bilrost = "0.1005.0-dev"
 ```
 
 Then, we derive `bilrost::Message` for our struct type:
@@ -410,7 +410,7 @@ To enable `no_std` support, disable the `std` features in `bilrost` (and
 
 ```toml
 [dependencies]
-bilrost = { version = "0.1004.0-dev", default-features = false, features = ["derive"] }
+bilrost = { version = "0.1005.0-dev", default-features = false, features = ["derive"] }
 ```
 
 ### Derive macros
@@ -431,6 +431,9 @@ We can now import and use its traits and derive macros. The main three are:
   except when they are included in a `Message` struct.
 
 #### Deriving `Message`
+
+The `Message` trait can be derived to allow encoding just about any struct as a
+Bilrost message, as long as its fields' types are supported.
 
 If not otherwise specified, fields are tagged sequentially in the order they
 are specified in the struct, starting with `1`.
@@ -528,11 +531,18 @@ struct Widget {
 
 When the oneof is included in a message, it has to be declared with the "oneof"
 attribute, providing a comma-separated list of all its field tags. (This
-attribute can also be spelled like `oneof = "2, 3"`.) It isn't possible for the
-derive macro to know what those tag numbers are when it runs because it can't
-have access to the definitions of the field's type, but the list of tags
-declared in this attribute and the list of tags that the oneof actually has are
-statically checked for equality at compile time.
+attribute can also be spelled like `oneof = "2, 3"`.)[^tagranges] It isn't
+possible for the derive macro to know what those tag numbers are when it runs
+because it can't have access to the definitions of the field's type, but the
+list of tags declared in this attribute and the list of tags that the oneof
+actually has are statically checked for equality at compile time.
+
+[^tagranges]: The way the full list of tags is specified within the `oneof`
+attribute and the `reserved_tags` attribute is the same: the whole list is comma
+separated, and each item may be either a single tag number or an inclusive range
+from minimum to maximum separated with a dash (like `1-5`). For both
+`reserved_tags` and `oneof`, the following are all exactly equivalent:
+`1, 2, 3, 4, 5`; `1-5`; `4, 5, 1-3`
 
 The field tags in the oneof must be unique, both within the oneof itself and
 within any message containing it. Oneof variants can only contain types that
@@ -642,15 +652,31 @@ will be similarly lower-cased.
 
 #### Other attributes
 
-There are a few other attributes available inside the "bilrost" attribute for
-fields:
+There are a few other attributes available inside the "bilrost" attribute:
+
+##### Reserving tags
+
+* **"reserved_tags"**: When placed on the message itself, this declares that the
+  given tags and tag ranges[^tagranges] are not used in the field. This has no
+  effect other than as a compile-time guard; if a field uses a tag that was
+  declared to be reserved the compilation will err.
+
+```rust,compile_fail
+# use bilrost::Message;
+#[derive(Message)]
+#[bilrost(reserved_tags(2, 6-10, 25))]
+struct Foo {
+    #[bilrost(tag(5), encoding(general))]
+    name: String,
+    age: int64, // Oops! Uses tag 6! Compile error
+}
+```
 
 ##### Ignoring fields
 
-* **"ignore"**: must be alone, with no tag or other attribute. This causes the
-  field
-  to be ignored by the generated message implementation. If any fields in a
-  message are ignored, it must implement `Default` to implement `Message`, so
+* **"ignore"**: Must be alone, with no tag or other attribute. This causes the
+  field to be ignored by the generated message implementation. If any fields in
+  a message are ignored, it must implement `Default` to implement `Message`, so
   there is a value for those fields to take on when they are created from
   encoded data.
 
@@ -659,7 +685,7 @@ fields:
 
 ##### Helper methods
 
-* **"enumeration"**: if a field is of type `u32` or `Option<u32>`, this causes
+* **"enumeration"**: If a field is of type `u32` or `Option<u32>`, this causes
   the message type to have helper methods named after the type that get and set
   its value as the enumeration type specified by this attribute.
 
@@ -703,71 +729,6 @@ support distinguished decoding in order to support it themselves. Distinguished
 encoding requires `Eq` be implemented for each field, oneof, and message type;
 the trait is not used directly, but is trivial to derive for any compatible
 type.
-
-<details><summary>Example</summary>
-
-```rust,
-use bilrost::{
-    DistinguishedMessage, DistinguishedOneof, Message, Oneof,
-    WithCanonicity,
-};
-use bytes::Bytes;
-use std::collections::BTreeMap;
-
-#[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
-enum PubKeyMaterial {
-    Empty,
-    #[bilrost(1)]
-    Rsa(Bytes),
-    #[bilrost(2)]
-    ED25519(Bytes),
-}
-
-use PubKeyMaterial::*;
-
-#[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-struct PubKey {
-    #[bilrost(oneof(1, 2))]
-    key: PubKeyMaterial,
-    #[bilrost(3)]
-    expiry: i64, // See also: `bilrost_types::Timestamp`
-}
-
-#[derive(Debug, Default, PartialEq, Eq, Message, DistinguishedMessage)]
-struct PubKeyRegistry {
-    keys_by_owner: BTreeMap<String, PubKey>,
-}
-
-let mut registry = PubKeyRegistry::default();
-registry.keys_by_owner.insert(
-    "Alice".to_string(),
-    PubKey {
-        key: ED25519(Bytes::from_static(b"not a secret")),
-        expiry: 1600999999,
-    },
-);
-registry.keys_by_owner.insert(
-    "Bob".to_string(),
-    PubKey {
-        key: Rsa(Bytes::from_static(b"pkey")),
-        expiry: 1500000001,
-    },
-);
-let encoded = registry.encode_to_vec();
-assert_eq!(
-    encoded,
-    b"\x05\x2c\
-      \x05Alice\x14\x09\x0cnot a secret\x04\xfe\xc7\xe9\xf5\x0a\
-      \x03Bob\x0c\x05\x04pkey\x08\x82\xbb\xc0\x95\x0a"
-        .as_slice()
-);
-let decoded = PubKeyRegistry::decode_distinguished(encoded.as_slice())
-    .canonical() // Check that the decoded data was canonical
-    .unwrap();
-assert_eq!(registry, decoded);
-```
-
-</details>
 
 ### Encoding and decoding messages
 
@@ -840,6 +801,103 @@ use `encode(..)` rather than `encode_dyn(..)`, and likewise for any other
 "`_dyn`" method. Likewise, `replace_from_slice(..)` is equivalent to
 `replace_from(..)`, just object safe; the same goes for other "`_slice`"
 methods.
+
+### Encoding and decoding example
+
+```rust,
+use bilrost::{
+    DistinguishedMessage, DistinguishedOneof, Message, Oneof,
+    WithCanonicity,
+};
+use bytes::Bytes;
+use std::collections::BTreeMap;
+
+#[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
+enum PubKeyMaterial {
+    Empty,
+    #[bilrost(1)]
+    Rsa(Bytes),
+    #[bilrost(2)]
+    ED25519(Bytes),
+}
+
+use PubKeyMaterial::*;
+
+#[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+struct PubKey {
+    #[bilrost(oneof(1, 2))]
+    key: PubKeyMaterial,
+    #[bilrost(3)]
+    expiry: i64, // See also: `bilrost_types::Timestamp`
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Message, DistinguishedMessage)]
+struct PubKeyRegistry {
+    keys_by_owner: BTreeMap<String, PubKey>,
+}
+
+let mut registry = PubKeyRegistry::default();
+registry.keys_by_owner.insert(
+    "Alice".to_string(),
+    PubKey {
+        key: ED25519(Bytes::from_static(b"not a secret")),
+        expiry: 1600999999,
+    },
+);
+registry.keys_by_owner.insert(
+    "Bob".to_string(),
+    PubKey {
+        key: Rsa(Bytes::from_static(b"pkey")),
+        expiry: 1500000001,
+    },
+);
+let encoded = registry.encode_to_vec();
+
+// The binary of this encoded message breaks down as follows:
+//
+// (The first and only field, containing a map from String to PubKey)
+// 05 - field key: tag 0+1 = 1, wire type 1 = length-delimited
+//   2c - length: 44 bytes
+//     (The key of the first map item, a String value)
+//     05 - length: 5 bytes
+//       "Alice"
+//     (The value of the first map item, a PubKey message)
+//     14 - length: 20 bytes
+//       (The "ED25519" variant of the PubKeyMaterial oneof)
+//       09 - field key: tag 0+2 = 2, wire type 1 = length-delimited
+//         (A String value)
+//         0c - length: 12 bytes
+//           "not a secret"
+//       (The "expiry" field of the PubKey message, an i64)
+//       04 - field key: tag 2+1 = 3, wire type 0 = varint
+//         fec7e9f50a - varint 3201999998, which is +1600999999 in zig-zag
+//     (The key of the second map item, a string value)
+//     03 - length: 3 bytes
+//       "Bob"
+//     (The value of the second map item, another PubKey message)
+//     0c - length: 12 bytes
+//       (The "RSA" variant of the PubKeyMaterial oneof)
+//       05 - field key: tag 0+1 = 1, wire type 1 = length-delimited
+//         (A String value)
+//         04 - length: 4 bytes
+//           "pkey"
+//       (The "expiry" field of the PubKey message, an i64)
+//       08 - field key: tag 1+2 = 3, wire type 0 = varint
+//         82bbc0950a - varint 3000000002, which is +1500000001 in zig-zag
+
+assert_eq!(
+    encoded,
+    b"\x05\x2c\
+      \x05Alice\x14\x09\x0cnot a secret\x04\xfe\xc7\xe9\xf5\x0a\
+      \x03Bob\x0c\x05\x04pkey\x08\x82\xbb\xc0\x95\x0a"
+        .as_slice()
+);
+
+let decoded = PubKeyRegistry::decode_distinguished(encoded.as_slice())
+    .canonical() // Check that the decoded data was canonical
+    .unwrap();
+assert_eq!(registry, decoded);
+```
 
 ### Supported message field types
 
@@ -1326,7 +1384,8 @@ order, and must have a [two's complement][twos] representation.
 [twos]: https://en.wikipedia.org/wiki/Two%27s_complement
 
 Floating point numbers must be encoded in little-endian byte order, and must
-have [IEEE 754 binary32/binary64][ieee754] standard representation.
+have [IEEE 754 binary32/binary64][ieee754] standard representation. Floating
+point numbers are encoded as four- and eight-byte fixed-width values.
 
 Arrays, plain byte strings, and collections must be encoded in order, with their
 lowest-indexed (first) bytes or items encoded first. For example, the
@@ -1410,10 +1469,13 @@ in the encoding, the message is not canonical. (In the case of an optional
 field, `Some(0)` is not considered empty, and is distinct from the always-empty
 value `None`; this is the purpose of optional fields.)
 
-Also in distinguished mode, if fields whose tags are not specified are
-encountered the encoding can no longer be considered canonical.
+Also in distinguished mode, if fields whose tags are not in the message's schema
+are encountered the encoding can no longer be considered canonical.
 
 #### Empty values
+
+The type of each field of a Bilrost message has an "empty" value, which is never
+represented as encoded data on the wire.
 
 | Type                                                  | Empty value                        |
 |-------------------------------------------------------|------------------------------------|
@@ -1426,6 +1488,10 @@ encountered the encoding can no longer be considered canonical.
 | `Message`                                             | each field of the message is empty |
 | `Oneof`                                               | `None` or the empty variant        |
 | any optional value (`Option<T>`)                      | `None`                             |
+
+The empty byte string is always a valid and canonical encoding of any Bilrost
+message type, and represents the value of the message in which every field has
+its empty value.
 
 #### Canonical ordering
 
@@ -1449,9 +1515,9 @@ For supported non-message types, the following orderings are standardized:
 [^u8bytes]: Bytes are considered to be unsigned. The least-valued byte is the
 nul byte `0x00`, and the greatest is `0xff`.
 
-This standardization corresponds to the existing definitions of `Ord` in the
-Rust language for booleans, integers, strings, arrays/slices, ordered sets, and
-ordered maps.
+This standardization corresponds to the existing definitions of [`Ord`][ord] in
+the Rust language for booleans, integers, strings, arrays/slices, ordered sets,
+and ordered maps.
 
 ## `bilrost` vs. `prost`
 
