@@ -3,12 +3,12 @@ use alloc::vec::Vec;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+use crate::buf::{ReverseBuf, ReverseBuffer};
 use crate::encoding::{
-    encode_varint, encoded_len_varint, Canonicity, Capped, DecodeContext, EmptyState, TagReader,
-    WireType,
+    encode_varint, encoded_len_varint, prepend_varint, Canonicity, Capped, DecodeContext,
+    EmptyState, TagReader, WireType,
 };
 use crate::{DecodeError, EncodeError};
-use crate::buf::ReverseBuf;
 
 /// Merges fields from the given buffer, to its cap, into the given `TaggedDecodable` value.
 /// Implemented as a private standalone method to discourage "merging" as a usage pattern.
@@ -61,6 +61,11 @@ pub trait Message: EmptyState {
     ///
     /// An error will be returned if the buffer does not have sufficient capacity.
     fn encode<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError>
+    where
+        Self: Sized;
+
+    /// Prepends the message to a buffer.
+    fn prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B)
     where
         Self: Sized;
 
@@ -117,6 +122,12 @@ pub trait Message: EmptyState {
 
     /// Encodes the message to a `Bytes` buffer.
     fn encode_to_bytes(&self) -> Bytes;
+
+    /// Encodes the message to a `ReverseBuffer`.
+    fn encode_fast(&self) -> ReverseBuffer;
+
+    /// Encodes the message witha length-delimiter to a `ReverseBuffer`.
+    fn encode_length_delimited_fast(&self) -> ReverseBuffer;
 
     /// Encodes the message to a `Bytes` buffer.
     fn encode_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError>;
@@ -265,6 +276,13 @@ where
         Ok(())
     }
 
+    fn prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B)
+    where
+        Self: Sized,
+    {
+        self.raw_prepend(buf);
+    }
+
     fn encode_length_delimited<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError> {
         let len = self.encoded_len();
         let required = len + encoded_len_varint(len as u64);
@@ -323,6 +341,18 @@ where
         let mut buf = BytesMut::with_capacity(self.encoded_len());
         self.raw_encode(&mut buf);
         buf.freeze()
+    }
+
+    fn encode_fast(&self) -> ReverseBuffer {
+        let mut buf = ReverseBuffer::new();
+        self.raw_prepend(&mut buf);
+        buf
+    }
+
+    fn encode_length_delimited_fast(&self) -> ReverseBuffer {
+        let mut buf = self.encode_fast();
+        prepend_varint(buf.remaining() as u64, &mut buf);
+        buf
     }
 
     fn encode_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError> {
