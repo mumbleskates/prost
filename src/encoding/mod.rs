@@ -115,6 +115,40 @@ pub fn prepend_varint<B: ReverseBuf>(value: u64, buf: &mut B) {
     }
 }
 
+/// Holds a varint value and dereferences to the slice of its relevant bytes.
+pub struct ConstVarint {
+    value: [u8; 9],
+    len: u8,
+}
+
+impl Deref for ConstVarint {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.value[..self.len as usize]
+    }
+}
+
+/// Encodes a varint at const time.
+pub const fn const_varint(mut value: u64) -> ConstVarint {
+    let mut res = [0; 9];
+    let mut i: usize = 0;
+    while i < 9 {
+        if value < 0x80 {
+            res[i] = value as u8;
+            return ConstVarint {
+                value: res,
+                len: (i + 1) as u8,
+            };
+        } else {
+            res[i] = ((value as u8) & 0x7f) | 0x80;
+            value = (value >> 7) - 1;
+            i += 1;
+        }
+    }
+    return ConstVarint { value: res, len: 9 };
+}
+
 /// Decodes a LEB128-bijective-encoded variable length integer from the buffer.
 #[inline(always)]
 pub fn decode_varint<B: Buf + ?Sized>(buf: &mut B) -> Result<u64, DecodeError> {
@@ -2320,6 +2354,9 @@ mod test {
             let mut buf = Vec::with_capacity(100);
             encode_varint(value, &mut buf);
             assert_eq!(buf, encoded);
+
+            // Constant encoded.
+            assert_eq!(const_varint(value).deref(), encoded);
 
             assert_eq!(encoded_len_varint(value), encoded.len());
 

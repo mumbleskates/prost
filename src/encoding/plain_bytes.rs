@@ -160,7 +160,7 @@ impl<const N: usize> Wiretyped<PlainBytes> for [u8; N] {
 
 impl<const N: usize> ValueEncoder<PlainBytes> for [u8; N] {
     fn encode_value<B: BufMut + ?Sized>(value: &[u8; N], mut buf: &mut B) {
-        encode_varint(N as u64, buf);
+        buf.put_slice(&const_varint(N as u64));
         (&mut buf).put(value.as_slice())
     }
 
