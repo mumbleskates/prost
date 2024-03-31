@@ -13,6 +13,12 @@
 * `bilrost-derive`, which contains the derive macros, is now `no_std`. This
   doesn't really change what it's capable of at all but it does make it easier
   to prove it doesn't accidentally preclude using `std`.
+* Added prepend-encoding: messages can be encoded to a prepend-only buffer. This
+  encoding path writes messages in reverse, avoiding any need to "look ahead" in
+  order to encode the correct length for data that is not yet written. This
+  enables writing an arbitrarily nested message without visiting any field more
+  than once, removing a quadratic hazard and general inefficiency in the
+  encoding path.
 
 ### Fixes
 
