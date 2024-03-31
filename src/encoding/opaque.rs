@@ -142,7 +142,7 @@ impl<'a> OpaqueValue<'a> {
         }
     }
 
-    fn prepend_value<B: ReverseBuf + ?Sized>(&self, mut buf: &mut B) {
+    fn prepend_value<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
         match self {
             Varint(val) => {
                 prepend_varint(*val, buf);
