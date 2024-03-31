@@ -8,6 +8,7 @@ use crate::encoding::{
     WireType,
 };
 use crate::{DecodeError, EncodeError};
+use crate::buf::ReverseBuf;
 
 /// Merges fields from the given buffer, to its cap, into the given `TaggedDecodable` value.
 /// Implemented as a private standalone method to discourage "merging" as a usage pattern.
@@ -465,6 +466,9 @@ pub trait RawMessage: EmptyState {
     /// This method will panic if the buffer has insufficient capacity.
     fn raw_encode<B: BufMut + ?Sized>(&self, buf: &mut B);
 
+    /// Prepends the message to a prepend buffer.
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B);
+
     /// Returns the encoded length of the message without a length delimiter.
     fn raw_encoded_len(&self) -> usize;
 
@@ -521,6 +525,10 @@ where
 
     fn raw_encode<B: BufMut + ?Sized>(&self, buf: &mut B) {
         (**self).raw_encode(buf)
+    }
+
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
+        (**self).raw_prepend(buf)
     }
 
     fn raw_encoded_len(&self) -> usize {

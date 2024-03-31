@@ -7,14 +7,10 @@ use core::str;
 
 use bytes::{Buf, BufMut, Bytes};
 
-use crate::encoding::{
-    delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint,
-    encoder_where_value_encoder, Canonicity, Capped, DecodeContext, DecodeError,
-    DistinguishedValueEncoder, EmptyState, Encoder, Fixed, Map, PlainBytes, TagMeasurer, TagWriter,
-    Unpacked, ValueEncoder, Varint, WireType, Wiretyped,
-};
+use crate::encoding::{delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder, Canonicity, Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, EmptyState, Encoder, Fixed, Map, PlainBytes, Unpacked, ValueEncoder, Varint, WireType, Wiretyped, prepend_varint};
 use crate::message::{merge, merge_distinguished, RawDistinguishedMessage, RawMessage};
 use crate::Blob;
+use crate::buf::ReverseBuf;
 use crate::DecodeErrorKind::InvalidValue;
 
 pub struct General;
@@ -108,15 +104,24 @@ impl Wiretyped<General> for String {
 }
 
 impl ValueEncoder<General> for String {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &String, buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         buf.put_slice(value.as_bytes());
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &String, buf: &mut B) {
+        buf.prepend_slice(value.as_bytes());
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &String) -> usize {
         encoded_len_varint(value.len() as u64) + value.len()
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut String,
         mut buf: Capped<B>,
@@ -163,6 +168,7 @@ impl ValueEncoder<General> for String {
 }
 
 impl DistinguishedValueEncoder<General> for String {
+    #[inline]
     fn decode_value_distinguished<B: Buf + ?Sized>(
         value: &mut String,
         buf: Capped<B>,
@@ -215,15 +221,24 @@ impl Wiretyped<General> for Cow<'_, str> {
 }
 
 impl ValueEncoder<General> for Cow<'_, str> {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &Cow<str>, buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         buf.put_slice(value.as_bytes());
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Cow<str>, buf: &mut B) {
+        buf.prepend_slice(value.as_bytes());
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &Cow<str>) -> usize {
         encoded_len_varint(value.len() as u64) + value.len()
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut Cow<str>,
         buf: Capped<B>,
@@ -234,6 +249,7 @@ impl ValueEncoder<General> for Cow<'_, str> {
 }
 
 impl DistinguishedValueEncoder<General> for Cow<'_, str> {
+    #[inline]
     fn decode_value_distinguished<B: Buf + ?Sized>(
         value: &mut Cow<str>,
         buf: Capped<B>,
@@ -282,15 +298,24 @@ impl Wiretyped<General> for bytestring::ByteString {
 
 #[cfg(feature = "bytestring")]
 impl ValueEncoder<General> for bytestring::ByteString {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &bytestring::ByteString, buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         buf.put_slice(value.as_bytes());
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &bytestring::ByteString, buf: &mut B) {
+        buf.prepend_slice(value.as_bytes());
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &bytestring::ByteString) -> usize {
         encoded_len_varint(value.len() as u64) + value.len()
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut bytestring::ByteString,
         mut buf: Capped<B>,
@@ -306,6 +331,7 @@ impl ValueEncoder<General> for bytestring::ByteString {
 
 #[cfg(feature = "bytestring")]
 impl DistinguishedValueEncoder<General> for bytestring::ByteString {
+    #[inline]
     fn decode_value_distinguished<B: Buf + ?Sized>(
         value: &mut bytestring::ByteString,
         buf: Capped<B>,
@@ -353,15 +379,24 @@ impl Wiretyped<General> for Bytes {
 }
 
 impl ValueEncoder<General> for Bytes {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &Bytes, mut buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         (&mut buf).put(value.clone()); // `put` needs Self to be sized, so we use the ref type
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Bytes, buf: &mut B) {
+        buf.prepend_slice(value);
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &Bytes) -> usize {
         encoded_len_varint(value.len() as u64) + value.len()
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut Bytes,
         mut buf: Capped<B>,
@@ -375,6 +410,7 @@ impl ValueEncoder<General> for Bytes {
 }
 
 impl DistinguishedValueEncoder<General> for Bytes {
+    #[inline]
     fn decode_value_distinguished<B: Buf + ?Sized>(
         value: &mut Bytes,
         buf: Capped<B>,
@@ -406,6 +442,12 @@ impl ValueEncoder<General> for Blob {
     #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &Blob, buf: &mut B) {
         ValueEncoder::<PlainBytes>::encode_value(&**value, buf)
+    }
+
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Blob, buf: &mut B) {
+        buf.prepend_slice(value);
+        prepend_varint(value.len() as u64, buf);
     }
 
     #[inline]
@@ -459,16 +501,26 @@ impl<T> ValueEncoder<General> for T
 where
     T: RawMessage,
 {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &T, buf: &mut B) {
         encode_varint(value.raw_encoded_len() as u64, buf);
         value.raw_encode(buf);
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &T, buf: &mut B) {
+        let end = buf.remaining();
+        value.raw_prepend(buf);
+        prepend_varint((buf.remaining() - end) as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &T) -> usize {
         let inner_len = value.raw_encoded_len();
         encoded_len_varint(inner_len as u64) + inner_len
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut T,
         mut buf: Capped<B>,
@@ -483,6 +535,7 @@ impl<T> DistinguishedValueEncoder<General> for T
 where
     T: RawDistinguishedMessage + Eq,
 {
+    #[inline]
     fn decode_value_distinguished<B: Buf + ?Sized>(
         value: &mut T,
         mut buf: Capped<B>,

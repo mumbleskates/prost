@@ -1,7 +1,8 @@
+use crate::buf::ReverseBuf;
 use crate::encoding::{
     empty_state_via_default, encode_varint, encoded_len_varint, encoder_where_value_encoder, Buf,
     BufMut, Canonicity, Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, Encoder,
-    TagMeasurer, TagWriter, ValueEncoder, WireType, Wiretyped,
+    ValueEncoder, WireType, Wiretyped, prepend_varint,
 };
 use crate::DecodeError;
 use crate::DecodeErrorKind::OutOfDomainValue;
@@ -70,6 +71,11 @@ macro_rules! varint {
             #[inline]
             fn encode_value<B: BufMut + ?Sized>($to_uint64_value: &$ty, buf: &mut B) {
                 encode_varint($to_uint64, buf);
+            }
+
+            #[inline]
+            fn prepend_value<B: ReverseBuf + ?Sized>($to_uint64_value: &$ty, buf: &mut B) {
+                prepend_varint($to_uint64, buf);
             }
 
             #[inline]

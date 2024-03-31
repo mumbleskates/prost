@@ -1,13 +1,10 @@
 use bytes::{Buf, BufMut};
 
 use crate::encoding::value_traits::{Collection, DistinguishedCollection};
-use crate::encoding::{
-    check_wire_type, Capped, DecodeContext, DistinguishedEncoder, DistinguishedValueEncoder,
-    Encoder, FieldEncoder, General, NewForOverwrite, Packed, TagMeasurer, TagWriter, ValueEncoder,
-    WireType, Wiretyped,
-};
+use crate::encoding::{check_wire_type, Capped, DecodeContext, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General, NewForOverwrite, Packed, TagMeasurer, TagWriter, ValueEncoder, WireType, Wiretyped, TagRevWriter};
 use crate::DecodeErrorKind::UnexpectedlyRepeated;
 use crate::{Canonicity, DecodeError};
+use crate::buf::ReverseBuf;
 
 pub struct Unpacked<E = General>(E);
 
@@ -103,6 +100,12 @@ where
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &C, buf: &mut B, tw: &mut TagWriter) {
         for val in value.iter() {
             FieldEncoder::<E>::encode_field(tag, val, buf, tw);
+        }
+    }
+
+    fn prepend_encode<B: ReverseBuf + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagRevWriter) {
+        for val in value.reversed() {
+            FieldEncoder::<E>::prepend_field(tag, val, buf, tw);
         }
     }
 

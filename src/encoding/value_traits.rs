@@ -79,21 +79,20 @@ pub trait Collection: EmptyState {
     where
         Self::Item: 'a,
         Self: 'a;
+    type ReverseIter<'a>: Iterator<Item = &'a Self::Item>
+    where
+        Self::Item: 'a,
+        Self: 'a;
 
     fn len(&self) -> usize;
     fn iter(&self) -> Self::RefIter<'_>;
+    fn reversed(&self) -> Self::ReverseIter<'_>;
     fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind>;
 }
 
 /// Trait for collections that store multiple items and have a distinguished representation, such as
 /// `Vec` and `BTreeSet`. Returns an error if the items are inserted in the wrong order.
 pub trait DistinguishedCollection: Collection + Eq {
-    type ReverseIter<'a>: Iterator<Item = &'a Self::Item>
-    where
-        Self::Item: 'a,
-        Self: 'a;
-
-    fn reversed(&self) -> Self::ReverseIter<'_>;
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind>;
 }
 
@@ -106,6 +105,11 @@ pub trait Mapping: EmptyState {
         Self::Key: 'a,
         Self::Value: 'a,
         Self: 'a;
+    type ReverseIter<'a>: Iterator<Item = (&'a Self::Key, &'a Self::Value)>
+    where
+        Self::Key: 'a,
+        Self::Value: 'a,
+        Self: 'a;
 
     fn len(&self) -> usize;
     #[inline]
@@ -113,19 +117,13 @@ pub trait Mapping: EmptyState {
         self.len() == 0
     }
     fn iter(&self) -> Self::RefIter<'_>;
+    fn reversed(&self) -> Self::ReverseIter<'_>;
     fn insert(&mut self, key: Self::Key, value: Self::Value) -> Result<(), DecodeErrorKind>;
 }
 
 /// Trait for associative containers with a distinguished representation. Returns an error if the
 /// items are inserted in the wrong order.
 pub trait DistinguishedMapping: Mapping {
-    type ReverseIter<'a>: Iterator<Item = (&'a Self::Key, &'a Self::Value)>
-    where
-        Self::Key: 'a,
-        Self::Value: 'a,
-        Self: 'a;
-
-    fn reversed(&self) -> Self::ReverseIter<'_>;
     fn insert_distinguished(
         &mut self,
         key: Self::Key,
@@ -156,6 +154,10 @@ impl<T> Collection for Vec<T> {
         where
             T: 'a,
             Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -165,6 +167,11 @@ impl<T> Collection for Vec<T> {
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         <[T]>::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        <[T]>::iter(self).rev()
     }
 
     #[inline]
@@ -178,16 +185,6 @@ impl<T> DistinguishedCollection for Vec<T>
 where
     T: Eq,
 {
-    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    #[inline]
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        <[T]>::iter(self).rev()
-    }
-
     #[inline]
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
         Vec::push(self, item);
@@ -231,12 +228,22 @@ where
         where
             T: 'a,
             Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
+
     fn len(&self) -> usize {
         <[T]>::len(self)
     }
 
     fn iter(&self) -> Self::RefIter<'_> {
         <[T]>::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        <[T]>::iter(self).rev()
     }
 
     fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
@@ -249,16 +256,6 @@ impl<T> DistinguishedCollection for Cow<'_, [T]>
 where
     T: Clone + Eq,
 {
-    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    #[inline]
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        <[T]>::iter(self).rev()
-    }
-
     #[inline]
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
         self.to_mut().push(item);
@@ -291,6 +288,10 @@ impl<T, A: smallvec::Array<Item = T>> Collection for smallvec::SmallVec<A> {
         where
             T: 'a,
             Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -300,6 +301,11 @@ impl<T, A: smallvec::Array<Item = T>> Collection for smallvec::SmallVec<A> {
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         <[T]>::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        <[T]>::iter(self).rev()
     }
 
     #[inline]
@@ -314,16 +320,6 @@ impl<T, A: smallvec::Array<Item = T>> DistinguishedCollection for smallvec::Smal
 where
     T: Eq,
 {
-    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    #[inline]
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        <[T]>::iter(self).rev()
-    }
-
     #[inline]
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
         smallvec::SmallVec::push(self, item);
@@ -356,6 +352,10 @@ impl<T> Collection for thin_vec::ThinVec<T> {
         where
             T: 'a,
             Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -365,6 +365,11 @@ impl<T> Collection for thin_vec::ThinVec<T> {
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         <[T]>::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        <[T]>::iter(self).rev()
     }
 
     #[inline]
@@ -379,16 +384,6 @@ impl<T> DistinguishedCollection for thin_vec::ThinVec<T>
 where
     T: Eq,
 {
-    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    #[inline]
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        <[T]>::iter(self).rev()
-    }
-
     #[inline]
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
         thin_vec::ThinVec::push(self, item);
@@ -421,6 +416,10 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::TinyVec<A> {
         where
             T: 'a,
             Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -430,6 +429,11 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::TinyVec<A> {
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         <[T]>::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        <[T]>::iter(self).rev()
     }
 
     #[inline]
@@ -444,16 +448,6 @@ impl<T, A: tinyvec::Array<Item = T>> DistinguishedCollection for tinyvec::TinyVe
 where
     T: Eq,
 {
-    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    #[inline]
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        <[T]>::iter(self).rev()
-    }
-
     #[inline]
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
         tinyvec::TinyVec::push(self, item);
@@ -487,6 +481,10 @@ where
         where
             Self::Item: 'a,
             Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<btree_set::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -496,6 +494,11 @@ where
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         BTreeSet::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        BTreeSet::iter(self).rev()
     }
 
     #[inline]
@@ -511,16 +514,6 @@ impl<T> DistinguishedCollection for BTreeSet<T>
 where
     T: Ord,
 {
-    type ReverseIter<'a> = core::iter::Rev<btree_set::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    #[inline]
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        BTreeSet::iter(self).rev()
-    }
-
     #[inline]
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
         // MSRV: can't use .last()
@@ -569,6 +562,10 @@ where
         where
             Self::Item: 'a,
             Self: 'a;
+    type ReverseIter<'a> = Self::RefIter<'a>
+        where
+            Self::Item: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -577,6 +574,11 @@ where
 
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
+        HashSet::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
         HashSet::iter(self)
     }
 
@@ -617,6 +619,7 @@ where
         where
             Self::Item: 'a,
             Self: 'a;
+    type ReverseIter<'a> = Self::RefIter<'a>;
 
     #[inline]
     fn len(&self) -> usize {
@@ -625,6 +628,11 @@ where
 
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
+        hashbrown::HashSet::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
         hashbrown::HashSet::iter(self)
     }
 
@@ -665,6 +673,11 @@ where
             K: 'a,
             V: 'a,
             Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<btree_map::Iter<'a, K, V>>
+        where
+            K: 'a,
+            V: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -674,6 +687,11 @@ where
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         BTreeMap::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        BTreeMap::iter(self).rev()
     }
 
     #[inline]
@@ -692,17 +710,6 @@ where
     Self: Eq,
     K: Ord,
 {
-    type ReverseIter<'a> = core::iter::Rev<btree_map::Iter<'a, K, V>>
-        where
-            K: 'a,
-            V: 'a,
-            Self: 'a;
-
-    #[inline]
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        BTreeMap::iter(self).rev()
-    }
-
     #[inline]
     fn insert_distinguished(
         &mut self,
@@ -756,6 +763,11 @@ where
             K: 'a,
             V: 'a,
             Self: 'a;
+    type ReverseIter<'a> = Self::RefIter<'a>
+        where
+            K: 'a,
+            V: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -764,6 +776,11 @@ where
 
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
+        HashMap::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
         HashMap::iter(self)
     }
 
@@ -808,6 +825,7 @@ where
             K: 'a,
             V: 'a,
             Self: 'a;
+    type ReverseIter<'a> = Self::RefIter<'a>;
 
     #[inline]
     fn len(&self) -> usize {
@@ -816,6 +834,11 @@ where
 
     #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
+        hashbrown::HashMap::iter(self)
+    }
+
+    #[inline]
+    fn reversed(&self) -> Self::ReverseIter<'_> {
         hashbrown::HashMap::iter(self)
     }
 

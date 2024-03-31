@@ -64,7 +64,7 @@ pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
 
 /// Prepends an integer value in LEB128-bijective format to the given buffer.
 #[inline(always)]
-pub fn prepend_varint<B: ReverseBuf>(value: u64, buf: &mut B) {
+pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
     const LIMIT: [u64; 9] = [
         0,
         0x80,
@@ -78,7 +78,7 @@ pub fn prepend_varint<B: ReverseBuf>(value: u64, buf: &mut B) {
     ];
 
     #[inline(always)]
-    fn prepend_varint_inner<const N: usize>(mut value: u64, buf: &mut impl ReverseBuf) {
+    fn prepend_varint_inner<const N: usize>(mut value: u64, buf: &mut (impl ReverseBuf + ?Sized)) {
         let mut varint_data = [0u8; N];
         for b in &mut varint_data[..N - 1] {
             *b = ((value & 0x7F) | 0x80) as u8;
@@ -461,7 +461,7 @@ impl TagRevWriter {
     /// type. When decoding, the wire type is taken as-is, and the tag delta added to the tag of the
     /// last field decoded.
     #[inline(always)]
-    pub fn begin_field<B: ReverseBuf>(&mut self, tag: u32, wire_type: WireType, buf: &mut B) {
+    pub fn begin_field<B: ReverseBuf + ?Sized>(&mut self, tag: u32, wire_type: WireType, buf: &mut B) {
         if let Some((current_tag, current_wire_type)) = self.current_key {
             let tag_delta = current_tag
                 .checked_sub(tag)
@@ -473,7 +473,7 @@ impl TagRevWriter {
 
     /// Finishes writing the current message by encoding the key of the first field that appeared.
     #[inline(always)]
-    pub fn finalize<B: ReverseBuf>(&mut self, buf: &mut B) {
+    pub fn finalize<B: ReverseBuf + ?Sized>(&mut self, buf: &mut B) {
         let Some((tag_delta, wire_type)) = self.current_key else {
             return;
         };
@@ -686,13 +686,19 @@ pub fn skip_field<B: Buf + ?Sized>(
 pub trait Encoder<E> {
     /// Encodes the a field with the given tag and value.
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter);
+
+    /// Prepends the encoding of the field with the given tag and value.
+    fn prepend_encode<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    );
+
     // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
     //  emit-reversed
     /// Returns the encoded length of the field, including the key.
     fn encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
-
-    ///
-    // fn prepend_encode<B: Buf>(&mut self, data: B, tw: &mut TagRevWriter);
 
     /// Decodes a field with the given wire type; the field's key should have already been consumed
     /// from the buffer.
@@ -1247,6 +1253,9 @@ pub trait ValueEncoder<E>: Wiretyped<E> {
     /// Encodes the given value unconditionally. This is guaranteed to emit data to the buffer.
     fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B);
 
+    /// Prepends the given value unconditionally. This is guaranteed to emit data to the buffer.
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B);
+
     // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
     //  emit-reversed
     /// Returns the number of bytes the given value would be encoded as.
@@ -1294,6 +1303,13 @@ where
 pub trait FieldEncoder<E> {
     /// Encodes exactly one field with the given tag and value into the buffer.
     fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter);
+    /// Prepends exactly one field with the given tag and value into the buffer.
+    fn prepend_field<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    );
     /// Returns the encoded length of the field including its key.
     fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
     /// Decodes a field directly from the buffer, also checking the wire type.
@@ -1313,6 +1329,16 @@ where
     fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter) {
         tw.encode_key(tag, Self::WIRE_TYPE, buf);
         Self::encode_value(value, buf);
+    }
+    #[inline]
+    fn prepend_field<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    ) {
+        tw.begin_field(tag, Self::WIRE_TYPE, buf);
+        Self::prepend_value(value, buf);
     }
     #[inline]
     fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize {
@@ -1372,6 +1398,18 @@ where
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter) {
         if let Some(value) = value {
             <T as FieldEncoder<E>>::encode_field(tag, value, buf, tw);
+        }
+    }
+
+    #[inline]
+    fn prepend_encode<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    ) {
+        if let Some(value) = value {
+            <T as FieldEncoder<E>>::prepend_field(tag, value, buf, tw)
         }
     }
 
@@ -1628,6 +1666,16 @@ macro_rules! delegate_encoding {
             }
 
             #[inline]
+            fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(
+                tag: u32,
+                value: &$value_ty,
+                buf: &mut B,
+                tw: &mut $crate::encoding::TagRevWriter,
+            ) {
+                $crate::encoding::Encoder::<$to_ty>::prepend_encode(tag, value, buf, tw)
+            }
+
+            #[inline]
             fn encoded_len(
                 tag: u32,
                 value: &$value_ty,
@@ -1721,6 +1769,11 @@ macro_rules! delegate_value_encoding {
             }
 
             #[inline]
+            fn prepend_value<B: $crate::buf::ReverseBuf + ?Sized>(value: &$value_ty, buf: &mut B) {
+                $crate::encoding::ValueEncoder::<$to_ty>::prepend_value(value, buf)
+            }
+
+            #[inline]
             fn value_encoded_len(value: &$value_ty) -> usize {
                 $crate::encoding::ValueEncoder::<$to_ty>::value_encoded_len(value)
             }
@@ -1799,7 +1852,7 @@ macro_rules! encoder_where_value_encoder {
             $($($where_clause)*)?
         {
             #[inline]
-            fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut TagWriter) {
+            fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut $crate::encoding::TagWriter) {
                 if !$crate::encoding::EmptyState::is_empty(value) {
                     $crate::encoding::FieldEncoder::<$encoding>::encode_field(
                         tag, value, buf, tw);
@@ -1807,7 +1860,15 @@ macro_rules! encoder_where_value_encoder {
             }
 
             #[inline]
-            fn encoded_len(tag: u32, value: &T, tm: &mut TagMeasurer) -> usize {
+            fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut $crate::encoding::TagRevWriter) {
+                if !$crate::encoding::EmptyState::is_empty(value) {
+                    $crate::encoding::FieldEncoder::<$encoding>::prepend_field(
+                        tag, value, buf, tw);
+                }
+            }
+
+            #[inline]
+            fn encoded_len(tag: u32, value: &T, tm: &mut $crate::encoding::TagMeasurer) -> usize {
                 if !$crate::encoding::EmptyState::is_empty(value) {
                     $crate::encoding::FieldEncoder::<$encoding>::field_encoded_len(
                         tag, value, tm)
@@ -1990,6 +2051,7 @@ mod test {
                 where
                     T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
                 {
+                    // TODO(widders): prepend
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
                         &value,

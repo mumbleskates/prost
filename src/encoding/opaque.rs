@@ -7,9 +7,10 @@ use core::ops::{Deref, DerefMut};
 use btreemultimap::BTreeMultiMap;
 use bytes::{Buf, BufMut};
 
+use crate::buf::ReverseBuf;
 use crate::encoding::{
-    encode_varint, encoded_len_varint, Capped, DecodeContext, EmptyState, TagMeasurer, TagWriter,
-    WireType,
+    encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState,
+    TagMeasurer, TagRevWriter, TagWriter, WireType,
 };
 use crate::DecodeErrorKind::Truncated;
 use crate::{Canonicity, DecodeError, Message, RawDistinguishedMessage, RawMessage};
@@ -141,9 +142,32 @@ impl<'a> OpaqueValue<'a> {
         }
     }
 
+    fn prepend_value<B: ReverseBuf + ?Sized>(&self, mut buf: &mut B) {
+        match self {
+            Varint(val) => {
+                prepend_varint(*val, buf);
+            }
+            LengthDelimited(val) => {
+                buf.prepend_slice(val.as_ref());
+                prepend_varint(val.len() as u64, buf);
+            }
+            ThirtyTwoBit(val) => {
+                buf.prepend_slice(val.as_slice());
+            }
+            SixtyFourBit(val) => {
+                buf.prepend_slice(val.as_slice());
+            }
+        }
+    }
+
     fn encode_field<B: BufMut + ?Sized>(&self, tag: u32, buf: &mut B, tw: &mut TagWriter) {
         tw.encode_key(tag, self.wire_type(), buf);
         self.encode_value(buf);
+    }
+
+    fn prepend_field<B: ReverseBuf + ?Sized>(&self, tag: u32, buf: &mut B, tw: &mut TagRevWriter) {
+        tw.begin_field(tag, self.wire_type(), buf);
+        self.prepend_value(buf);
     }
 
     fn value_encoded_len(&self) -> usize {
@@ -337,6 +361,14 @@ impl RawMessage for OpaqueMessage<'_> {
         for (tag, value) in self {
             value.encode_field(*tag, buf, &mut tw);
         }
+    }
+
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
+        let mut tw = TagRevWriter::new();
+        for (&tag, value) in self.iter().rev() {
+            value.prepend_field(tag, buf, &mut tw);
+        }
+        tw.finalize(buf);
     }
 
     fn raw_encoded_len(&self) -> usize {

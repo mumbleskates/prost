@@ -2,10 +2,11 @@ use alloc::vec::Vec;
 
 use bytes::{Buf, BufMut};
 
+use crate::buf::ReverseBuf;
 use crate::encoding::EmptyState;
 use crate::encoding::{
     delegate_encoding, encoder_where_value_encoder, Canonicity, Capped, DecodeContext,
-    DistinguishedValueEncoder, Encoder, TagMeasurer, TagWriter, ValueEncoder, WireType, Wiretyped,
+    DistinguishedValueEncoder, Encoder, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeError;
 use crate::DecodeErrorKind::Truncated;
@@ -23,6 +24,7 @@ macro_rules! fixed_width_common {
         $ty:ty,
         $wire_type:ident,
         $put:ident,
+        $prepend:ident,
         $get:ident
     ) => {
         impl Wiretyped<Fixed> for $ty {
@@ -33,6 +35,11 @@ macro_rules! fixed_width_common {
             #[inline]
             fn encode_value<B: BufMut + ?Sized>(value: &$ty, buf: &mut B) {
                 buf.$put(*value);
+            }
+
+            #[inline]
+            fn prepend_value<B: ReverseBuf + ?Sized>(value: &$ty, buf: &mut B) {
+                buf.$prepend(*value);
             }
 
             #[inline]
@@ -62,9 +69,10 @@ macro_rules! fixed_width_int {
         $ty:ty,
         $wire_type:ident,
         $put:ident,
+        $prepend:ident,
         $get:ident
     ) => {
-        fixed_width_common!($ty, $wire_type, $put, $get);
+        fixed_width_common!($ty, $wire_type, $put, $prepend, $get);
 
         impl DistinguishedValueEncoder<Fixed> for $ty {
             #[inline]
@@ -104,9 +112,10 @@ macro_rules! fixed_width_float {
         $ty:ty,
         $wire_type:ident,
         $put:ident,
+        $prepend:ident,
         $get:ident
     ) => {
-        fixed_width_common!($ty, $wire_type, $put, $get);
+        fixed_width_common!($ty, $wire_type, $put, $prepend, $get);
 
         impl EmptyState for $ty {
             #[inline]
@@ -154,6 +163,11 @@ macro_rules! fixed_width_array {
             #[inline]
             fn encode_value<B: BufMut + ?Sized>(value: &[u8; $N], mut buf: &mut B) {
                 (&mut buf).put(value.as_slice());
+            }
+
+            #[inline]
+            fn prepend_value<B: ReverseBuf + ?Sized>(value: &[u8; $N], buf: &mut B) {
+                buf.prepend_slice(value.as_slice());
             }
 
             #[inline]
@@ -211,11 +225,11 @@ macro_rules! fixed_width_array {
     };
 }
 
-fixed_width_float!(f32, f32, ThirtyTwoBit, put_f32_le, get_f32_le);
-fixed_width_float!(f64, f64, SixtyFourBit, put_f64_le, get_f64_le);
-fixed_width_int!(fixed_u32, u32, ThirtyTwoBit, put_u32_le, get_u32_le);
-fixed_width_int!(fixed_u64, u64, SixtyFourBit, put_u64_le, get_u64_le);
-fixed_width_int!(fixed_i32, i32, ThirtyTwoBit, put_i32_le, get_i32_le);
-fixed_width_int!(fixed_i64, i64, SixtyFourBit, put_i64_le, get_i64_le);
+fixed_width_float!(f32, f32, ThirtyTwoBit, put_f32_le, prepend_f32_le, get_f32_le);
+fixed_width_float!(f64, f64, SixtyFourBit, put_f64_le, prepend_f64_le, get_f64_le);
+fixed_width_int!(fixed_u32, u32, ThirtyTwoBit, put_u32_le, prepend_u32_le, get_u32_le);
+fixed_width_int!(fixed_u64, u64, SixtyFourBit, put_u64_le, prepend_u64_le, get_u64_le);
+fixed_width_int!(fixed_i32, i32, ThirtyTwoBit, put_i32_le, prepend_i32_le, get_i32_le);
+fixed_width_int!(fixed_i64, i64, SixtyFourBit, put_i64_le, prepend_i64_le, get_i64_le);
 fixed_width_array!(u8_4, 4, ThirtyTwoBit);
 fixed_width_array!(u8_8, 8, SixtyFourBit);
