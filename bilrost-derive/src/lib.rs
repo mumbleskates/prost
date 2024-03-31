@@ -473,11 +473,12 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
         }
     });
 
-    let prepend = fields.iter().map(|chunk| match chunk {
+    let prepend = fields.iter().rev().map(|chunk| match chunk {
         AlwaysOrdered((field_ident, field)) => field.prepend(quote!(self.#field_ident)),
         SortGroup(parts) => {
             let parts: Vec<TokenStream> = parts
                 .iter()
+                .rev()
                 .map(|part| match part {
                     Contiguous(fields) => {
                         let Some((_, first_field)) = fields.first() else {
@@ -521,7 +522,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
                     let mut nparts = 0usize;
                     #(#parts)*
                     let parts = &mut parts[..nparts];
-                    parts.sort_unstable_by_key(|(tag, _)| *tag);
+                    parts.sort_unstable_by_key(|(tag, _)| ::core::cmp::Reverse(*tag));
                     parts.iter()
                         .rev()
                         .for_each(|(_, prepend_func)| (prepend_func.unwrap())(self, buf, tw));
