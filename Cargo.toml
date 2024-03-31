@@ -70,6 +70,13 @@ full-test-suite = [
     "third-party-type-support",
 ]
 
+full-nostd-support = [
+    "derive",
+    "detailed-errors",
+    "extended-diagnostics",
+    "third-party-type-support",
+]
+
 [dependencies]
 bilrost-derive = { version = "0.1005.0-dev", path = "bilrost-derive", optional = true }
 btreemultimap = { version = "0.1", default-features = false, optional = true }
