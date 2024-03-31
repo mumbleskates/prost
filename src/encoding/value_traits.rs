@@ -619,7 +619,10 @@ where
         where
             Self::Item: 'a,
             Self: 'a;
-    type ReverseIter<'a> = Self::RefIter<'a>;
+    type ReverseIter<'a> = Self::RefIter<'a>
+        where
+            Self::Item: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
@@ -825,7 +828,11 @@ where
             K: 'a,
             V: 'a,
             Self: 'a;
-    type ReverseIter<'a> = Self::RefIter<'a>;
+    type ReverseIter<'a> = Self::RefIter<'a>
+        where
+            K: 'a,
+            V: 'a,
+            Self: 'a;
 
     #[inline]
     fn len(&self) -> usize {
