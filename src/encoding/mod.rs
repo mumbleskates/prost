@@ -461,7 +461,12 @@ impl TagRevWriter {
     /// type. When decoding, the wire type is taken as-is, and the tag delta added to the tag of the
     /// last field decoded.
     #[inline(always)]
-    pub fn begin_field<B: ReverseBuf + ?Sized>(&mut self, tag: u32, wire_type: WireType, buf: &mut B) {
+    pub fn begin_field<B: ReverseBuf + ?Sized>(
+        &mut self,
+        tag: u32,
+        wire_type: WireType,
+        buf: &mut B,
+    ) {
         if let Some((current_tag, current_wire_type)) = self.current_key {
             let tag_delta = current_tag
                 .checked_sub(tag)
@@ -2044,10 +2049,15 @@ mod test {
     macro_rules! check_type {
         ($kind:ident, $encoder_trait:ident, $decode:ident $(, enforce with $require:ident)?) => {
             pub mod $kind {
-                use super::*;
                 use bytes::BytesMut;
+                use crate::buf::ReverseBuffer;
+                use super::*;
 
-                pub fn check_type<T, E>(value: T, tag: u32, wire_type: WireType) -> TestCaseResult
+                pub fn check_type<T, E>(
+                    value: T,
+                    tag: u32,
+                    wire_type: WireType,
+                ) -> TestCaseResult
                 where
                     T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
                 {
@@ -2058,65 +2068,82 @@ mod test {
                         &mut TagMeasurer::new(),
                     );
 
-                    let mut buf = BytesMut::with_capacity(expected_len);
-                    <T as Encoder<E>>::encode(tag, &value, &mut buf, &mut TagWriter::new());
+                    let mut forward_buf = BytesMut::with_capacity(expected_len);
+                    <T as Encoder<E>>::encode(tag, &value, &mut forward_buf, &mut TagWriter::new());
 
-                    let buf = &mut buf.freeze();
-                    let mut buf = Capped::new(buf);
-                    let mut tr = TagReader::new();
-
+                    let forward_encoded = &mut forward_buf.freeze();
                     prop_assert_eq!(
-                        buf.remaining(),
                         expected_len,
+                        forward_encoded.remaining(),
                         "encoded_len wrong; expected: {}, actual: {}",
                         expected_len,
-                        buf.remaining()
+                        forward_encoded.remaining()
                     );
 
-                    if buf.remaining() == 0 {
-                        // Short circuit for empty packed values.
+                    let mut prepend_buf = ReverseBuffer::new();
+                    let mut trw = TagRevWriter::new();
+                    <T as Encoder<E>>::prepend_encode(tag, &value, &mut prepend_buf, &mut trw);
+                    trw.finalize(&mut prepend_buf);
+                    let mut prepended = Vec::new();
+                    prepended.put(prepend_buf.reader());
+
+                    if check_type_prepend_must_match_forward::$kind::VALUE {
+                        prop_assert_eq!(
+                            forward_encoded.as_ref(),
+                            prepended.as_slice(),
+                            "prepend did not match append",
+                        );
+                    }
+
+                    if forward_encoded.remaining() == 0 {
+                        // Short circuit for omitted fields, which do not get decoded.
                         return Ok(());
                     }
 
-                    let (decoded_tag, decoded_wire_type) = tr
-                        .decode_key(buf.lend())
+                    for mut encoded in [forward_encoded.as_ref(), prepended.as_slice()] {
+                        let mut buf = Capped::new(&mut encoded);
+                        let mut tr = TagReader::new();
+
+                        let (decoded_tag, decoded_wire_type) = tr
+                            .decode_key(buf.lend())
+                            .map_err(|error| TestCaseError::fail(error.to_string()))?;
+                        prop_assert_eq!(
+                            tag,
+                            decoded_tag,
+                            "decoded tag does not match; expected: {}, actual: {}",
+                            tag,
+                            decoded_tag
+                        );
+
+                        prop_assert_eq!(
+                            wire_type,
+                            decoded_wire_type,
+                            "decoded wire type does not match; expected: {:?}, actual: {:?}",
+                            wire_type,
+                            decoded_wire_type,
+                        );
+
+                        check_legal_remaining(tag, wire_type, buf.remaining())?;
+
+                        let mut roundtrip_value = T::new_for_overwrite();
+                        <T as $encoder_trait<E>>::$decode(
+                            wire_type,
+                            false,
+                            &mut roundtrip_value,
+                            buf.lend(),
+                            DecodeContext::default(),
+                        )
+                        $(.$require())?
                         .map_err(|error| TestCaseError::fail(error.to_string()))?;
-                    prop_assert_eq!(
-                        tag,
-                        decoded_tag,
-                        "decoded tag does not match; expected: {}, actual: {}",
-                        tag,
-                        decoded_tag
-                    );
 
-                    prop_assert_eq!(
-                        wire_type,
-                        decoded_wire_type,
-                        "decoded wire type does not match; expected: {:?}, actual: {:?}",
-                        wire_type,
-                        decoded_wire_type,
-                    );
+                        prop_assert!(
+                            !buf.remaining() > 0,
+                            "expected buffer to be empty, remaining: {}",
+                            buf.remaining()
+                        );
 
-                    check_legal_remaining(tag, wire_type, buf.remaining())?;
-
-                    let mut roundtrip_value = T::new_for_overwrite();
-                    <T as $encoder_trait<E>>::$decode(
-                        wire_type,
-                        false,
-                        &mut roundtrip_value,
-                        buf.lend(),
-                        DecodeContext::default(),
-                    )
-                    $(.$require())?
-                    .map_err(|error| TestCaseError::fail(error.to_string()))?;
-
-                    prop_assert!(
-                        !buf.remaining() > 0,
-                        "expected buffer to be empty, remaining: {}",
-                        buf.remaining()
-                    );
-
-                    prop_assert_eq!(value, roundtrip_value);
+                        prop_assert_eq!(&value, &roundtrip_value);
+                    }
 
                     Ok(())
                 }
@@ -2191,6 +2218,19 @@ mod test {
                 }
             }
         };
+    }
+    // Non-distinguished types either contain floating-point numbers (which are prepend-encoded
+    // trivially similarly to how they are forward-encoded) or hash-based collections and mappings.
+    // The latter don't have distinct "reversed" iterators, so if they have multiple items they
+    // won't necessarily prepend-encode the exact same bytes that they forward-encode and we needn't
+    // assert that they do.
+    mod check_type_prepend_must_match_forward {
+        pub(crate) mod expedient {
+            pub(crate) const VALUE: bool = false;
+        }
+        pub(crate) mod distinguished {
+            pub(crate) const VALUE: bool = true;
+        }
     }
     check_type!(expedient, Encoder, decode);
     check_type!(distinguished, DistinguishedEncoder, decode_distinguished,
