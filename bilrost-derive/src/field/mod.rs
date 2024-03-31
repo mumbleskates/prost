@@ -131,6 +131,14 @@ impl Field {
         }
     }
 
+    /// Returns a statement which prepends the field.
+    pub fn prepend(&self, ident: TokenStream) -> TokenStream {
+        match self {
+            Field::Value(scalar) => scalar.prepend(ident),
+            Field::Oneof(oneof) => oneof.prepend(ident),
+        }
+    }
+
     /// Returns an expression which evaluates to the result of decoding a value into the field.
     pub fn decode_expedient(&self, ident: TokenStream) -> TokenStream {
         match self {

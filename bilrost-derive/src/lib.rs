@@ -473,6 +473,63 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
         }
     });
 
+    let prepend = fields.iter().map(|chunk| match chunk {
+        AlwaysOrdered((field_ident, field)) => field.prepend(quote!(self.#field_ident)),
+        SortGroup(parts) => {
+            let parts: Vec<TokenStream> = parts
+                .iter()
+                .map(|part| match part {
+                    Contiguous(fields) => {
+                        let Some((_, first_field)) = fields.first() else {
+                            panic!("empty contiguous field group");
+                        };
+                        let first_tag = first_field.first_tag();
+                        let each_field = fields.iter().rev().cloned().map(|(field_ident, field)| {
+                            field.prepend(quote!(instance.#field_ident))
+                        });
+                        quote! {
+                            parts[nparts] = (#first_tag, Some(|instance, buf, tw| {
+                                #(#each_field)*
+                            }));
+                            nparts += 1;
+                        }
+                    }
+                    Oneof((field_ident, field)) => {
+                        let current_tag = field.current_tag(quote!(self.#field_ident));
+                        let prepend = field.prepend(quote!(instance.#field_ident));
+                        quote! {
+                            if let Some(tag) = #current_tag {
+                                parts[nparts] = (tag, Some(|instance, buf, tw| {
+                                    #prepend
+                                }));
+                                nparts += 1;
+                            }
+                        }
+                    }
+                })
+                .collect();
+            let max_parts = parts.len();
+            // TODO(widders): when there are many parts, use Vec instead of array
+            quote! {
+                {
+                    let mut parts = [
+                        (0u32, ::core::option::Option::None::<
+                                   fn(&Self, &mut __B, &mut ::bilrost::encoding::TagRevWriter)
+                               >);
+                        #max_parts
+                    ];
+                    let mut nparts = 0usize;
+                    #(#parts)*
+                    let parts = &mut parts[..nparts];
+                    parts.sort_unstable_by_key(|(tag, _)| *tag);
+                    parts.iter()
+                        .rev()
+                        .for_each(|(_, prepend_func)| (prepend_func.unwrap())(self, buf, tw));
+                }
+            }
+        }
+    });
+
     let decode = unsorted_fields.iter().map(|(field_ident, field)| {
         let decode = field.decode_expedient(quote!(value));
         let tags = field.tags().into_iter().map(|tag| quote!(#tag));
@@ -538,6 +595,16 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
             {
                 let tw = &mut ::bilrost::encoding::TagWriter::new();
                 #(#encode)*
+            }
+
+            #[allow(unused_variables)]
+            fn raw_prepend<__B>(&self, buf: &mut __B)
+            where
+                __B: ::bilrost::buf::ReverseBuf + ?Sized,
+            {
+                let tw = &mut ::bilrost::encoding::TagRevWriter::new();
+                #(#prepend)*
+                tw.finalize(buf);
             }
 
             #[allow(unused_variables)]
@@ -847,6 +914,17 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
             }
 
             #[inline]
+            fn prepend_value<__B: ::bilrost::buf::ReverseBuf + ?Sized>(
+                value: &Self,
+                buf: &mut __B,
+            ) {
+                ::bilrost::encoding::prepend_varint(
+                    ::bilrost::Enumeration::to_number(value) as u64,
+                    buf,
+                );
+            }
+
+            #[inline]
             fn value_encoded_len(value: &Self) -> usize {
                 ::bilrost::encoding::encoded_len_varint(
                     ::bilrost::encoding::Enumeration::to_number(value) as u64
@@ -1046,6 +1124,12 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         quote!(#ident::#variant_ident #with_value => { #encode })
     });
 
+    let prepend = fields.iter().map(|(variant_ident, field)| {
+        let prepend = field.prepend(quote!(*value));
+        let with_value = field.with_value(quote!(value));
+        quote!(#ident::#variant_ident #with_value => { #prepend })
+    });
+
     let encoded_len = fields.iter().map(|(variant_ident, field)| {
         let encoded_len = field.encoded_len(quote!(*value));
         let with_value = field.with_value(quote!(value));
@@ -1098,6 +1182,17 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     match self {
                         #ident::#empty_ident => {}
                         #(#encode,)*
+                    }
+                }
+
+                fn oneof_prepend<__B: ::bilrost::buf::ReverseBuf + ?Sized>(
+                    &self,
+                    buf: &mut __B,
+                    tw: &mut ::bilrost::encoding::TagRevWriter,
+                ) {
+                    match self {
+                        #ident::#empty_ident => {}
+                        #(#prepend,)*
                     }
                 }
 
@@ -1199,6 +1294,16 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                 ) {
                     match self {
                         #(#encode,)*
+                    }
+                }
+
+                fn oneof_prepend<__B: ::bilrost::buf::ReverseBuf + ?Sized>(
+                    &self,
+                    buf: &mut __B,
+                    tw: &mut ::bilrost::encoding::TagRevWriter,
+                ) {
+                    match self {
+                        #(#prepend,)*
                     }
                 }
 

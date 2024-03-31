@@ -71,6 +71,13 @@ impl Field {
         }
     }
 
+    /// Returns a statement which prepends the oneof field.
+    pub fn prepend(&self, ident: TokenStream) -> TokenStream {
+        quote! {
+            ::bilrost::encoding::Oneof::oneof_prepend(&#ident, buf, tw);
+        }
+    }
+
     /// Returns an expression which evaluates to the result of decoding the oneof field.
     pub fn decode_expedient(&self, ident: TokenStream) -> TokenStream {
         quote!(
