@@ -89,6 +89,7 @@ mod derived_message_tests {
         use super::*;
         use bilrost::Canonicity;
         use bilrost::Canonicity::Canonical;
+        use bytes::BufMut;
 
         pub(super) fn decodes<'a, M>(from: impl IntoOpaqueMessage<'a>, into: M)
         where
@@ -150,6 +151,13 @@ mod derived_message_tests {
                 "distinguished encoding does not round trip"
             );
             assert_eq!(into.encoded_len(), encoded.len(), "encoded_len was wrong");
+            let mut prepend_round_trip = Vec::new();
+            prepend_round_trip.put(into.encode_fast());
+            assert_eq!(
+                encoded,
+                prepend_round_trip,
+                "distinguished encoding does not round trip with prepend",
+            );
         }
 
         pub(super) fn decodes_non_canonically<'a, M>(
@@ -190,6 +198,8 @@ mod derived_message_tests {
                 round_tripped.len(),
                 "encoded_len was wrong"
             );
+            // The resulting message value should round-trip canonically when reencoded.
+            decodes_distinguished(into.encode_to_vec(), into);
         }
 
         pub(super) fn never_decodes<'a, M>(from: impl IntoOpaqueMessage<'a>, err: DecodeErrorKind)
@@ -228,12 +238,16 @@ mod derived_message_tests {
         }
 
         pub(super) fn encodes<'a, M: Message>(value: M, becomes: impl IntoOpaqueMessage<'a>) {
-            let encoded = value.encode_to_vec();
+            let forward_encoded = value.encode_to_vec();
             assert_eq!(
-                OpaqueMessage::decode(&*encoded),
+                OpaqueMessage::decode(forward_encoded.as_slice()),
                 Ok(becomes.into_opaque_message())
             );
-            assert_eq!(value.encoded_len(), encoded.len(), "encoded_len was wrong");
+            assert_eq!(value.encoded_len(), forward_encoded.len(), "encoded_len was wrong");
+            let prepended = value.encode_fast();
+            let mut prepend_encoded = Vec::new();
+            prepend_encoded.put(prepended);
+            assert_eq!(forward_encoded, prepend_encoded);
         }
 
         pub(super) fn is_invalid<M>(value: impl AsRef<[u8]>, err: DecodeErrorKind)
