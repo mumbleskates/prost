@@ -524,7 +524,6 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
                     let parts = &mut parts[..nparts];
                     parts.sort_unstable_by_key(|(tag, _)| ::core::cmp::Reverse(*tag));
                     parts.iter()
-                        .rev()
                         .for_each(|(_, prepend_func)| (prepend_func.unwrap())(self, buf, tw));
                 }
             }
