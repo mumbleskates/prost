@@ -57,13 +57,30 @@ hashbrown = ["dep:hashbrown"]
 smallvec = ["dep:smallvec"]
 thin-vec = ["dep:thin-vec"]
 
-# Optimization controls
+# Optimization controls. "auto-optimize" enables the default setting for all optimizations.
 auto-optimize = [
     "auto-self-copy-optimization",
     "unroll-varint-encoding",
 ]
+
+# Self-copy optimization: This causes copies of short segments of bytes into the prepend buffer to
+# be explicit and happen in reversed order rather than delegating to the intrinsic memcpy. On some
+# architectures (x86_64) this can be a significant improvement; on others (arm64) it's negligible or
+# worse.
+#
+# The "auto" feature here enables this optimization when on platforms that seem to benefit from it,
+# and the "force" feature enables it unconditionally.
 auto-self-copy-optimization = []
 force-self-copy-optimization = []
+# Unroll varint encoding: This changes the spelling of the functions that encode varint values to
+# branch in a way that bisects the resulting length of the varint and then calls an unrollable
+# fixed-length encoding loop once the length is known, rather than implementing a plain loop that
+# may branch on each iteration if the varint is done encoding.
+#
+# This improves performance significantly in benchmarks on some CPUs but not on others, at the cost
+# of emitted code size. The observed impact of this optimization is still rather conditional
+# regardless: unless the data encoded involves long arrays of encoded varints, the advantages are
+# likely to be far less prevalent.
 unroll-varint-encoding = []
 
 full-test-suite = [

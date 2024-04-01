@@ -158,6 +158,9 @@ pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
     } else if value < VARINT_LIMIT[8] {
         prepend_varint_inner::<8>(value, buf);
     } else {
+        // TODO: This implementation frequently becomes much slower for this case specifically; as
+        //  much as 40% slower than the 8-byte case! Rooting out the cause of this will be a big
+        //  win for performance in many cases.
         prepend_varint_inner::<9>(value, buf);
     }
 }
