@@ -183,6 +183,15 @@ impl ReverseBuffer {
         self.capacity
     }
 
+    /// Returns a reference to the full contents of the buffer if it is fully contiguous, or None if
+    /// it is not.
+    pub fn contiguous(&self) -> Option<&[u8]> {
+        match self.chunks.len() {
+            0..=1 => Some(self.chunk()),
+            _ => None,
+        }
+    }
+
     /// Ensures that the buffer will, upon its next allocation, reserve at least enough space to fit
     /// this many more bytes than are currently in the buffer.
     #[inline(always)]
@@ -538,6 +547,17 @@ pub struct ReverseBufferReader<'a> {
     front: usize,
     /// Total size of all the boxes covered by chunks
     capacity: usize,
+}
+
+impl ReverseBufferReader<'_> {
+    /// Returns a reference to the full contents of the buffer if it is fully contiguous, or None if
+    /// it is not.
+    pub fn contiguous(&self) -> Option<&[u8]> {
+        match self.chunks.len() {
+            0..=1 => Some(self.chunk()),
+            _ => None,
+        }
+    }
 }
 
 impl Buf for ReverseBufferReader<'_> {
