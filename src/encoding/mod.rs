@@ -168,7 +168,7 @@ pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
 /// Prepends an integer value in LEB128-bijective format to the given buffer.
 #[cfg(not(feature = "unroll-varint-encoding"))]
 #[inline(always)]
-pub fn prepend_varint<B: ReverseBuf>(mut value: u64, buf: &mut B) {
+pub fn prepend_varint<B: ReverseBuf + ?Sized>(mut value: u64, buf: &mut B) {
     if value < 0x80 {
         buf.prepend_u8(value as u8);
         return;
