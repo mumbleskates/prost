@@ -7,10 +7,15 @@ use core::str;
 
 use bytes::{Buf, BufMut, Bytes};
 
-use crate::encoding::{delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder, Canonicity, Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, EmptyState, Encoder, Fixed, Map, PlainBytes, Unpacked, ValueEncoder, Varint, WireType, Wiretyped, prepend_varint};
+use crate::buf::ReverseBuf;
+use crate::encoding::{
+    delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint,
+    encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
+    DistinguishedValueEncoder, EmptyState, Encoder, Fixed, Map, PlainBytes, Unpacked, ValueEncoder,
+    Varint, WireType, Wiretyped,
+};
 use crate::message::{merge, merge_distinguished, RawDistinguishedMessage, RawMessage};
 use crate::Blob;
-use crate::buf::ReverseBuf;
 use crate::DecodeErrorKind::InvalidValue;
 
 pub struct General;

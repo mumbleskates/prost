@@ -5,8 +5,8 @@ use core::borrow::{Borrow, BorrowMut};
 use core::ops::{Deref, DerefMut};
 
 use bytes::{Buf, BufMut};
-use crate::buf::ReverseBuf;
 
+use crate::buf::ReverseBuf;
 use crate::encoding::{skip_field, Canonicity, Capped, DecodeContext, EmptyState, WireType};
 use crate::message::{RawDistinguishedMessage, RawMessage};
 use crate::DecodeError;

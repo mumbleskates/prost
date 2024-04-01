@@ -1,8 +1,12 @@
 use bytes::{Buf, BufMut};
-use crate::buf::ReverseBuf;
 
+use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{DistinguishedMapping, Mapping};
-use crate::encoding::{encode_varint, encoded_len_varint, encoder_where_value_encoder, Canonicity, Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, NewForOverwrite, ValueEncoder, WireType, Wiretyped, prepend_varint};
+use crate::encoding::{
+    encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Canonicity,
+    Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, NewForOverwrite,
+    ValueEncoder, WireType, Wiretyped,
+};
 use crate::DecodeErrorKind::Truncated;
 
 pub struct Map<KE, VE>(KE, VE);

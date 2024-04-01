@@ -524,9 +524,10 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
                             panic!("empty contiguous field group");
                         };
                         let first_tag = first_field.first_tag();
-                        let each_field = fields.iter().rev().cloned().map(|(field_ident, field)| {
-                            field.prepend(quote!(instance.#field_ident))
-                        });
+                        let each_field =
+                            fields.iter().rev().cloned().map(|(field_ident, field)| {
+                                field.prepend(quote!(instance.#field_ident))
+                            });
                         quote! {
                             parts[nparts] = (#first_tag, Some(|instance, buf, tw| {
                                 #(#each_field)*

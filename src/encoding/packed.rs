@@ -1,8 +1,12 @@
 use bytes::{Buf, BufMut};
-use crate::buf::ReverseBuf;
 
+use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{Collection, DistinguishedCollection};
-use crate::encoding::{encode_varint, encoded_len_varint, unpacked, Canonicity, Capped, DecodeContext, DecodeError, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General, NewForOverwrite, TagMeasurer, TagWriter, ValueEncoder, WireType, Wiretyped, prepend_varint, TagRevWriter};
+use crate::encoding::{
+    encode_varint, encoded_len_varint, prepend_varint, unpacked, Canonicity, Capped, DecodeContext,
+    DecodeError, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General,
+    NewForOverwrite, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped,
+};
 use crate::DecodeErrorKind::{Truncated, UnexpectedlyRepeated};
 
 pub struct Packed<E = General>(E);
@@ -116,7 +120,12 @@ where
     }
 
     #[inline]
-    fn prepend_encode<B: ReverseBuf + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagRevWriter) {
+    fn prepend_encode<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    ) {
         if !value.is_empty() {
             Self::prepend_field(tag, value, buf, tw);
         }

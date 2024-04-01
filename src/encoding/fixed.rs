@@ -225,11 +225,53 @@ macro_rules! fixed_width_array {
     };
 }
 
-fixed_width_float!(f32, f32, ThirtyTwoBit, put_f32_le, prepend_f32_le, get_f32_le);
-fixed_width_float!(f64, f64, SixtyFourBit, put_f64_le, prepend_f64_le, get_f64_le);
-fixed_width_int!(fixed_u32, u32, ThirtyTwoBit, put_u32_le, prepend_u32_le, get_u32_le);
-fixed_width_int!(fixed_u64, u64, SixtyFourBit, put_u64_le, prepend_u64_le, get_u64_le);
-fixed_width_int!(fixed_i32, i32, ThirtyTwoBit, put_i32_le, prepend_i32_le, get_i32_le);
-fixed_width_int!(fixed_i64, i64, SixtyFourBit, put_i64_le, prepend_i64_le, get_i64_le);
+fixed_width_float!(
+    f32,
+    f32,
+    ThirtyTwoBit,
+    put_f32_le,
+    prepend_f32_le,
+    get_f32_le
+);
+fixed_width_float!(
+    f64,
+    f64,
+    SixtyFourBit,
+    put_f64_le,
+    prepend_f64_le,
+    get_f64_le
+);
+fixed_width_int!(
+    fixed_u32,
+    u32,
+    ThirtyTwoBit,
+    put_u32_le,
+    prepend_u32_le,
+    get_u32_le
+);
+fixed_width_int!(
+    fixed_u64,
+    u64,
+    SixtyFourBit,
+    put_u64_le,
+    prepend_u64_le,
+    get_u64_le
+);
+fixed_width_int!(
+    fixed_i32,
+    i32,
+    ThirtyTwoBit,
+    put_i32_le,
+    prepend_i32_le,
+    get_i32_le
+);
+fixed_width_int!(
+    fixed_i64,
+    i64,
+    SixtyFourBit,
+    put_i64_le,
+    prepend_i64_le,
+    get_i64_le
+);
 fixed_width_array!(u8_4, 4, ThirtyTwoBit);
 fixed_width_array!(u8_8, 8, SixtyFourBit);

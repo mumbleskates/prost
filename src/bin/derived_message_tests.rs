@@ -154,8 +154,7 @@ mod derived_message_tests {
             let mut prepend_round_trip = Vec::new();
             prepend_round_trip.put(into.encode_fast());
             assert_eq!(
-                encoded,
-                prepend_round_trip,
+                encoded, prepend_round_trip,
                 "distinguished encoding does not round trip with prepend",
             );
         }
@@ -243,7 +242,11 @@ mod derived_message_tests {
                 OpaqueMessage::decode(forward_encoded.as_slice()),
                 Ok(becomes.into_opaque_message())
             );
-            assert_eq!(value.encoded_len(), forward_encoded.len(), "encoded_len was wrong");
+            assert_eq!(
+                value.encoded_len(),
+                forward_encoded.len(),
+                "encoded_len was wrong"
+            );
             let prepended = value.encode_fast();
             let mut prepend_encoded = Vec::new();
             prepend_encoded.put(prepended);
