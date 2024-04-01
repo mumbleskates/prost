@@ -1,4 +1,4 @@
-use std::mem;
+use std::{iter, mem};
 
 use bilrost::buf::ReverseBuffer;
 use bilrost::encoding::{
@@ -209,12 +209,12 @@ fn main() {
     benchmark_varint(
         &mut criterion,
         "mixed",
-        (0..12)
+        (0..9)
             .flat_map(move |width| {
                 let exponent = width * 7 + 1;
-                (0..9).map(move |offset| offset + (1 << exponent))
+                (0..11).map(move |offset| offset + (1 << exponent))
             })
-            .take(100)
+            .chain(iter::once(1))
             .collect(),
     );
 
