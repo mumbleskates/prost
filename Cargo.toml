@@ -58,9 +58,13 @@ smallvec = ["dep:smallvec"]
 thin-vec = ["dep:thin-vec"]
 
 # Optimization controls
-auto-optimize = ["auto-self-copy-optimization"]
+auto-optimize = [
+    "auto-self-copy-optimization",
+    "unroll-varint-encoding",
+]
 auto-self-copy-optimization = []
 force-self-copy-optimization = []
+unroll-varint-encoding = []
 
 full-test-suite = [
     "derive",

@@ -47,8 +47,66 @@ pub use unpacked::Unpacked;
 /// Varint encoder. Encodes integer types as varints.
 pub use varint::Varint;
 
+// This is an array of the smallest values whose varint representation is N+1 bytes, where N is the
+// index in the array.
+const VARINT_LIMIT: [u64; 9] = [
+    0,
+    0x80,
+    0x4080,
+    0x20_4080,
+    0x1020_4080,
+    0x8_1020_4080,
+    0x408_1020_4080,
+    0x2_0408_1020_4080,
+    0x102_0408_1020_4080,
+];
+
 /// Encodes an integer value into LEB128-bijective variable length format, and writes it to the
 /// buffer. The buffer must have enough remaining space (maximum 9 bytes).
+#[cfg(feature = "unroll-varint-encoding")]
+#[inline(always)]
+pub fn encode_varint<B: BufMut + ?Sized>(value: u64, buf: &mut B) {
+    #[inline(always)]
+    fn encode_varint_inner<const N: usize>(mut value: u64, buf: &mut (impl BufMut + ?Sized)) {
+        let mut varint_data = [0u8; N];
+        for b in &mut varint_data[..N - 1] {
+            *b = ((value & 0x7F) | 0x80) as u8;
+            value = (value >> 7) - 1;
+        }
+        varint_data[N - 1] = value as u8;
+        buf.put_slice(&varint_data);
+    }
+
+    if value < VARINT_LIMIT[1] {
+        buf.put_u8(value as u8);
+    } else if value < VARINT_LIMIT[5] {
+        if value < VARINT_LIMIT[3] {
+            if value < VARINT_LIMIT[2] {
+                encode_varint_inner::<2>(value, buf);
+            } else {
+                encode_varint_inner::<3>(value, buf);
+            }
+        } else if value < VARINT_LIMIT[4] {
+            encode_varint_inner::<4>(value, buf);
+        } else {
+            encode_varint_inner::<5>(value, buf);
+        }
+    } else if value < VARINT_LIMIT[7] {
+        if value < VARINT_LIMIT[6] {
+            encode_varint_inner::<6>(value, buf);
+        } else {
+            encode_varint_inner::<7>(value, buf);
+        }
+    } else if value < VARINT_LIMIT[8] {
+        encode_varint_inner::<8>(value, buf);
+    } else {
+        encode_varint_inner::<9>(value, buf);
+    }
+}
+
+/// Encodes an integer value into LEB128-bijective variable length format, and writes it to the
+/// buffer. The buffer must have enough remaining space (maximum 9 bytes).
+#[cfg(not(feature = "unroll-varint-encoding"))]
 #[inline(always)]
 pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
     for _ in 0..9 {
@@ -63,20 +121,9 @@ pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
 }
 
 /// Prepends an integer value in LEB128-bijective format to the given buffer.
+#[cfg(feature = "unroll-varint-encoding")]
 #[inline(always)]
 pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
-    const LIMIT: [u64; 9] = [
-        0,
-        0x80,
-        0x4080,
-        0x20_4080,
-        0x1020_4080,
-        0x8_1020_4080,
-        0x408_1020_4080,
-        0x2_0408_1020_4080,
-        0x102_0408_1020_4080,
-    ];
-
     #[inline(always)]
     fn prepend_varint_inner<const N: usize>(mut value: u64, buf: &mut (impl ReverseBuf + ?Sized)) {
         let mut varint_data = [0u8; N];
@@ -88,31 +135,53 @@ pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
         buf.prepend_slice(&varint_data);
     }
 
-    if value < LIMIT[1] {
+    if value < VARINT_LIMIT[1] {
         buf.prepend_u8(value as u8);
-    } else if value < LIMIT[5] {
-        if value < LIMIT[3] {
-            if value < LIMIT[2] {
+    } else if value < VARINT_LIMIT[5] {
+        if value < VARINT_LIMIT[3] {
+            if value < VARINT_LIMIT[2] {
                 prepend_varint_inner::<2>(value, buf);
             } else {
                 prepend_varint_inner::<3>(value, buf);
             }
-        } else if value < LIMIT[4] {
+        } else if value < VARINT_LIMIT[4] {
             prepend_varint_inner::<4>(value, buf);
         } else {
             prepend_varint_inner::<5>(value, buf);
         }
-    } else if value < LIMIT[7] {
-        if value < LIMIT[6] {
+    } else if value < VARINT_LIMIT[7] {
+        if value < VARINT_LIMIT[6] {
             prepend_varint_inner::<6>(value, buf);
         } else {
             prepend_varint_inner::<7>(value, buf);
         }
-    } else if value < LIMIT[8] {
+    } else if value < VARINT_LIMIT[8] {
         prepend_varint_inner::<8>(value, buf);
     } else {
         prepend_varint_inner::<9>(value, buf);
     }
+}
+
+/// Prepends an integer value in LEB128-bijective format to the given buffer.
+#[cfg(not(feature = "unroll-varint-encoding"))]
+#[inline(always)]
+pub fn prepend_varint<B: ReverseBuf>(mut value: u64, buf: &mut B) {
+    if value < 0x80 {
+        buf.prepend_u8(value as u8);
+        return;
+    }
+    let mut varint_data = [0u8; 9];
+    for (i, b) in varint_data.iter_mut().enumerate() {
+        if value < 0x80 {
+            *b = value as u8;
+            buf.prepend_slice(&varint_data[..=i]);
+            return;
+        } else {
+            *b = ((value & 0x7F) | 0x80) as u8;
+            value = (value >> 7) - 1;
+        }
+    }
+    buf.prepend_slice(&varint_data);
 }
 
 /// Holds a varint value and dereferences to the slice of its relevant bytes.
@@ -344,38 +413,27 @@ impl DecodeContext {
 /// The returned value will be between 1 and 9, inclusive.
 #[inline(always)]
 pub const fn encoded_len_varint(value: u64) -> usize {
-    const LIMIT: [u64; 9] = [
-        0,
-        0x80,
-        0x4080,
-        0x20_4080,
-        0x1020_4080,
-        0x8_1020_4080,
-        0x408_1020_4080,
-        0x2_0408_1020_4080,
-        0x102_0408_1020_4080,
-    ];
-    if value < LIMIT[1] {
+    if value < VARINT_LIMIT[1] {
         1
-    } else if value < LIMIT[5] {
-        if value < LIMIT[3] {
-            if value < LIMIT[2] {
+    } else if value < VARINT_LIMIT[5] {
+        if value < VARINT_LIMIT[3] {
+            if value < VARINT_LIMIT[2] {
                 2
             } else {
                 3
             }
-        } else if value < LIMIT[4] {
+        } else if value < VARINT_LIMIT[4] {
             4
         } else {
             5
         }
-    } else if value < LIMIT[7] {
-        if value < LIMIT[6] {
+    } else if value < VARINT_LIMIT[7] {
+        if value < VARINT_LIMIT[6] {
             6
         } else {
             7
         }
-    } else if value < LIMIT[8] {
+    } else if value < VARINT_LIMIT[8] {
         8
     } else {
         9
