@@ -17,7 +17,7 @@ const ENABLE_SELF_COPY_OPTIMIZATION: bool = cfg!(any(
     feature = "force-self-copy-optimization"
 ));
 // Prepends larger than this size will always delegate to standard ptr data copying.
-const MAX_SELF_COPY: usize = 8;
+const MAX_SELF_COPY: usize = 9;
 // Default first allocation size.
 const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 
@@ -39,55 +39,58 @@ pub trait ReverseBuf: Buf {
     }
 
     #[inline]
+    fn prepend_array<const N: usize>(&mut self, data: [u8; N]) {
+        self.prepend(data.as_slice())
+    }
+
+    #[inline]
     fn prepend_u8(&mut self, n: u8) {
-        let src = [n];
-        self.prepend_slice(&src);
+        self.prepend_array([n]);
     }
 
     #[inline]
     fn prepend_i8(&mut self, n: i8) {
-        let src = [n as u8];
-        self.prepend_slice(&src);
+        self.prepend_array([n as u8]);
     }
 
     #[inline]
     fn prepend_u16_le(&mut self, n: u16) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 
     #[inline]
     fn prepend_i16_le(&mut self, n: i16) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 
     #[inline]
     fn prepend_u32_le(&mut self, n: u32) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 
     #[inline]
     fn prepend_i32_le(&mut self, n: i32) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 
     #[inline]
     fn prepend_u64_le(&mut self, n: u64) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 
     #[inline]
     fn prepend_i64_le(&mut self, n: i64) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 
     #[inline]
     fn prepend_f32_le(&mut self, n: f32) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 
     #[inline]
     fn prepend_f64_le(&mut self, n: f64) {
-        self.prepend_slice(&n.to_le_bytes())
+        self.prepend_array(n.to_le_bytes())
     }
 }
 
@@ -432,6 +435,28 @@ impl ReverseBuf for ReverseBuffer {
             self.front = new_front;
         } else {
             self.grow_and_copy_slice(data);
+        }
+    }
+
+    /// This is the call we dispatch to for fixed-size values, like f32 and so on. This path never
+    /// enables the self-copy optimization, and is significantly faster for small fixed-size values
+    /// even while variably-sized varints of the same size can be significantly slower without the
+    /// self-copy optimization.
+    #[inline(always)]
+    fn prepend_array<const N: usize>(&mut self, data: [u8; N]) {
+        if let Some(new_front) = self.front.checked_sub(N) {
+            // SAFETY: we are initializing the range of the front chunk before the front with
+            // bytes from `data`.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    data.as_ptr(),
+                    self.front_chunk_mut()[new_front..].as_mut_ptr() as *mut u8,
+                    data.len(),
+                );
+            }
+            self.front = new_front;
+        } else {
+            self.grow_and_copy_slice(&data);
         }
     }
 

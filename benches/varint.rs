@@ -2,7 +2,8 @@ use std::mem;
 
 use bilrost::buf::ReverseBuffer;
 use bilrost::encoding::{
-    decode_varint, encode_varint, encoded_len_varint, prepend_varint, Capped, TagReader, WireType,
+    const_varint, decode_varint, encode_varint, encoded_len_varint, prepend_varint, Capped,
+    TagReader, WireType,
 };
 use bilrost::DecodeError;
 use bytes::Buf;
@@ -125,6 +126,16 @@ fn benchmark_decode_key(criterion: &mut Criterion, name: &str, mut values: Vec<u
         .throughput(Throughput::Bytes(decoded_len));
 }
 
+fn assert_all_sized(
+    vals: impl IntoIterator<Item = u64>,
+    varint_len: usize,
+) -> impl Iterator<Item = u64> {
+    vals.into_iter().map(move |val| {
+        assert_eq!(const_varint(val).len(), varint_len);
+        val
+    })
+}
+
 fn main() {
     let criterion = Criterion::default();
     #[cfg(feature = "pprof")]
@@ -132,23 +143,78 @@ fn main() {
     let mut criterion = criterion.configure_from_args();
 
     // Benchmark encoding and decoding 100 small (1 byte) varints.
-    benchmark_varint(&mut criterion, "small", (0..100).collect());
+    benchmark_varint(
+        &mut criterion,
+        "small-1",
+        assert_all_sized(0..100, 1).collect(),
+    );
+
+    // Benchmark encoding and decoding 100 medium (2 byte) varints.
+    benchmark_varint(
+        &mut criterion,
+        "medium-2",
+        assert_all_sized((200..).take(100), 2).collect(),
+    );
+
+    // Benchmark encoding and decoding 100 medium (3 byte) varints.
+    benchmark_varint(
+        &mut criterion,
+        "medium-3",
+        assert_all_sized((1 << 20..).take(100), 3).collect(),
+    );
+
+    // Benchmark encoding and decoding 100 medium (4 byte) varints.
+    benchmark_varint(
+        &mut criterion,
+        "medium-4",
+        assert_all_sized((1 << 25..).take(100), 4).collect(),
+    );
 
     // Benchmark encoding and decoding 100 medium (5 byte) varints.
-    benchmark_varint(&mut criterion, "medium", (1 << 28..).take(100).collect());
+    benchmark_varint(
+        &mut criterion,
+        "medium-5",
+        assert_all_sized((1 << 30..).take(100), 5).collect(),
+    );
+
+    // Benchmark encoding and decoding 100 medium (6 byte) varints.
+    benchmark_varint(
+        &mut criterion,
+        "medium-6",
+        assert_all_sized((1 << 40..).take(100), 6).collect(),
+    );
+
+    // Benchmark encoding and decoding 100 medium (7 byte) varints.
+    benchmark_varint(
+        &mut criterion,
+        "medium-7",
+        assert_all_sized((1 << 45..).take(100), 7).collect(),
+    );
+
+    // Benchmark encoding and decoding 100 large (8 byte) varints.
+    benchmark_varint(
+        &mut criterion,
+        "large-8",
+        assert_all_sized((1 << 50..).take(100), 8).collect(),
+    );
 
     // Benchmark encoding and decoding 100 large (9 byte) varints.
-    benchmark_varint(&mut criterion, "large", (1 << 63..).take(100).collect());
+    benchmark_varint(
+        &mut criterion,
+        "large-9",
+        assert_all_sized((1 << 63..).take(100), 9).collect(),
+    );
 
     // Benchmark encoding and decoding 100 varints of mixed width (average 5.5 bytes).
     benchmark_varint(
         &mut criterion,
         "mixed",
-        (0..10)
+        (0..12)
             .flat_map(move |width| {
-                let exponent = width * 7;
-                (0..10).map(move |offset| offset + (1 << exponent))
+                let exponent = width * 7 + 1;
+                (0..9).map(move |offset| offset + (1 << exponent))
             })
+            .take(100)
             .collect(),
     );
 
