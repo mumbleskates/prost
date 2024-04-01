@@ -146,7 +146,7 @@ pub const fn const_varint(mut value: u64) -> ConstVarint {
             i += 1;
         }
     }
-    return ConstVarint { value: res, len: 9 };
+    ConstVarint { value: res, len: 9 }
 }
 
 /// Decodes a LEB128-bijective-encoded variable length integer from the buffer.
