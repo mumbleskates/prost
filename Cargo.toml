@@ -60,7 +60,7 @@ thin-vec = ["dep:thin-vec"]
 # Optimization controls. "auto-optimize" enables the default setting for all optimizations.
 auto-optimize = [
     "auto-self-copy-optimization",
-    "unroll-varint-encoding",
+    "auto-unroll-varint-encoding",
 ]
 
 # Self-copy optimization: This causes copies of short segments of bytes into the prepend buffer to
@@ -69,9 +69,10 @@ auto-optimize = [
 # worse.
 #
 # The "auto" feature here enables this optimization when on platforms that seem to benefit from it,
-# and the "force" feature enables it unconditionally.
+# and the regular feature enables it unconditionally.
 auto-self-copy-optimization = []
-force-self-copy-optimization = []
+self-copy-optimization = []
+
 # Unroll varint encoding: This changes the spelling of the functions that encode varint values to
 # branch in a way that bisects the resulting length of the varint and then calls an unrollable
 # fixed-length encoding loop once the length is known, rather than implementing a plain loop that
@@ -81,6 +82,10 @@ force-self-copy-optimization = []
 # of emitted code size. The observed impact of this optimization is still rather conditional
 # regardless: unless the data encoded involves long arrays of encoded varints, the advantages are
 # likely to be far less prevalent.
+#
+# As in other features, the "auto" feature enables the optimization when it seems like a good idea
+# (currently always) and the regular feature enables it unconditionally.
+auto-unroll-varint-encoding = ["unroll-varint-encoding"]
 unroll-varint-encoding = []
 
 full-test-suite = [

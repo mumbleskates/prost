@@ -14,7 +14,7 @@ const ENABLE_SELF_COPY_OPTIMIZATION: bool = cfg!(any(
         feature = "auto-self-copy-optimization",
         target_arch = "x86_64"
     ),
-    feature = "force-self-copy-optimization"
+    feature = "self-copy-optimization"
 ));
 // Prepends larger than this size will always delegate to standard ptr data copying.
 const MAX_SELF_COPY: usize = 9;
