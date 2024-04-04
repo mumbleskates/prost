@@ -16,6 +16,10 @@
 
 ### Fixes
 
+* Explicitly instantiate and invoke the const-time assertions that check the
+  tags match between a Oneof type and its inclusion in a Message. Before this
+  the asserts probably would never run.
+
 ### Cleanups
 
 ## v0.1004.0
