@@ -537,6 +537,26 @@ because it can't have access to the definitions of the field's type, but the
 list of tags declared in this attribute and the list of tags that the oneof
 actually has are statically checked for equality at compile time.
 
+```rust,compile_fail
+use bilrost::{Message, Oneof};
+
+#[derive(Oneof)]
+enum Abc {
+    #[bilrost(1)]
+    A(String),
+    #[bilrost(2)]
+    B(i64),
+    #[bilrost(3)]
+    C(bool),
+}
+
+#[derive(Message)]
+struct TagsDontMatch {
+    #[bilrost(oneof(1, 2))] // These tags don't match the oneof!
+    label: Option<Abc>,
+}
+```
+
 [^tagranges]: The way the full list of tags is specified within the `oneof`
 attribute and the `reserved_tags` attribute is the same: the whole list is comma
 separated, and each item may be either a single tag number or an inclusive range
