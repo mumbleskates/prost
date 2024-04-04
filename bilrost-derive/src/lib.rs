@@ -575,6 +575,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
             where
                 __B: ::bilrost::bytes::BufMut + ?Sized,
             {
+                let _ = <Self as ::bilrost::RawMessage>::__ASSERTIONS;
                 let tw = &mut ::bilrost::encoding::TagWriter::new();
                 #(#encode)*
             }
