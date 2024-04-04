@@ -566,6 +566,13 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
         quote!()
     };
 
+    // The static guards should be instantiated within each of the methods of the trait; in newer
+    // versions of rust simply instantiating a variable in any method with `let` is enough to cause
+    // the assertions to be evaluated, but in older versions the evaluation might not happen unless
+    // there is an actual code path that invokes the function.
+    //
+    // Even in rust 1.79 nightly, if the constant is never named anywhere the assertions won't
+    // actually run.
     let expanded = quote! {
         impl #impl_generics ::bilrost::RawMessage for #ident #ty_generics #where_clause {
             const __ASSERTIONS: () = { #(#static_guards)* };
@@ -593,6 +600,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
             where
                 __B: ::bilrost::bytes::Buf + ?Sized,
             {
+                let _ = <Self as ::bilrost::RawMessage>::__ASSERTIONS;
                 #struct_name
                 match tag {
                     #(#decode)*
@@ -602,6 +610,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
 
             #[inline]
             fn raw_encoded_len(&self) -> usize {
+                let _ = <Self as ::bilrost::RawMessage>::__ASSERTIONS;
                 let tm = &mut ::bilrost::encoding::TagMeasurer::new();
                 0 #(+ #encoded_len)*
             }

@@ -550,11 +550,15 @@ enum Abc {
     C(bool),
 }
 
-#[derive(Message)]
+#[derive(Default, Message)]
 struct TagsDontMatch {
     #[bilrost(oneof(1, 2))] // These tags don't match the oneof!
     label: Option<Abc>,
 }
+
+// In older versions of rust, the build may not fail until the message trait is
+// actually used somewhere.
+let _ = TagsDontMatch::default().encoded_len();
 ```
 
 [^tagranges]: The way the full list of tags is specified within the `oneof`
