@@ -650,6 +650,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
             where
                 __B: ::bilrost::buf::ReverseBuf + ?Sized,
             {
+                let _ = <Self as ::bilrost::RawMessage>::__ASSERTIONS;
                 let tw = &mut ::bilrost::encoding::TagRevWriter::new();
                 #(#prepend)*
                 tw.finalize(buf);
