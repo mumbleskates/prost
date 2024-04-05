@@ -760,14 +760,17 @@ There are a variety of methods and associated functions available for encoding
 and decoding data in `Message` implementations.
 
 The most straightforward ways to encode and decode a message are `encode_fast`,
-`encode_to_vec`, and `decode`.
+`encode_to_vec`, and `decode`. Methods are available for encoding and decoding
+messages to and from several types and traits, both with and without prefixed
+length delimiters. (Length delimiters for encoded messages always take the form
+of a normal Bilrost varint.)
 
 * `encode_fast`, `encode_length_delimited_fast`: encodes the message into a
-  `bilrost::buf::ReverseBuffer` and returns it. See the section on
-  [that type](#reversebuffer) for more information. The `..length_delimited..`
-  variant performs the first task, but prefixes the encoded data with its
-  length, such that it's appropriate to be decoded with the corresponding
-  "length_delimited" decoding function.
+  `ReverseBuffer` and returns it. See the section on [that type](#reversebuffer)
+  for more information. The `..length_delimited..` variant likewise encodes the
+  message then also prefixes the encoded data with its length, such that it's
+  appropriate to be decoded with the corresponding "length_delimited" decoding
+  function.
 * `encode_to_vec`, `encode_to_bytes`, and `..length_delimited..` variants:
   encodes the message into a new vec or bytes and returns that container. This
   is not quite as efficient as `encode_fast`, but always produces an encoding
