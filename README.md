@@ -757,29 +757,34 @@ type.
 ### Encoding and decoding messages
 
 There are a variety of methods and associated functions available for encoding
-and decoding data in `Message` implementations:
+and decoding data in `Message` implementations.
 
-* `encode`: encodes the message into a `&mut bytes::BufMut`
-* `encode_length_delimited`: encodes the message prefixed with a length
-  delimiter
-* `prepend`: encodes the message into a `&mut bilrost::buf::ReverseBuf`, a trait
-  available for this explicit purpose. (Encoding length-delimited encodings from
-  back to front is more efficient; the general expectation is that this is more
-  efficient than writing in the forwards direction, and the advantages compound
-  as messages become larger and more deeply nested.)
-* `decode`, `decode_length_delimited`: decodes the message likewise, from a
-  `bytes::Buf`
+The most straightforward ways to encode and decode a message are `encode_fast`,
+`encode_to_vec`, and `decode`.
+
+* `encode_fast`, `encode_length_delimited_fast`: encodes the message into a
+  `bilrost::buf::ReverseBuffer` and returns it. See the section on
+  [that type](#reversebuffer) for more information. The `..length_delimited..`
+  variant performs the first task, but prefixes the encoded data with its
+  length, such that it's appropriate to be decoded with the corresponding
+  "length_delimited" decoding function.
+* `encode_to_vec`, `encode_to_bytes`, and `..length_delimited..` variants:
+  encodes the message into a new vec or bytes and returns that container. This
+  is not quite as efficient as `encode_fast`, but always produces an encoding
+  that is contiguous in memory.
+* `encode`, `encode_length_delimited`: encodes the message into a
+  `&mut bytes::BufMut`, appending it after any data that is already there.
+* `prepend`: encodes the message into a `&mut bilrost::buf::ReverseBuf`,
+  *before* any data that is already there.
+* `decode`, `decode_length_delimited`: decodes the message type from a
+  `bytes::Buf`. The length-delimited version of the call will consume only as
+  many bytes as the length delimiter (read from the front of the `Buf`)
+  indicates, while the plain version of the method will attempt to decode the
+  entire contents.
 * `replace_from`, `replace_from_length_delimited`: like `decode`, but rather
   than returning a `Result` with a new instance of the message, these are
   mutating methods that replace the value in an existing instance. If decoding
-  fails, the message will be left with its fields empty.
-* `encode_to_vec`, `encode_to_bytes`, `encode_length_delimited_to_vec`, ...:
-  encodes the message into a new vec or bytes and returns that container.
-* `encode_fast`, `encode_length_delimited_fast`: encodes the message into a
-  `bilrost::buf::ReverseBuffer` and returns it. This is expected to usually be
-  faster than `encode_to_vec` or `encode_to_bytes`, but the result may not be
-  contiguous in memroy. See the section on
-  [`ReverseBuf`](#reversebuf-and-reversebuffer) for more info.
+  fails, the message will be left with its fields [empty](#empty-values).
 * There are also `encode_dyn`, `replace_from_slice`, and `replace_from_dyn`
   methods for encoding and decoding that do not provide anything the above
   methods do not, but are callable from a trait object.
@@ -838,9 +843,29 @@ methods.
 
 ### Supporting types and traits
 
-#### `ReverseBuf` and `ReverseBuffer`
+#### `ReverseBuf`
 
-TODO: explain
+`bilrost::buf::ReverseBuf` is a trait corresponding to `bytes::BufMut` which
+works in almost all the same ways, except chunks of bytes that are written to it
+are added *before* the data already in the buffer, rather than after it. This
+can make writing length-delimited encodings such as Bilrost significantly more
+efficient to write, especially as they contain more values and deeper nesting.
+
+`ReverseBuf` declares `bytes::Buf` as a supertrait, so any value of this type
+can be consumed as a buffer.
+
+#### `ReverseBuffer`
+
+`bilrost::buf::ReverseBuffer` is the main provided implementation of the
+`ReverseBuf` trait. It has amenities for reserving capacity, fetching the whole
+buffer as a slice if it's contiguous in memory, and has the method `reader()`
+which returns a read-only view of the buffer that also implements `bytes::Buf`
+but does not cause the buffer to be consumed when it is read through that trait.
+
+`ReverseBuffer` allocates lazily, grows exponentially, and stores its data in
+multiple allocations of increasing size. It is typically the most efficient type
+to encode a `bilrost` message into, and it offers many of the same amenities as
+the other options (`Vec` and `Bytes`).
 
 ### Encoding and decoding example
 
