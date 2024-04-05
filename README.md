@@ -762,14 +762,24 @@ and decoding data in `Message` implementations:
 * `encode`: encodes the message into a `&mut bytes::BufMut`
 * `encode_length_delimited`: encodes the message prefixed with a length
   delimiter
+* `prepend`: encodes the message into a `&mut bilrost::buf::ReverseBuf`, a trait
+  available for this explicit purpose. (Encoding length-delimited encodings from
+  back to front is more efficient; the general expectation is that this is more
+  efficient than writing in the forwards direction, and the advantages compound
+  as messages become larger and more deeply nested.)
 * `decode`, `decode_length_delimited`: decodes the message likewise, from a
   `bytes::Buf`
 * `replace_from`, `replace_from_length_delimited`: like `decode`, but rather
   than returning a `Result` with a new instance of the message, these are
   mutating methods that replace the value in an existing instance. If decoding
   fails, the message will be left with its fields empty.
-* `encode_to_vec`, `encode_to_slice`, `encode_length_delimited_to_vec`, ...:
-  encodes the message into a new vec or bytes and returns that container
+* `encode_to_vec`, `encode_to_bytes`, `encode_length_delimited_to_vec`, ...:
+  encodes the message into a new vec or bytes and returns that container.
+* `encode_fast`, `encode_length_delimited_fast`: encodes the message into a
+  `bilrost::buf::ReverseBuffer` and returns it. This is expected to usually be
+  faster than `encode_to_vec` or `encode_to_bytes`, but the result may not be
+  contiguous in memroy. See the section on
+  [`ReverseBuf`](#reversebuf-and-reversebuffer) for more info.
 * There are also `encode_dyn`, `replace_from_slice`, and `replace_from_dyn`
   methods for encoding and decoding that do not provide anything the above
   methods do not, but are callable from a trait object.
@@ -825,6 +835,12 @@ use `encode(..)` rather than `encode_dyn(..)`, and likewise for any other
 "`_dyn`" method. Likewise, `replace_from_slice(..)` is equivalent to
 `replace_from(..)`, just object safe; the same goes for other "`_slice`"
 methods.
+
+### Supporting types and traits
+
+#### `ReverseBuf` and `ReverseBuffer`
+
+TODO: explain
 
 ### Encoding and decoding example
 
