@@ -102,17 +102,22 @@ pub trait ReverseBuf: Buf {
 pub struct ReverseBuffer {
     /// Chunks of owned items in reverse order.
     chunks: Vec<Box<[MaybeUninit<u8>]>>,
-    /// Index of the first item in the front chunk (at the end of `self.chunks`). Invariant: Always
-    /// a valid index in that chunk when any chunk exists.
+    /// Index of the first initialized byte in the front chunk (at the end of `self.chunks`).
+    /// Invariant: Always a valid index in that chunk when any chunk exists, or the same as the
+    /// length of the only chunk when that chunk is being kept and the buffer is empty.
     front: usize,
-    /// Total size of owned bytes in the chunks, including the uninitialized items at the front of
+    /// Total size of owned bytes in the chunks, including the uninitialized bytes at the front of
     /// the front chunk.
     capacity: usize,
     /// Advisory size value for when the next chunk is allocated. If this value is positive it is an
     /// exact size for the next allocation(s); otherwise it is a negated minimum added capacity that
     /// was requested.
     planned_allocation: usize,
+    /// Whether the planned allocation will be of an exact size. If false, planned_allocation is
+    /// only a minimum.
     planned_exact: bool,
+    /// When true, this buffer will never drop its first chunk (which is kept as reserved minimum
+    /// capacity).
     keep_back: bool,
     _phantom_data: PhantomData<u8>,
 }
@@ -354,7 +359,7 @@ impl ReverseBuffer {
         self.front = new_front;
     }
 
-    /// Returns a reader that references this buf's value, which implements `bytes::Buf` without
+    /// Returns a reader that references this buf's contents, which implements `bytes::Buf` without
     /// draining bytes from the buffer.
     pub fn reader(&self) -> ReverseBufferReader {
         ReverseBufferReader {
