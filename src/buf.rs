@@ -31,6 +31,13 @@ pub trait ReverseBuf: Buf {
     /// already written to the buffer.
     fn prepend<B: Buf>(&mut self, data: B);
 
+    /// Returns the number of bytes available for additional data to be prepended. The returned
+    /// value should not change if no data is prepended, should be zero when and only when no more
+    /// writes can succeed, and may be smaller than the real capacity possible.
+    ///
+    /// This method follows the same general contract as `bytes::BufMut::remaining_mut()`.
+    fn remaining_writable(&self) -> usize;
+
     // --- Provided: ---
 
     /// Corresponding prepending method to `bytes::BufMut::put_slice`.
@@ -480,6 +487,11 @@ impl ReverseBuf for ReverseBuffer {
         } else {
             self.grow_and_copy_buf(data, prepending_len);
         }
+    }
+
+    fn remaining_writable(&self) -> usize {
+        // ReverseBuf only fails when allocating does.
+        usize::MAX - self.capacity
     }
 
     #[inline(always)]
