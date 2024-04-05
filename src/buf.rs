@@ -33,64 +33,124 @@ pub trait ReverseBuf: Buf {
 
     // --- Provided: ---
 
+    /// Corresponding prepending method to `bytes::BufMut::put_slice`.
     #[inline]
     fn prepend_slice(&mut self, data: &[u8]) {
         self.prepend(data)
     }
 
+    /// Prepends the bytes of an array given by-value to the buffer.
     #[inline]
     fn prepend_array<const N: usize>(&mut self, data: [u8; N]) {
-        self.prepend(data.as_slice())
+        self.prepend_slice(&data)
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_u8`.
     #[inline]
     fn prepend_u8(&mut self, n: u8) {
         self.prepend_array([n]);
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_i8`.
     #[inline]
     fn prepend_i8(&mut self, n: i8) {
-        self.prepend_array([n as u8]);
+        self.prepend_u8(n as u8);
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_u16_le`.
     #[inline]
     fn prepend_u16_le(&mut self, n: u16) {
         self.prepend_array(n.to_le_bytes())
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_i16_le`.
     #[inline]
     fn prepend_i16_le(&mut self, n: i16) {
         self.prepend_array(n.to_le_bytes())
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_u32_le`.
     #[inline]
     fn prepend_u32_le(&mut self, n: u32) {
         self.prepend_array(n.to_le_bytes())
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_i32_le`.
     #[inline]
     fn prepend_i32_le(&mut self, n: i32) {
         self.prepend_array(n.to_le_bytes())
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_u64_le`.
     #[inline]
     fn prepend_u64_le(&mut self, n: u64) {
         self.prepend_array(n.to_le_bytes())
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_i64_le`.
     #[inline]
     fn prepend_i64_le(&mut self, n: i64) {
         self.prepend_array(n.to_le_bytes())
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_f32_le`.
     #[inline]
     fn prepend_f32_le(&mut self, n: f32) {
         self.prepend_array(n.to_le_bytes())
     }
 
+    /// Corresponding prepending method to `bytes::BufMut::put_f64_le`.
     #[inline]
     fn prepend_f64_le(&mut self, n: f64) {
         self.prepend_array(n.to_le_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_u16_be`.
+    #[inline]
+    fn prepend_u16_be(&mut self, n: u16) {
+        self.prepend_array(n.to_be_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_i16_be`.
+    #[inline]
+    fn prepend_i16_be(&mut self, n: i16) {
+        self.prepend_array(n.to_be_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_u32_be`.
+    #[inline]
+    fn prepend_u32_be(&mut self, n: u32) {
+        self.prepend_array(n.to_be_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_i32_be`.
+    #[inline]
+    fn prepend_i32_be(&mut self, n: i32) {
+        self.prepend_array(n.to_be_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_u64_be`.
+    #[inline]
+    fn prepend_u64_be(&mut self, n: u64) {
+        self.prepend_array(n.to_be_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_i64_be`.
+    #[inline]
+    fn prepend_i64_be(&mut self, n: i64) {
+        self.prepend_array(n.to_be_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_f32_be`.
+    #[inline]
+    fn prepend_f32_be(&mut self, n: f32) {
+        self.prepend_array(n.to_be_bytes())
+    }
+
+    /// Corresponding prepending method to `bytes::BufMut::put_f64_be`.
+    #[inline]
+    fn prepend_f64_be(&mut self, n: f64) {
+        self.prepend_array(n.to_be_bytes())
     }
 }
 
