@@ -8,6 +8,10 @@
 
 ### Cleanups
 
+## v0.1005.1
+
+This release changes nothing, just fixes the link to the logo in the docs :)
+
 ## v0.1005.0
 
 ### Breaking changes
