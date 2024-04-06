@@ -83,6 +83,7 @@ auto-unroll-varint-encoding = ["unroll-varint-encoding"]
 unroll-varint-encoding = []
 
 full-test-suite = [
+    "derive",
     "detailed-errors",
     "extended-diagnostics",
     "third-party-type-support",
