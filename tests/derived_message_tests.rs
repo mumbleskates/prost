@@ -1451,10 +1451,7 @@ fn decoding_maps() {
             ])),
             NotCanonical,
         );
-        assert::never_decodes::<Foo<BTreeMap<bool, String>>>(
-            repeated_map,
-            UnexpectedlyRepeated,
-        );
+        assert::never_decodes::<Foo<BTreeMap<bool, String>>>(repeated_map, UnexpectedlyRepeated);
     }
     #[allow(unused_macros)]
     macro_rules! test_hash {
@@ -1593,14 +1590,8 @@ fn decoding_vecs() {
             unpacked,
             Foo(Cow::default(), Cow::Borrowed(expected.as_slice())),
         );
-        assert::decodes_distinguished(
-            packed,
-            Foo(Cow::Owned(expected.clone()), Cow::default()),
-        );
-        assert::decodes_distinguished(
-            unpacked,
-            Foo(Cow::default(), Cow::Owned(expected.clone())),
-        );
+        assert::decodes_distinguished(packed, Foo(Cow::Owned(expected.clone()), Cow::default()));
+        assert::decodes_distinguished(unpacked, Foo(Cow::default(), Cow::Owned(expected.clone())));
         #[allow(unused_macros)]
         macro_rules! test_vec {
             ($vec_ty:ty) => {
@@ -1762,10 +1753,7 @@ fn decoding_sets() {
             Foo(BTreeSet::new(), BTreeSet::from(expected_items.clone())),
             NotCanonical,
         );
-        assert::never_decodes::<Foo<BTreeSet<String>>>(
-            &repeated_set_packed,
-            UnexpectedlyRepeated,
-        );
+        assert::never_decodes::<Foo<BTreeSet<String>>>(&repeated_set_packed, UnexpectedlyRepeated);
         assert::never_decodes::<Foo<BTreeSet<String>>>(
             &repeated_set_unpacked,
             UnexpectedlyRepeated,
@@ -1784,14 +1772,8 @@ fn decoding_sets() {
                     Foo($ty::new(), $ty::from(expected_items.clone())),
                 );
             }
-            assert::doesnt_decode::<Foo<$ty<String>>>(
-                repeated_set_packed,
-                UnexpectedlyRepeated,
-            );
-            assert::doesnt_decode::<Foo<$ty<String>>>(
-                repeated_set_unpacked,
-                UnexpectedlyRepeated,
-            );
+            assert::doesnt_decode::<Foo<$ty<String>>>(repeated_set_packed, UnexpectedlyRepeated);
+            assert::doesnt_decode::<Foo<$ty<String>>>(repeated_set_unpacked, UnexpectedlyRepeated);
         };
     }
     #[cfg(feature = "std")]
@@ -1852,10 +1834,7 @@ fn decoding_sets_with_swapped_packedness() {
             );
         }
         assert::never_decodes::<Oof<BTreeSet<u32>>>(&repeated_set_packed, UnexpectedlyRepeated);
-        assert::never_decodes::<Oof<BTreeSet<u32>>>(
-            &repeated_set_unpacked,
-            UnexpectedlyRepeated,
-        );
+        assert::never_decodes::<Oof<BTreeSet<u32>>>(&repeated_set_unpacked, UnexpectedlyRepeated);
     }
     #[allow(unused_macros)]
     macro_rules! test_hash {
@@ -1897,8 +1876,7 @@ where
     #[derive(Debug, PartialEq, Message)]
     struct Foo<T>(#[bilrost(encoding(packed))] T, String);
 
-    let OV::LengthDelimited(set_value) =
-        OV::packed([OV::string("fooble"), OV::string("barbaz")])
+    let OV::LengthDelimited(set_value) = OV::packed([OV::string("fooble"), OV::string("barbaz")])
     else {
         unreachable!()
     };
@@ -2454,9 +2432,7 @@ fn unknown_fields_distinguished() {
             (1, OV::u64(1)),
             (
                 3,
-                OV::message(
-                    &[(1, OV::i64(1)), (2, OV::string("unknown"))].into_opaque_message(),
-                ),
+                OV::message(&[(1, OV::i64(1)), (2, OV::string("unknown"))].into_opaque_message()),
             ),
         ],
         Foo {

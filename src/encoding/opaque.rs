@@ -246,7 +246,7 @@ impl<'a> OpaqueMessage<'a> {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     pub fn clear(&mut self) {
         self.0.clear();
     }
