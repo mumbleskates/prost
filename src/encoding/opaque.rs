@@ -1,16 +1,18 @@
 use alloc::borrow::{Cow, ToOwned};
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem;
-use core::ops::{Deref, DerefMut};
+use core::ops::Index;
 
-use btreemultimap::BTreeMultiMap;
 use bytes::{Buf, BufMut};
 
+use crate::buf::ReverseBuf;
 use crate::encoding::{
-    encode_varint, encoded_len_varint, Capped, DecodeContext, EmptyState, TagMeasurer, TagWriter,
-    WireType,
+    encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState,
+    TagMeasurer, TagRevWriter, TagWriter, WireType,
 };
+use crate::iter::FlatAdapter;
 use crate::DecodeErrorKind::Truncated;
 use crate::{Canonicity, DecodeError, Message, RawDistinguishedMessage, RawMessage};
 
@@ -141,9 +143,32 @@ impl<'a> OpaqueValue<'a> {
         }
     }
 
+    fn prepend_value<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
+        match self {
+            Varint(val) => {
+                prepend_varint(*val, buf);
+            }
+            LengthDelimited(val) => {
+                buf.prepend_slice(val.as_ref());
+                prepend_varint(val.len() as u64, buf);
+            }
+            ThirtyTwoBit(val) => {
+                buf.prepend_slice(val.as_slice());
+            }
+            SixtyFourBit(val) => {
+                buf.prepend_slice(val.as_slice());
+            }
+        }
+    }
+
     fn encode_field<B: BufMut + ?Sized>(&self, tag: u32, buf: &mut B, tw: &mut TagWriter) {
         tw.encode_key(tag, self.wire_type(), buf);
         self.encode_value(buf);
+    }
+
+    fn prepend_field<B: ReverseBuf + ?Sized>(&self, tag: u32, buf: &mut B, tw: &mut TagRevWriter) {
+        tw.begin_field(tag, self.wire_type(), buf);
+        self.prepend_value(buf);
     }
 
     fn value_encoded_len(&self) -> usize {
@@ -215,11 +240,27 @@ impl<'a> OpaqueValue<'a> {
 /// At present this is still an unstable API, mostly used for internals and testing. Trait
 /// implementations and APIs of `OpaqueMessage` and `OpaqueValue` are subject to change.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct OpaqueMessage<'a>(BTreeMultiMap<u32, OpaqueValue<'a>>);
+pub struct OpaqueMessage<'a>(BTreeMap<u32, Vec<OpaqueValue<'a>>>);
 
-impl OpaqueMessage<'_> {
+impl<'a> OpaqueMessage<'a> {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    pub fn insert(&mut self, tag: u32, value: OpaqueValue<'a>) {
+        self.0.entry(tag).or_default().push(value);
+    }
+
+    pub fn iter(&self) -> OpaqueIter<'a, '_> {
+        FlatAdapter(self.0.iter()).flatten()
+    }
+
+    pub fn iter_mut(&mut self) -> OpaqueIterMut<'a, '_> {
+        FlatAdapter(self.0.iter_mut()).flatten()
     }
 
     /// Produces a full copy of the message with all data (re-)borrowed.
@@ -241,65 +282,37 @@ impl OpaqueMessage<'_> {
     }
 }
 
-impl<'a> Deref for OpaqueMessage<'a> {
-    type Target = BTreeMultiMap<u32, OpaqueValue<'a>>;
+impl<'a> Index<&u32> for OpaqueMessage<'a> {
+    type Output = [OpaqueValue<'a>];
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    fn index(&self, index: &u32) -> &Self::Output {
+        &self.0[index]
     }
 }
 
-impl<'a> DerefMut for OpaqueMessage<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+pub type OpaqueIter<'a, 'b> = core::iter::Flatten<
+    FlatAdapter<alloc::collections::btree_map::Iter<'b, u32, Vec<OpaqueValue<'a>>>>,
+>;
 
-pub struct OpaqueIterator<'a> {
-    iter: <BTreeMultiMap<u32, OpaqueValue<'a>> as IntoIterator>::IntoIter,
-    current: Option<(u32, <Vec<OpaqueValue<'a>> as IntoIterator>::IntoIter)>,
-}
+pub type OpaqueIterMut<'a, 'b> = core::iter::Flatten<
+    FlatAdapter<alloc::collections::btree_map::IterMut<'b, u32, Vec<OpaqueValue<'a>>>>,
+>;
 
-impl<'a> Iterator for OpaqueIterator<'a> {
-    type Item = (u32, OpaqueValue<'a>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (tag, value_iter) = match self.current.as_mut() {
-            None => self.current.insert(
-                self.iter
-                    .next()
-                    .map(|(tag, values)| (tag, values.into_iter()))?,
-            ),
-            Some(x) => x,
-        };
-        match value_iter.next() {
-            None => {
-                let (new_tag, new_values) = self.current.insert(
-                    self.iter
-                        .next()
-                        .map(|(tag, values)| (tag, values.into_iter()))?,
-                );
-                Some((*new_tag, new_values.next()?))
-            }
-            Some(value) => Some((*tag, value)),
-        }
-    }
-}
+pub type OpaqueIntoIter<'a> = core::iter::Flatten<
+    FlatAdapter<alloc::collections::btree_map::IntoIter<u32, Vec<OpaqueValue<'a>>>>,
+>;
 
 impl<'a> IntoIterator for OpaqueMessage<'a> {
-    type Item = <OpaqueIterator<'a> as Iterator>::Item;
-    type IntoIter = OpaqueIterator<'a>;
+    type Item = (u32, OpaqueValue<'a>);
+    type IntoIter = OpaqueIntoIter<'a>;
     fn into_iter(self) -> Self::IntoIter {
-        OpaqueIterator {
-            iter: self.0.into_iter(),
-            current: None,
-        }
+        FlatAdapter(self.0.into_iter()).flatten()
     }
 }
 
 impl<'a, 'b> IntoIterator for &'b OpaqueMessage<'a> {
-    type Item = <&'b BTreeMultiMap<u32, OpaqueValue<'a>> as IntoIterator>::Item;
-    type IntoIter = <&'b BTreeMultiMap<u32, OpaqueValue<'a>> as IntoIterator>::IntoIter;
+    type Item = (&'b u32, &'b OpaqueValue<'a>);
+    type IntoIter = OpaqueIter<'a, 'b>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -308,7 +321,11 @@ impl<'a, 'b> IntoIterator for &'b OpaqueMessage<'a> {
 
 impl<'a> FromIterator<(u32, OpaqueValue<'a>)> for OpaqueMessage<'a> {
     fn from_iter<T: IntoIterator<Item = (u32, OpaqueValue<'a>)>>(iter: T) -> Self {
-        Self(iter.into_iter().collect())
+        let mut res = Self::new();
+        for (tag, value) in iter {
+            res.insert(tag, value);
+        }
+        res
     }
 }
 
@@ -337,6 +354,14 @@ impl RawMessage for OpaqueMessage<'_> {
         for (tag, value) in self {
             value.encode_field(*tag, buf, &mut tw);
         }
+    }
+
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
+        let mut tw = TagRevWriter::new();
+        for (&tag, value) in self.iter().rev() {
+            value.prepend_field(tag, buf, &mut tw);
+        }
+        tw.finalize(buf);
     }
 
     fn raw_encoded_len(&self) -> usize {

@@ -6,6 +6,7 @@ use core::ops::{Deref, DerefMut};
 
 use bytes::{Buf, BufMut};
 
+use crate::buf::ReverseBuf;
 use crate::encoding::{skip_field, Canonicity, Capped, DecodeContext, EmptyState, WireType};
 use crate::message::{RawDistinguishedMessage, RawMessage};
 use crate::DecodeError;
@@ -168,6 +169,8 @@ impl RawMessage for () {
     const __ASSERTIONS: () = ();
 
     fn raw_encode<B: BufMut + ?Sized>(&self, _buf: &mut B) {}
+
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, _buf: &mut B) {}
 
     fn raw_encoded_len(&self) -> usize {
         0

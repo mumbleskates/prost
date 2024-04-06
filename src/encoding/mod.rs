@@ -6,6 +6,7 @@ use core::ops::{Deref, DerefMut};
 use bytes::buf::Take;
 use bytes::{Buf, BufMut};
 
+use crate::buf::ReverseBuf;
 use crate::DecodeErrorKind::{
     InvalidVarint, NotCanonical, TagOverflowed, Truncated, UnexpectedlyRepeated, UnknownField,
     WrongWireType,
@@ -16,7 +17,6 @@ mod fixed;
 mod general;
 mod map;
 /// Tools for opaque encoding and decoding of any valid bilrost data.
-#[cfg(feature = "opaque")]
 pub mod opaque;
 mod packed;
 mod plain_bytes;
@@ -46,8 +46,66 @@ pub use unpacked::Unpacked;
 /// Varint encoder. Encodes integer types as varints.
 pub use varint::Varint;
 
+// This is an array of the smallest values whose varint representation is N+1 bytes, where N is the
+// index in the array.
+const VARINT_LIMIT: [u64; 9] = [
+    0,
+    0x80,
+    0x4080,
+    0x20_4080,
+    0x1020_4080,
+    0x8_1020_4080,
+    0x408_1020_4080,
+    0x2_0408_1020_4080,
+    0x102_0408_1020_4080,
+];
+
 /// Encodes an integer value into LEB128-bijective variable length format, and writes it to the
 /// buffer. The buffer must have enough remaining space (maximum 9 bytes).
+#[cfg(feature = "unroll-varint-encoding")]
+#[inline(always)]
+pub fn encode_varint<B: BufMut + ?Sized>(value: u64, buf: &mut B) {
+    #[inline(always)]
+    fn encode_varint_inner<const N: usize>(mut value: u64, buf: &mut (impl BufMut + ?Sized)) {
+        let mut varint_data = [0u8; N];
+        for b in &mut varint_data[..N - 1] {
+            *b = ((value & 0x7F) | 0x80) as u8;
+            value = (value >> 7) - 1;
+        }
+        varint_data[N - 1] = value as u8;
+        buf.put_slice(&varint_data);
+    }
+
+    if value < VARINT_LIMIT[1] {
+        buf.put_u8(value as u8);
+    } else if value < VARINT_LIMIT[5] {
+        if value < VARINT_LIMIT[3] {
+            if value < VARINT_LIMIT[2] {
+                encode_varint_inner::<2>(value, buf);
+            } else {
+                encode_varint_inner::<3>(value, buf);
+            }
+        } else if value < VARINT_LIMIT[4] {
+            encode_varint_inner::<4>(value, buf);
+        } else {
+            encode_varint_inner::<5>(value, buf);
+        }
+    } else if value < VARINT_LIMIT[7] {
+        if value < VARINT_LIMIT[6] {
+            encode_varint_inner::<6>(value, buf);
+        } else {
+            encode_varint_inner::<7>(value, buf);
+        }
+    } else if value < VARINT_LIMIT[8] {
+        encode_varint_inner::<8>(value, buf);
+    } else {
+        encode_varint_inner::<9>(value, buf);
+    }
+}
+
+/// Encodes an integer value into LEB128-bijective variable length format, and writes it to the
+/// buffer. The buffer must have enough remaining space (maximum 9 bytes).
+#[cfg(not(feature = "unroll-varint-encoding"))]
 #[inline(always)]
 pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
     for _ in 0..9 {
@@ -59,6 +117,107 @@ pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
             value = (value >> 7) - 1;
         }
     }
+}
+
+/// Prepends an integer value in LEB128-bijective format to the given buffer.
+#[cfg(feature = "unroll-varint-encoding")]
+#[inline(always)]
+pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
+    #[inline(always)]
+    fn prepend_varint_inner<const N: usize>(mut value: u64, buf: &mut (impl ReverseBuf + ?Sized)) {
+        let mut varint_data = [0u8; N];
+        for b in &mut varint_data[..N - 1] {
+            *b = ((value & 0x7F) | 0x80) as u8;
+            value = (value >> 7) - 1;
+        }
+        varint_data[N - 1] = value as u8;
+        buf.prepend_slice(&varint_data);
+    }
+
+    if value < VARINT_LIMIT[1] {
+        buf.prepend_u8(value as u8);
+    } else if value < VARINT_LIMIT[5] {
+        if value < VARINT_LIMIT[3] {
+            if value < VARINT_LIMIT[2] {
+                prepend_varint_inner::<2>(value, buf);
+            } else {
+                prepend_varint_inner::<3>(value, buf);
+            }
+        } else if value < VARINT_LIMIT[4] {
+            prepend_varint_inner::<4>(value, buf);
+        } else {
+            prepend_varint_inner::<5>(value, buf);
+        }
+    } else if value < VARINT_LIMIT[7] {
+        if value < VARINT_LIMIT[6] {
+            prepend_varint_inner::<6>(value, buf);
+        } else {
+            prepend_varint_inner::<7>(value, buf);
+        }
+    } else if value < VARINT_LIMIT[8] {
+        prepend_varint_inner::<8>(value, buf);
+    } else {
+        // TODO: This implementation frequently becomes much slower for this case specifically; as
+        //  much as 40% slower than the 8-byte case! Rooting out the cause of this will be a big
+        //  win for performance in many cases.
+        prepend_varint_inner::<9>(value, buf);
+    }
+}
+
+/// Prepends an integer value in LEB128-bijective format to the given buffer.
+#[cfg(not(feature = "unroll-varint-encoding"))]
+#[inline(always)]
+pub fn prepend_varint<B: ReverseBuf + ?Sized>(mut value: u64, buf: &mut B) {
+    if value < 0x80 {
+        buf.prepend_u8(value as u8);
+        return;
+    }
+    let mut varint_data = [0u8; 9];
+    for (i, b) in varint_data.iter_mut().enumerate() {
+        if value < 0x80 {
+            *b = value as u8;
+            buf.prepend_slice(&varint_data[..=i]);
+            return;
+        } else {
+            *b = ((value & 0x7F) | 0x80) as u8;
+            value = (value >> 7) - 1;
+        }
+    }
+    buf.prepend_slice(&varint_data);
+}
+
+/// Holds a varint value and dereferences to the slice of its relevant bytes.
+pub struct ConstVarint {
+    value: [u8; 9],
+    len: u8,
+}
+
+impl Deref for ConstVarint {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.value[..self.len as usize]
+    }
+}
+
+/// Encodes a varint at const time.
+pub const fn const_varint(mut value: u64) -> ConstVarint {
+    let mut res = [0; 9];
+    let mut i: usize = 0;
+    while i < 9 {
+        if value < 0x80 {
+            res[i] = value as u8;
+            return ConstVarint {
+                value: res,
+                len: (i + 1) as u8,
+            };
+        } else {
+            res[i] = ((value as u8) & 0x7f) | 0x80;
+            value = (value >> 7) - 1;
+            i += 1;
+        }
+    }
+    ConstVarint { value: res, len: 9 }
 }
 
 /// Decodes a LEB128-bijective-encoded variable length integer from the buffer.
@@ -256,38 +415,27 @@ impl DecodeContext {
 /// The returned value will be between 1 and 9, inclusive.
 #[inline(always)]
 pub const fn encoded_len_varint(value: u64) -> usize {
-    const LIMIT: [u64; 9] = [
-        0,
-        0x80,
-        0x4080,
-        0x20_4080,
-        0x1020_4080,
-        0x8_1020_4080,
-        0x408_1020_4080,
-        0x2_0408_1020_4080,
-        0x102_0408_1020_4080,
-    ];
-    if value < LIMIT[1] {
+    if value < VARINT_LIMIT[1] {
         1
-    } else if value < LIMIT[5] {
-        if value < LIMIT[3] {
-            if value < LIMIT[2] {
+    } else if value < VARINT_LIMIT[5] {
+        if value < VARINT_LIMIT[3] {
+            if value < VARINT_LIMIT[2] {
                 2
             } else {
                 3
             }
-        } else if value < LIMIT[4] {
+        } else if value < VARINT_LIMIT[4] {
             4
         } else {
             5
         }
-    } else if value < LIMIT[7] {
-        if value < LIMIT[6] {
+    } else if value < VARINT_LIMIT[7] {
+        if value < VARINT_LIMIT[6] {
             6
         } else {
             7
         }
-    } else if value < LIMIT[8] {
+    } else if value < VARINT_LIMIT[8] {
         8
     } else {
         9
@@ -351,6 +499,51 @@ impl TagWriter {
             .expect("fields encoded out of order");
         self.last_tag = tag;
         encode_varint(((tag_delta as u64) << 2) | (wire_type as u64), buf);
+    }
+}
+
+/// Writes keys for the provided tags into a prepend-only buffer.
+#[derive(Default)]
+pub struct TagRevWriter {
+    current_key: Option<(u32, WireType)>,
+}
+
+impl TagRevWriter {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Encode the key delta to the given key into the buffer.
+    ///
+    /// All fields must be encoded in order; this is enforced in the encoding by encoding each
+    /// field's tag as a non-negative delta from the previously encoded field's tag. The tag delta
+    /// is encoded in the bits above the lowest two bits in the key delta, which encode the wire
+    /// type. When decoding, the wire type is taken as-is, and the tag delta added to the tag of the
+    /// last field decoded.
+    #[inline(always)]
+    pub fn begin_field<B: ReverseBuf + ?Sized>(
+        &mut self,
+        tag: u32,
+        wire_type: WireType,
+        buf: &mut B,
+    ) {
+        if let Some((current_tag, current_wire_type)) = self.current_key {
+            let tag_delta = current_tag
+                .checked_sub(tag)
+                .expect("fields prepended out of order");
+            prepend_varint(((tag_delta as u64) << 2) | (current_wire_type as u64), buf);
+        }
+        self.current_key = Some((tag, wire_type));
+    }
+
+    /// Finishes writing the current message by encoding the key of the first field that appeared.
+    #[inline(always)]
+    pub fn finalize<B: ReverseBuf + ?Sized>(&mut self, buf: &mut B) {
+        let Some((tag_delta, wire_type)) = self.current_key else {
+            return;
+        };
+        prepend_varint(((tag_delta as u64) << 2) | (wire_type as u64), buf);
+        self.current_key = None;
     }
 }
 
@@ -558,10 +751,20 @@ pub fn skip_field<B: Buf + ?Sized>(
 pub trait Encoder<E> {
     /// Encodes the a field with the given tag and value.
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter);
+
+    /// Prepends the encoding of the field with the given tag and value.
+    fn prepend_encode<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    );
+
     // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
     //  emit-reversed
     /// Returns the encoded length of the field, including the key.
     fn encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
+
     /// Decodes a field with the given wire type; the field's key should have already been consumed
     /// from the buffer.
     fn decode<B: Buf + ?Sized>(
@@ -1115,6 +1318,9 @@ pub trait ValueEncoder<E>: Wiretyped<E> {
     /// Encodes the given value unconditionally. This is guaranteed to emit data to the buffer.
     fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B);
 
+    /// Prepends the given value unconditionally. This is guaranteed to emit data to the buffer.
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B);
+
     // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
     //  emit-reversed
     /// Returns the number of bytes the given value would be encoded as.
@@ -1162,6 +1368,13 @@ where
 pub trait FieldEncoder<E> {
     /// Encodes exactly one field with the given tag and value into the buffer.
     fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter);
+    /// Prepends exactly one field with the given tag and value into the buffer.
+    fn prepend_field<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    );
     /// Returns the encoded length of the field including its key.
     fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
     /// Decodes a field directly from the buffer, also checking the wire type.
@@ -1181,6 +1394,16 @@ where
     fn encode_field<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter) {
         tw.encode_key(tag, Self::WIRE_TYPE, buf);
         Self::encode_value(value, buf);
+    }
+    #[inline]
+    fn prepend_field<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    ) {
+        tw.begin_field(tag, Self::WIRE_TYPE, buf);
+        Self::prepend_value(value, buf);
     }
     #[inline]
     fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize {
@@ -1240,6 +1463,18 @@ where
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter) {
         if let Some(value) = value {
             <T as FieldEncoder<E>>::encode_field(tag, value, buf, tw);
+        }
+    }
+
+    #[inline]
+    fn prepend_encode<B: ReverseBuf + ?Sized>(
+        tag: u32,
+        value: &Self,
+        buf: &mut B,
+        tw: &mut TagRevWriter,
+    ) {
+        if let Some(value) = value {
+            <T as FieldEncoder<E>>::prepend_field(tag, value, buf, tw)
         }
     }
 
@@ -1308,6 +1543,9 @@ pub trait Oneof: EmptyState {
     /// Encodes the fields of the oneof into the given buffer.
     fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter);
 
+    /// Prepends the fields of the oneof into the given buffer.
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter);
+
     /// Measures the number of bytes that would encode this oneof.
     fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize;
 
@@ -1333,6 +1571,9 @@ pub trait NonEmptyOneof: Sized {
     /// Encodes the fields of the oneof into the given buffer.
     fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter);
 
+    /// Prepends the fields of the oneof into the given buffer.
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter);
+
     /// Measures the number of bytes that would encode this oneof.
     fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize;
 
@@ -1356,12 +1597,21 @@ where
 {
     const FIELD_TAGS: &'static [u32] = T::FIELD_TAGS;
 
+    #[inline]
     fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter) {
         if let Some(value) = self {
             value.oneof_encode(buf, tw);
         }
     }
 
+    #[inline]
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter) {
+        if let Some(value) = self {
+            value.oneof_prepend(buf, tw);
+        }
+    }
+
+    #[inline]
     fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize {
         if let Some(value) = self {
             value.oneof_encoded_len(tm)
@@ -1370,10 +1620,12 @@ where
         }
     }
 
+    #[inline]
     fn oneof_current_tag(&self) -> Option<u32> {
         self.as_ref().map(NonEmptyOneof::oneof_current_tag)
     }
 
+    #[inline]
     fn oneof_decode_field<B: Buf + ?Sized>(
         &mut self,
         tag: u32,
@@ -1419,6 +1671,7 @@ where
     T: NonEmptyDistinguishedOneof,
     Self: Oneof,
 {
+    #[inline]
     fn oneof_decode_field_distinguished<B: Buf + ?Sized>(
         &mut self,
         tag: u32,
@@ -1493,6 +1746,16 @@ macro_rules! delegate_encoding {
                 tw: &mut $crate::encoding::TagWriter,
             ) {
                 $crate::encoding::Encoder::<$to_ty>::encode(tag, value, buf, tw)
+            }
+
+            #[inline]
+            fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(
+                tag: u32,
+                value: &$value_ty,
+                buf: &mut B,
+                tw: &mut $crate::encoding::TagRevWriter,
+            ) {
+                $crate::encoding::Encoder::<$to_ty>::prepend_encode(tag, value, buf, tw)
             }
 
             #[inline]
@@ -1589,6 +1852,11 @@ macro_rules! delegate_value_encoding {
             }
 
             #[inline]
+            fn prepend_value<B: $crate::buf::ReverseBuf + ?Sized>(value: &$value_ty, buf: &mut B) {
+                $crate::encoding::ValueEncoder::<$to_ty>::prepend_value(value, buf)
+            }
+
+            #[inline]
             fn value_encoded_len(value: &$value_ty) -> usize {
                 $crate::encoding::ValueEncoder::<$to_ty>::value_encoded_len(value)
             }
@@ -1667,7 +1935,7 @@ macro_rules! encoder_where_value_encoder {
             $($($where_clause)*)?
         {
             #[inline]
-            fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut TagWriter) {
+            fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut $crate::encoding::TagWriter) {
                 if !$crate::encoding::EmptyState::is_empty(value) {
                     $crate::encoding::FieldEncoder::<$encoding>::encode_field(
                         tag, value, buf, tw);
@@ -1675,7 +1943,15 @@ macro_rules! encoder_where_value_encoder {
             }
 
             #[inline]
-            fn encoded_len(tag: u32, value: &T, tm: &mut TagMeasurer) -> usize {
+            fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut $crate::encoding::TagRevWriter) {
+                if !$crate::encoding::EmptyState::is_empty(value) {
+                    $crate::encoding::FieldEncoder::<$encoding>::prepend_field(
+                        tag, value, buf, tw);
+                }
+            }
+
+            #[inline]
+            fn encoded_len(tag: u32, value: &T, tm: &mut $crate::encoding::TagMeasurer) -> usize {
                 if !$crate::encoding::EmptyState::is_empty(value) {
                     $crate::encoding::FieldEncoder::<$encoding>::field_encoded_len(
                         tag, value, tm)
@@ -1851,78 +2127,101 @@ mod test {
     macro_rules! check_type {
         ($kind:ident, $encoder_trait:ident, $decode:ident $(, enforce with $require:ident)?) => {
             pub mod $kind {
-                use super::*;
                 use bytes::BytesMut;
+                use crate::buf::ReverseBuffer;
+                use super::*;
 
-                pub fn check_type<T, E>(value: T, tag: u32, wire_type: WireType) -> TestCaseResult
+                pub fn check_type<T, E>(
+                    value: T,
+                    tag: u32,
+                    wire_type: WireType,
+                ) -> TestCaseResult
                 where
                     T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
                 {
+                    // TODO(widders): prepend
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
                         &value,
                         &mut TagMeasurer::new(),
                     );
 
-                    let mut buf = BytesMut::with_capacity(expected_len);
-                    <T as Encoder<E>>::encode(tag, &value, &mut buf, &mut TagWriter::new());
+                    let mut forward_buf = BytesMut::with_capacity(expected_len);
+                    <T as Encoder<E>>::encode(tag, &value, &mut forward_buf, &mut TagWriter::new());
 
-                    let buf = &mut buf.freeze();
-                    let mut buf = Capped::new(buf);
-                    let mut tr = TagReader::new();
-
+                    let forward_encoded = &mut forward_buf.freeze();
                     prop_assert_eq!(
-                        buf.remaining(),
                         expected_len,
+                        forward_encoded.remaining(),
                         "encoded_len wrong; expected: {}, actual: {}",
                         expected_len,
-                        buf.remaining()
+                        forward_encoded.remaining()
                     );
 
-                    if buf.remaining() == 0 {
-                        // Short circuit for empty packed values.
+                    let mut prepend_buf = ReverseBuffer::new();
+                    let mut trw = TagRevWriter::new();
+                    <T as Encoder<E>>::prepend_encode(tag, &value, &mut prepend_buf, &mut trw);
+                    trw.finalize(&mut prepend_buf);
+                    let mut prepended = Vec::new();
+                    prepended.put(prepend_buf.reader());
+
+                    if check_type_prepend_must_match_forward::$kind::VALUE {
+                        prop_assert_eq!(
+                            forward_encoded.as_ref(),
+                            prepended.as_slice(),
+                            "prepend did not match append",
+                        );
+                    }
+
+                    if forward_encoded.remaining() == 0 {
+                        // Short circuit for omitted fields, which do not get decoded.
                         return Ok(());
                     }
 
-                    let (decoded_tag, decoded_wire_type) = tr
-                        .decode_key(buf.lend())
+                    for mut encoded in [forward_encoded.as_ref(), prepended.as_slice()] {
+                        let mut buf = Capped::new(&mut encoded);
+                        let mut tr = TagReader::new();
+
+                        let (decoded_tag, decoded_wire_type) = tr
+                            .decode_key(buf.lend())
+                            .map_err(|error| TestCaseError::fail(error.to_string()))?;
+                        prop_assert_eq!(
+                            tag,
+                            decoded_tag,
+                            "decoded tag does not match; expected: {}, actual: {}",
+                            tag,
+                            decoded_tag
+                        );
+
+                        prop_assert_eq!(
+                            wire_type,
+                            decoded_wire_type,
+                            "decoded wire type does not match; expected: {:?}, actual: {:?}",
+                            wire_type,
+                            decoded_wire_type,
+                        );
+
+                        check_legal_remaining(tag, wire_type, buf.remaining())?;
+
+                        let mut roundtrip_value = T::new_for_overwrite();
+                        <T as $encoder_trait<E>>::$decode(
+                            wire_type,
+                            false,
+                            &mut roundtrip_value,
+                            buf.lend(),
+                            DecodeContext::default(),
+                        )
+                        $(.$require())?
                         .map_err(|error| TestCaseError::fail(error.to_string()))?;
-                    prop_assert_eq!(
-                        tag,
-                        decoded_tag,
-                        "decoded tag does not match; expected: {}, actual: {}",
-                        tag,
-                        decoded_tag
-                    );
 
-                    prop_assert_eq!(
-                        wire_type,
-                        decoded_wire_type,
-                        "decoded wire type does not match; expected: {:?}, actual: {:?}",
-                        wire_type,
-                        decoded_wire_type,
-                    );
+                        prop_assert!(
+                            !buf.remaining() > 0,
+                            "expected buffer to be empty, remaining: {}",
+                            buf.remaining()
+                        );
 
-                    check_legal_remaining(tag, wire_type, buf.remaining())?;
-
-                    let mut roundtrip_value = T::new_for_overwrite();
-                    <T as $encoder_trait<E>>::$decode(
-                        wire_type,
-                        false,
-                        &mut roundtrip_value,
-                        buf.lend(),
-                        DecodeContext::default(),
-                    )
-                    $(.$require())?
-                    .map_err(|error| TestCaseError::fail(error.to_string()))?;
-
-                    prop_assert!(
-                        !buf.remaining() > 0,
-                        "expected buffer to be empty, remaining: {}",
-                        buf.remaining()
-                    );
-
-                    prop_assert_eq!(value, roundtrip_value);
+                        prop_assert_eq!(&value, &roundtrip_value);
+                    }
 
                     Ok(())
                 }
@@ -1997,6 +2296,19 @@ mod test {
                 }
             }
         };
+    }
+    // Non-distinguished types either contain floating-point numbers (which are prepend-encoded
+    // trivially similarly to how they are forward-encoded) or hash-based collections and mappings.
+    // The latter don't have distinct "reversed" iterators, so if they have multiple items they
+    // won't necessarily prepend-encode the exact same bytes that they forward-encode and we needn't
+    // assert that they do.
+    mod check_type_prepend_must_match_forward {
+        pub(crate) mod expedient {
+            pub(crate) const VALUE: bool = false;
+        }
+        pub(crate) mod distinguished {
+            pub(crate) const VALUE: bool = true;
+        }
     }
     check_type!(expedient, Encoder, decode);
     check_type!(distinguished, DistinguishedEncoder, decode_distinguished,
@@ -2222,6 +2534,9 @@ mod test {
             let mut buf = Vec::with_capacity(100);
             encode_varint(value, &mut buf);
             assert_eq!(buf, encoded);
+
+            // Constant encoded.
+            assert_eq!(const_varint(value).deref(), encoded);
 
             assert_eq!(encoded_len_varint(value), encoded.len());
 

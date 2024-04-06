@@ -157,6 +157,32 @@ impl Field {
         }
     }
 
+    /// Returns a statement which encodes the field using buffer `buf` and tag writer `tw`.
+    pub fn prepend(&self, ident: TokenStream) -> TokenStream {
+        let tag = self.tag;
+        let encoder = &self.encoding;
+        let ty = &self.ty;
+        if self.in_oneof {
+            quote! {
+                <#ty as ::bilrost::encoding::FieldEncoder<#encoder>>::prepend_field(
+                    #tag,
+                    &#ident,
+                    buf,
+                    tw,
+                );
+            }
+        } else {
+            quote! {
+                <#ty as ::bilrost::encoding::Encoder<#encoder>>::prepend_encode(
+                    #tag,
+                    &#ident,
+                    buf,
+                    tw,
+                );
+            }
+        }
+    }
+
     /// Returns an expression which evaluates to the result of merging a decoded value into the
     /// field. The given ident must be an &mut that already refers to the destination.
     pub fn decode_expedient(&self, ident: TokenStream) -> TokenStream {

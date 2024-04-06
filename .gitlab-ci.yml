@@ -21,9 +21,9 @@ lint:
   stage: test
   script:
     - rustup component add clippy rustfmt
-    - cargo clippy --all --all-targets --features full-test-suite
-    - cargo clippy --all --all-targets --features full-test-suite --no-default-features
-    - cargo clippy --all --all-targets --no-default-features
+    - cargo clippy --workspace --all-targets --features full-test-suite
+    - cargo clippy --workspace --all-targets --features full-test-suite --no-default-features
+    - cargo clippy --workspace --all-targets --no-default-features
     - cargo fmt --all --check
 
 test:

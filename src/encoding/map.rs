@@ -1,10 +1,11 @@
 use bytes::{Buf, BufMut};
 
+use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{DistinguishedMapping, Mapping};
 use crate::encoding::{
-    encode_varint, encoded_len_varint, encoder_where_value_encoder, Canonicity, Capped,
-    DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, NewForOverwrite, TagMeasurer,
-    TagWriter, ValueEncoder, WireType, Wiretyped,
+    encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Canonicity,
+    Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, NewForOverwrite,
+    ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeErrorKind::Truncated;
 
@@ -60,6 +61,15 @@ where
             ValueEncoder::<KE>::encode_value(key, buf);
             ValueEncoder::<VE>::encode_value(val, buf);
         }
+    }
+
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &M, buf: &mut B) {
+        let end = buf.remaining();
+        for (key, val) in value.reversed() {
+            ValueEncoder::<VE>::prepend_value(val, buf);
+            ValueEncoder::<KE>::prepend_value(key, buf);
+        }
+        prepend_varint((buf.remaining() - end) as u64, buf);
     }
 
     fn value_encoded_len(value: &M) -> usize {

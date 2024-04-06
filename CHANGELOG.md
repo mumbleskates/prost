@@ -2,8 +2,17 @@
 
 ### Breaking changes
 
+* The (unstable) internal encoding traits continue to evolve, this time to
+  support prepend-encoding.
+
 ### New features
 
+* Added prepend-encoding: messages can be encoded to a prepend-only buffer, with 
+  `.prepend(reverse_buf)` or `.encode_fast()`. This encoding method writes
+  messages in reverse, avoiding any need to "look ahead" in order to encode the
+  correct length for data that is not yet written. This enables writing an
+  arbitrarily nested message without visiting any field more than once, removing
+  a quadratic hazard and general inefficiency in the encoding path.
 * New `reserved_tags` attribute on messages to prevent tags from being used,
   even by accident.
 * Both the new `reserved_tags` and the old `oneof` attributes can now specify
@@ -21,6 +30,13 @@
   the asserts probably would never run.
 
 ### Cleanups
+
+* The "opaque" message types are now always available, and no longer require a
+  dependency or a crate feature. The "opaque" feature qill be removed in a
+  future version.
+* The "derived message tests" have been moved from a binary with required
+  features to an integration test. The "derive" feature and the "bilrost-derive"
+  crate dependency are now always enabled in tests to support this.
 
 ## v0.1004.0
 

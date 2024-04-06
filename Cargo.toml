@@ -24,26 +24,20 @@ members = [
     "bilrost-types",
 ]
 
-exclude = [
-    # The fuzz crate can't be compiled or tested without the 'cargo fuzz' command,
-    # so exclude it from normal builds.
-    "fuzz",
-    # Same counts for the afl fuzz targets
-    "afl",
-]
-
 [lib]
 # https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
 bench = false
 
 [features]
-default = ["derive", "detailed-errors", "std"]
+default = ["auto-optimize", "derive", "detailed-errors", "std"]
 derive = ["dep:bilrost-derive"]
 detailed-errors = ["dep:thin-vec"]
 extended-diagnostics = ["dep:const_panic"]
 no-recursion-limit = []
-opaque = ["dep:btreemultimap"]
 std = []
+
+# Deprecated: Does nothing. Opaque message types are always available.
+opaque = []
 
 third-party-type-support = [
     "bytestring",
@@ -56,19 +50,50 @@ bytestring = ["dep:bytestring"]
 hashbrown = ["dep:hashbrown"]
 smallvec = ["dep:smallvec"]
 thin-vec = ["dep:thin-vec"]
-tinyvec = ["dep:tinyvec"]
+
+# Optimization controls. "auto-optimize" enables the default setting for all optimizations.
+auto-optimize = [
+    "auto-self-copy-optimization",
+    "auto-unroll-varint-encoding",
+]
+
+# Self-copy optimization: This causes copies of short segments of bytes into the prepend buffer to
+# be explicit and happen in reversed order rather than delegating to the intrinsic memcpy. On some
+# architectures (x86_64) this can be a significant improvement; on others (arm64) it's negligible or
+# worse.
+#
+# The "auto" feature here enables this optimization when on platforms that seem to benefit from it,
+# and the regular feature enables it unconditionally.
+auto-self-copy-optimization = []
+self-copy-optimization = []
+
+# Unroll varint encoding: This changes the spelling of the functions that encode varint values to
+# branch in a way that bisects the resulting length of the varint and then calls an unrollable
+# fixed-length encoding loop once the length is known, rather than implementing a plain loop that
+# may branch on each iteration if the varint is done encoding.
+#
+# This improves performance significantly in benchmarks on some CPUs but not on others, at the cost
+# of emitted code size. The observed impact of this optimization is still rather conditional
+# regardless: unless the data encoded involves long arrays of encoded varints, the advantages are
+# likely to be far less prevalent.
+#
+# As in other features, the "auto" feature enables the optimization when it seems like a good idea
+# (currently always) and the regular feature enables it unconditionally.
+auto-unroll-varint-encoding = ["unroll-varint-encoding"]
+unroll-varint-encoding = []
 
 full-test-suite = [
     "derive",
     "detailed-errors",
     "extended-diagnostics",
-    "opaque",
     "third-party-type-support",
 ]
 
+# Enables pprof profiling in benchmarks.
+pprof = ["dep:pprof"]
+
 [dependencies]
 bilrost-derive = { version = "0.1005.0-dev", path = "bilrost-derive", optional = true }
-btreemultimap = { version = "0.1", default-features = false, optional = true }
 bytes = { version = "1", default-features = false }
 bytestring = { version = ">=1", default-features = false, optional = true }
 const_panic = { version = "0.2", default-features = false, features = ["non_basic"], optional = true }
@@ -77,7 +102,11 @@ smallvec = { version = ">=1.6.1", default-features = false, features = ["const_g
 thin-vec = { version = ">=0.2", default-features = false, optional = true }
 tinyvec = { version = ">=1", default-features = false, features = ["alloc"], optional = true }
 
+# pprof prevents building on windows, so must be an optional feature
+pprof = { version = "0.13", features = ["flamegraph"], optional = true }
+
 [dev-dependencies]
+bilrost = { path = ".", features = ["derive"] } # always enable proc-macro use for integration tests
 criterion = { version = "0.5", default-features = false }
 itertools = "0.12"
 proptest = "1"
@@ -91,7 +120,3 @@ lto = "fat"
 [[bench]]
 name = "varint"
 harness = false
-
-[[bin]]
-name = "derived_message_tests"
-required-features = ["derive", "opaque"]

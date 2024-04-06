@@ -1,6 +1,7 @@
-#![no_std]
-#![doc(html_root_url = "https://docs.rs/bilrost/0.1005.0-dev")]
 #![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://github.com/mumbleskates/bilrost/tree/bilrost/logo/bilrost256.jpg")]
+#![doc(html_root_url = "https://docs.rs/bilrost/0.1005.0-dev")]
+#![no_std]
 
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -13,12 +14,15 @@ pub use bytes;
 #[doc(hidden)]
 pub use bilrost_derive::{DistinguishedMessage, DistinguishedOneof, Enumeration, Message, Oneof};
 
+pub mod buf;
 mod error;
 mod message;
 mod types;
 
 #[doc(hidden)]
 pub mod encoding;
+#[doc(hidden)]
+mod iter;
 
 pub use crate::encoding::{Canonicity, Enumeration, WithCanonicity};
 pub use crate::error::{DecodeError, DecodeErrorKind, EncodeError};

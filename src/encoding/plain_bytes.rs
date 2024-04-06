@@ -2,12 +2,13 @@ use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::ops::Deref;
 
+use crate::buf::ReverseBuf;
 use bytes::{Buf, BufMut};
 
 use crate::encoding::{
-    delegate_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder, Canonicity,
-    Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, EmptyState, Encoder,
-    TagMeasurer, TagWriter, ValueEncoder, WireType, Wiretyped,
+    const_varint, delegate_encoding, encode_varint, encoded_len_varint,
+    encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
+    DistinguishedValueEncoder, EmptyState, Encoder, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeErrorKind::InvalidValue;
 
@@ -28,6 +29,11 @@ impl ValueEncoder<PlainBytes> for Vec<u8> {
     fn encode_value<B: BufMut + ?Sized>(value: &Vec<u8>, buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         buf.put_slice(value.as_slice());
+    }
+
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Vec<u8>, buf: &mut B) {
+        buf.prepend_slice(value);
+        prepend_varint(value.len() as u64, buf);
     }
 
     fn value_encoded_len(value: &Vec<u8>) -> usize {
@@ -90,6 +96,11 @@ impl ValueEncoder<PlainBytes> for Cow<'_, [u8]> {
     fn encode_value<B: BufMut + ?Sized>(value: &Cow<[u8]>, buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         buf.put_slice(value.as_ref());
+    }
+
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Cow<[u8]>, buf: &mut B) {
+        buf.prepend_slice(value);
+        prepend_varint(value.len() as u64, buf);
     }
 
     #[inline]
@@ -160,8 +171,13 @@ impl<const N: usize> Wiretyped<PlainBytes> for [u8; N] {
 
 impl<const N: usize> ValueEncoder<PlainBytes> for [u8; N] {
     fn encode_value<B: BufMut + ?Sized>(value: &[u8; N], mut buf: &mut B) {
-        encode_varint(N as u64, buf);
+        buf.put_slice(&const_varint(N as u64));
         (&mut buf).put(value.as_slice())
+    }
+
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &[u8; N], buf: &mut B) {
+        buf.prepend_slice(value);
+        buf.prepend_slice(&const_varint(N as u64))
     }
 
     fn value_encoded_len(_value: &[u8; N]) -> usize {
