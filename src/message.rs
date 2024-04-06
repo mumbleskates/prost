@@ -162,6 +162,7 @@ pub trait Message: EmptyState {
 }
 
 /// An enhanced trait for Bilrost messages that promise a distinguished representation.
+///
 /// Implementation of this trait comes with the following promises:
 ///
 ///  1. The message will always encode to the same bytes as any other message with an equal value.
