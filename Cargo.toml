@@ -24,14 +24,6 @@ members = [
     "bilrost-types",
 ]
 
-exclude = [
-    # The fuzz crate can't be compiled or tested without the 'cargo fuzz' command,
-    # so exclude it from normal builds.
-    "fuzz",
-    # Same counts for the afl fuzz targets
-    "afl",
-]
-
 [lib]
 # https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
 bench = false
@@ -91,7 +83,6 @@ auto-unroll-varint-encoding = ["unroll-varint-encoding"]
 unroll-varint-encoding = []
 
 full-test-suite = [
-    "derive",
     "detailed-errors",
     "extended-diagnostics",
     "third-party-type-support",
@@ -114,6 +105,7 @@ tinyvec = { version = ">=1", default-features = false, features = ["alloc"], opt
 pprof = { version = "0.13", features = ["flamegraph"], optional = true }
 
 [dev-dependencies]
+bilrost = { path = ".", features = ["derive"] } # always enable proc-macro use for integration tests
 criterion = { version = "0.5", default-features = false }
 itertools = "0.12"
 proptest = "1"
@@ -127,7 +119,3 @@ lto = "fat"
 [[bench]]
 name = "varint"
 harness = false
-
-[[bin]]
-name = "derived_message_tests"
-required-features = ["derive"]
