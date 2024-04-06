@@ -21,6 +21,8 @@ mod types;
 
 #[doc(hidden)]
 pub mod encoding;
+#[doc(hidden)]
+mod iter;
 
 pub use crate::encoding::{Canonicity, Enumeration, WithCanonicity};
 pub use crate::error::{DecodeError, DecodeErrorKind, EncodeError};

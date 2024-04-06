@@ -12,6 +12,7 @@ use crate::encoding::{
     encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState,
     TagMeasurer, TagRevWriter, TagWriter, WireType,
 };
+use crate::iter::FlatAdapter;
 use crate::DecodeErrorKind::Truncated;
 use crate::{Canonicity, DecodeError, Message, RawDistinguishedMessage, RawMessage};
 
@@ -245,17 +246,21 @@ impl<'a> OpaqueMessage<'a> {
     pub fn new() -> Self {
         Self::default()
     }
+    
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
 
     pub fn insert(&mut self, tag: u32, value: OpaqueValue<'a>) {
         self.0.entry(tag).or_default().push(value);
     }
 
     pub fn iter(&self) -> OpaqueIter<'a, '_> {
-        OpaqueIter::new(self.0.iter())
+        FlatAdapter(self.0.iter()).flatten()
     }
 
     pub fn iter_mut(&mut self) -> OpaqueIterMut<'a, '_> {
-        OpaqueIterMut::new(self.0.iter_mut())
+        FlatAdapter(self.0.iter_mut()).flatten()
     }
 
     /// Produces a full copy of the message with all data (re-)borrowed.
@@ -285,32 +290,23 @@ impl<'a> Index<&u32> for OpaqueMessage<'a> {
     }
 }
 
-pub type OpaqueIter<'a, 'b> = FlatteningIter<
-    alloc::collections::btree_map::Iter<'b, u32, Vec<OpaqueValue<'a>>>,
-    &'b u32,
-    &'b Vec<OpaqueValue<'a>>,
+pub type OpaqueIter<'a, 'b> = core::iter::Flatten<
+    FlatAdapter<alloc::collections::btree_map::Iter<'b, u32, Vec<OpaqueValue<'a>>>>,
 >;
 
-pub type OpaqueIterMut<'a, 'b> = FlatteningIter<
-    alloc::collections::btree_map::IterMut<'b, u32, Vec<OpaqueValue<'a>>>,
-    &'b u32,
-    &'b mut Vec<OpaqueValue<'a>>,
+pub type OpaqueIterMut<'a, 'b> = core::iter::Flatten<
+    FlatAdapter<alloc::collections::btree_map::IterMut<'b, u32, Vec<OpaqueValue<'a>>>>,
 >;
 
-pub type OpaqueIntoIter<'a> = FlatteningIter<
-    alloc::collections::btree_map::IntoIter<u32, Vec<OpaqueValue<'a>>>,
-    u32,
-    Vec<OpaqueValue<'a>>,
+pub type OpaqueIntoIter<'a> = core::iter::Flatten<
+    FlatAdapter<alloc::collections::btree_map::IntoIter<u32, Vec<OpaqueValue<'a>>>>,
 >;
 
 impl<'a> IntoIterator for OpaqueMessage<'a> {
     type Item = (u32, OpaqueValue<'a>);
     type IntoIter = OpaqueIntoIter<'a>;
     fn into_iter(self) -> Self::IntoIter {
-        OpaqueIntoIter {
-            iter: self.0.into_iter(),
-            current: None,
-        }
+        FlatAdapter(self.0.into_iter()).flatten()
     }
 }
 
@@ -320,59 +316,6 @@ impl<'a, 'b> IntoIterator for &'b OpaqueMessage<'a> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
-    }
-}
-
-pub struct FlatteningIter<I, K, Vs>
-where
-    I: Iterator<Item = (K, Vs)>,
-    Vs: IntoIterator,
-{
-    iter: I,
-    current: Option<(K, Vs::IntoIter)>,
-}
-
-impl<I, K, Vs> FlatteningIter<I, K, Vs>
-where
-    I: Iterator<Item = (K, Vs)>,
-    Vs: IntoIterator,
-{
-    fn new(iter: I) -> Self {
-        Self {
-            iter,
-            current: None,
-        }
-    }
-}
-
-impl<I, K, Vs> Iterator for FlatteningIter<I, K, Vs>
-where
-    K: Clone,
-    I: Iterator<Item = (K, Vs)>,
-    Vs: IntoIterator,
-{
-    type Item = (K, Vs::Item);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (key, value_iter) = match self.current.as_mut() {
-            None => self.current.insert(
-                self.iter
-                    .next()
-                    .map(|(tag, values)| (tag, values.into_iter()))?,
-            ),
-            Some(x) => x,
-        };
-        match value_iter.next() {
-            None => {
-                let (new_key, new_values) = self.current.insert(
-                    self.iter
-                        .next()
-                        .map(|(tag, values)| (tag, values.into_iter()))?,
-                );
-                Some((new_key.clone(), new_values.next()?))
-            }
-            Some(value) => Some((key.clone(), value)),
-        }
     }
 }
 
@@ -415,10 +358,8 @@ impl RawMessage for OpaqueMessage<'_> {
 
     fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
         let mut tw = TagRevWriter::new();
-        for (&tag, values) in self.0.iter().rev() {
-            for value in values.iter().rev() {
-                value.prepend_field(tag, buf, &mut tw);
-            }
+        for (&tag, value) in self.iter().rev() {
+            value.prepend_field(tag, buf, &mut tw);
         }
         tw.finalize(buf);
     }
