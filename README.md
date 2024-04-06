@@ -390,9 +390,6 @@ The `bilrost` crate has several optional features:
 * "extended-diagnostics": with a small added dependency, attempts to provide
   better compile-time diagnostics when derives and derived implementations don't
   work. Somewhat experimental.
-* "opaque": enables `bilrost::encoding::opaque::{OpaqueMessage, OpaqueValue}`
-  which can decode, represent, and reencode *any* potentially valid `bilrost`
-  data.
 * "bytestring": provides first-party support for `bytestring::Bytestring`
 * "hashbrown": provides first-party support for `hashbrown::{HashMap, HashSet}`
 * "smallvec": provides first-party support for `smallvec::SmallVec`

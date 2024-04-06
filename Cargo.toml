@@ -42,8 +42,10 @@ derive = ["dep:bilrost-derive"]
 detailed-errors = ["dep:thin-vec"]
 extended-diagnostics = ["dep:const_panic"]
 no-recursion-limit = []
-opaque = []
 std = []
+
+# Deprecated: Does nothing. Opaque message types are always available.
+opaque = []
 
 third-party-type-support = [
     "bytestring",
@@ -92,7 +94,6 @@ full-test-suite = [
     "derive",
     "detailed-errors",
     "extended-diagnostics",
-    "opaque",
     "third-party-type-support",
 ]
 
@@ -129,4 +130,4 @@ harness = false
 
 [[bin]]
 name = "derived_message_tests"
-required-features = ["derive", "opaque"]
+required-features = ["derive"]

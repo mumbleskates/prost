@@ -4,7 +4,7 @@
 /// This is useful as where the type of core::iter::FlatMap cannot be named (because its function
 /// type is always anonymous), the type of FlatAdapter(..).flatten() can be named any time the type
 /// of its iterator can.
-pub struct FlatAdapter<I>(I);
+pub struct FlatAdapter<I>(pub I);
 
 impl<I, K, Vs> Iterator for FlatAdapter<I>
 where
