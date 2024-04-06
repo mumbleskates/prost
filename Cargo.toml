@@ -42,7 +42,7 @@ derive = ["dep:bilrost-derive"]
 detailed-errors = ["dep:thin-vec"]
 extended-diagnostics = ["dep:const_panic"]
 no-recursion-limit = []
-opaque = ["dep:btreemultimap"]
+opaque = []
 std = []
 
 third-party-type-support = [
@@ -111,7 +111,6 @@ pprof = ["dep:pprof"]
 
 [dependencies]
 bilrost-derive = { version = "0.1005.0-dev", path = "bilrost-derive", optional = true }
-btreemultimap = { version = "0.1", default-features = false, optional = true }
 bytes = { version = "1", default-features = false }
 bytestring = { version = ">=1", default-features = false, optional = true }
 const_panic = { version = "0.2", default-features = false, features = ["non_basic"], optional = true }
