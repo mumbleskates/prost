@@ -3,6 +3,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem;
+use core::ops::Index;
 
 use bytes::{Buf, BufMut};
 
@@ -273,6 +274,14 @@ impl<'a> OpaqueMessage<'a> {
         }
         // SAFETY: we've converted every `Cow` in the structure to `Owned` in-place
         unsafe { mem::transmute(self) }
+    }
+}
+
+impl<'a> Index<&u32> for OpaqueMessage<'a> {
+    type Output = [OpaqueValue<'a>];
+
+    fn index(&self, index: &u32) -> &Self::Output {
+        &self.0[index]
     }
 }
 
