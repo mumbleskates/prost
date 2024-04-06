@@ -96,16 +96,6 @@ full-test-suite = [
     "third-party-type-support",
 ]
 
-# The full set of extra functionality expected to be guaranteed no_std. When "opaque" supports
-# no_std (by upstreaming this or removing the third party crate dependency) this feature will go
-# away.
-full-nostd-support = [
-    "derive",
-    "detailed-errors",
-    "extended-diagnostics",
-    "third-party-type-support",
-]
-
 # Enables pprof profiling in benchmarks.
 pprof = ["dep:pprof"]
 
