@@ -1395,6 +1395,7 @@ where
         tw.encode_key(tag, Self::WIRE_TYPE, buf);
         Self::encode_value(value, buf);
     }
+
     #[inline]
     fn prepend_field<B: ReverseBuf + ?Sized>(
         tag: u32,
@@ -1405,10 +1406,12 @@ where
         tw.begin_field(tag, Self::WIRE_TYPE, buf);
         Self::prepend_value(value, buf);
     }
+
     #[inline]
     fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize {
         tm.key_len(tag) + Self::value_encoded_len(value)
     }
+
     #[inline]
     fn decode_field<B: Buf + ?Sized>(
         wire_type: WireType,
