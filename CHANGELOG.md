@@ -46,7 +46,7 @@ This release changes nothing, just fixes the link to the logo in the docs :)
 ### Cleanups
 
 * The "opaque" message types are now always available, and no longer require a
-  dependency or a crate feature. The "opaque" feature qill be removed in a
+  dependency or a crate feature. The "opaque" feature will be removed in a
   future version.
 * The "derived message tests" have been moved from a binary with required
   features to an integration test. The "derive" feature and the "bilrost-derive"
