@@ -7,7 +7,9 @@ use core::ops::{Deref, DerefMut};
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::{skip_field, Canonicity, Capped, DecodeContext, EmptyState, WireType};
+use crate::encoding::{
+    skip_field, Canonicity, Capped, DecodeContext, EmptyState, General, TagMeasurer, WireType,
+};
 use crate::message::{RawDistinguishedMessage, RawMessage};
 use crate::DecodeError;
 
@@ -155,55 +157,204 @@ impl proptest::arbitrary::Arbitrary for Blob {
     >;
 }
 
-impl EmptyState for () {
-    fn empty() -> Self {}
+macro_rules! impl_tuple {
+    (
+        $name:tt,
+        ($($numbers:tt),*),
+        ($($numbers_desc:tt),*),
+        ($($letters:ident),*),
+        ($($letters_desc:ident),*),
+    ) => {
+        impl<$($letters),*> EmptyState for ($($letters,)*)
+        where
+            $($letters: EmptyState,)*
+        {
+            fn empty() -> Self {
+                ($($letters::empty(),)*)
+            }
 
-    fn is_empty(&self) -> bool {
-        true
+            fn is_empty(&self) {
+                true $(&& self.$numbers.is_empty())*
+            }
+
+            fn clear(&mut self) {
+                $(self.$numbers.clear();)*
+            }
+        }
+
+        impl<$($letters),*> RawMessage for ($($letters,)*)
+        where
+            $($letters: EmptyState + Encoder<General>,)*
+        {
+            const __ASSERTIONS: () = ();
+
+            fn raw_encode<B: BufMut + ?Sized>(&self, buf: &mut B) {
+                let mut tw = TagWriter::new();
+                $($letters::encode($numbers, &self.$numbers, buf, &mut tw);)*
+            }
+
+            fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
+                let mut tw = TagRevWriter::new();
+                $($letters_desc::prepend_encode($numbers_desc, &self.$numbers_desc, buf, &mut tw);)*
+                tw.finalize();
+            }
+
+            fn raw_encoded_len(&self) -> usize {
+                let mut tm = TagMeasurer::new();
+                0usize $(+ $letters::encoded_len($numbers, &self.$numbers, &mut tm))*
+            }
+
+            fn raw_decode_field<B: Buf + ?Sized>(
+                &mut self,
+                tag: u32,
+                wire_type: WireType,
+                duplicated: bool,
+                buf: Capped<B>,
+                ctx: DecodeContext,
+            ) -> Result<(), DecodeError>
+            where
+                Self: Sized,
+            {
+                match tag {
+                    $($numbers => {
+                        $letters::decode(wire_type, duplicated, &mut self.$numbers, buf, ctx)
+                            .map_err(|mut error| {
+                                error.push($name, stringify!($numbers));
+                                error
+                            })
+                    })*
+                    _ => skip_field(wire_type, buf),
+                }
+            }
+        }
+
+        impl<$($letters),*> RawDistinguishedMessage for ($($letters,)*)
+        where
+            Self: Eq,
+            $($letters: EmptyState + DistinguishedEncoder<General>,)*
+        {
+            fn raw_decode_field_distinguished<B: Buf + ?Sized>(
+                &mut self,
+                _tag: u32,
+                wire_type: WireType,
+                _duplicated: bool,
+                buf: Capped<B>,
+                _ctx: DecodeContext,
+            ) -> Result<Canonicity, DecodeError>
+            where
+                Self: Sized,
+            {
+                match tag {
+                    $($numbers => {
+                        $letters::decode_distinguished(
+                            wire_type,
+                            duplicated,
+                            &mut self.$numbers,
+                            buf,
+                            ctx,
+                        ).map_err(|mut error| {
+                            error.push($name, stringify!($numbers));
+                            error
+                        })
+                    })*
+                    _ => {
+                        skip_field(wire_type, buf)?;
+                        Ok(Canonicity::HasExtensions)
+                    }
+                }
+            }
+        }
     }
-
-    fn clear(&mut self) {}
 }
 
-impl RawMessage for () {
-    const __ASSERTIONS: () = ();
-
-    fn raw_encode<B: BufMut + ?Sized>(&self, _buf: &mut B) {}
-
-    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, _buf: &mut B) {}
-
-    fn raw_encoded_len(&self) -> usize {
-        0
-    }
-
-    fn raw_decode_field<B: Buf + ?Sized>(
-        &mut self,
-        _tag: u32,
-        wire_type: WireType,
-        _duplicated: bool,
-        buf: Capped<B>,
-        _ctx: DecodeContext,
-    ) -> Result<(), DecodeError>
-    where
-        Self: Sized,
-    {
-        skip_field(wire_type, buf)
-    }
-}
-
-impl RawDistinguishedMessage for () {
-    fn raw_decode_field_distinguished<B: Buf + ?Sized>(
-        &mut self,
-        _tag: u32,
-        wire_type: WireType,
-        _duplicated: bool,
-        buf: Capped<B>,
-        _ctx: DecodeContext,
-    ) -> Result<Canonicity, DecodeError>
-    where
-        Self: Sized,
-    {
-        skip_field(wire_type, buf)?;
-        Ok(Canonicity::HasExtensions)
-    }
-}
+impl_tuple!(
+    "()", //
+    (),   //
+    (),   //
+    (),   //
+    (),   //
+);
+impl_tuple!(
+    "(1-tuple)", //
+    (0),         //
+    (0),         //
+    (A),         //
+    (A),         //
+);
+impl_tuple!(
+    "(2-tuple)", //
+    (0, 1),      //
+    (1, 0),      //
+    (A, B),      //
+    (B, A),      //
+);
+impl_tuple!(
+    "(3-tuple)", //
+    (0, 1, 2),   //
+    (2, 1, 0),   //
+    (A, B, C),   //
+    (C, B, A),   //
+);
+impl_tuple!(
+    "(4-tuple)",  //
+    (0, 1, 2, 3), //
+    (3, 2, 1, 0), //
+    (A, B, C, D), //
+    (D, C, B, A), //
+);
+impl_tuple!(
+    "(5-tuple)",     //
+    (0, 1, 2, 3, 4), //
+    (4, 3, 2, 1, 0), //
+    (A, B, C, D, E), //
+    (E, D, C, B, A), //
+);
+impl_tuple!(
+    "(6-tuple)",        //
+    (0, 1, 2, 3, 4, 5), //
+    (5, 4, 3, 2, 1, 0), //
+    (A, B, C, D, E, F), //
+    (F, E, D, C, B, A), //
+);
+impl_tuple!(
+    "(7-tuple)",           //
+    (0, 1, 2, 3, 4, 5, 6), //
+    (6, 5, 4, 3, 2, 1, 0), //
+    (A, B, C, D, E, F, G), //
+    (G, F, E, D, C, B, A), //
+);
+impl_tuple!(
+    "(8-tuple)",              //
+    (0, 1, 2, 3, 4, 5, 6, 7), //
+    (7, 6, 5, 4, 3, 2, 1, 0), //
+    (A, B, C, D, E, F, G, H), //
+    (H, G, F, E, D, C, B, A), //
+);
+impl_tuple!(
+    "(9-tuple)",                 //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8), //
+    (8, 7, 6, 5, 4, 3, 2, 1, 0), //
+    (A, B, C, D, E, F, G, H, I), //
+    (I, H, G, F, E, D, C, B, A), //
+);
+impl_tuple!(
+    "(10-tuple)",                   //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9), //
+    (9, 8, 7, 6, 5, 4, 3, 2, 1, 0), //
+    (A, B, C, D, E, F, G, H, I, J), //
+    (J, I, H, G, F, E, D, C, B, A), //
+);
+impl_tuple!(
+    "(11-tuple)",                       //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), //
+    (10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0), //
+    (A, B, C, D, E, F, G, H, I, J, K),  //
+    (K, J, I, H, G, F, E, D, C, B, A),  //
+);
+impl_tuple!(
+    "(12-tuple)",                           //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), //
+    (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0), //
+    (A, B, C, D, E, F, G, H, I, J, K, L),   //
+    (L, K, J, I, H, G, F, E, D, C, B, A),   //
+);
