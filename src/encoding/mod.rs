@@ -1935,7 +1935,12 @@ macro_rules! encoder_where_value_encoder {
             $($($where_clause)*)?
         {
             #[inline]
-            fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut $crate::encoding::TagWriter) {
+            fn encode<B: BufMut + ?Sized>(
+                tag: u32,
+                value: &T,
+                buf: &mut B,
+                tw: &mut $crate::encoding::TagWriter,
+            ) {
                 if !$crate::encoding::EmptyState::is_empty(value) {
                     $crate::encoding::FieldEncoder::<$encoding>::encode_field(
                         tag, value, buf, tw);
@@ -1943,7 +1948,12 @@ macro_rules! encoder_where_value_encoder {
             }
 
             #[inline]
-            fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut $crate::encoding::TagRevWriter) {
+            fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(
+                tag: u32,
+                value: &T,
+                buf: &mut B,
+                tw: &mut $crate::encoding::TagRevWriter,
+            ) {
                 if !$crate::encoding::EmptyState::is_empty(value) {
                     $crate::encoding::FieldEncoder::<$encoding>::prepend_field(
                         tag, value, buf, tw);
