@@ -218,8 +218,10 @@ macro_rules! impl_tuple {
         ($($numbers_desc:tt),*),
         ($($letters:ident),*),
         ($($letters_desc:ident),*),
+        ($($encoders:ident),*),
+        ($($encoders_desc:ident),*),
     ) => {
-        impl<$($letters),*> EmptyState for ($($letters,)*)
+        impl<$($letters,)*> EmptyState for ($($letters,)*)
         where
             $($letters: EmptyState,)*
         {
@@ -236,18 +238,16 @@ macro_rules! impl_tuple {
             }
         }
 
-        impl<$($letters),*> RawMessage for ($($letters,)*)
+        impl<$($letters),* $($encoders,)*> Encoder<($encoders,)*> for ($($letters,)*)
         where
-            $($letters: EmptyState + Encoder<General>,)*
+            $($letters: EmptyState + Encoder<$encoders>,)*
         {
-            const __ASSERTIONS: () = ();
-
-            fn raw_encode<__B: BufMut + ?Sized>(&self, buf: &mut __B) {
+            fn encode<__B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut __B, tw: &mut TagWriter) {
                 let mut tw = TagWriter::new();
                 $($letters::encode($numbers, &self.$numbers, buf, &mut tw);)*
             }
 
-            fn raw_prepend<__B: ReverseBuf + ?Sized>(&self, buf: &mut __B) {
+            fn prepend_encode<__B: ReverseBuf + ?Sized>(tag: u32, value: &Self, buf: &mut __B, tw: &mut TagRevWriter) {
                 let mut tw = TagRevWriter::new();
                 $($letters_desc::prepend_encode($numbers_desc, &self.$numbers_desc, buf, &mut tw);)*
                 tw.finalize(buf);
@@ -327,6 +327,8 @@ impl_tuple!(
     (0),         //
     (A),         //
     (A),         //
+    (Ae),        //
+    (Ae),        //
 );
 impl_tuple!(
     "(2-tuple)", //
@@ -334,74 +336,96 @@ impl_tuple!(
     (1, 0),      //
     (A, B),      //
     (B, A),      //
+    (Ae, Be),    //
+    (Be, Ae),    //
 );
 impl_tuple!(
-    "(3-tuple)", //
-    (0, 1, 2),   //
-    (2, 1, 0),   //
-    (A, B, C),   //
-    (C, B, A),   //
+    "(3-tuple)",  //
+    (0, 1, 2),    //
+    (2, 1, 0),    //
+    (A, B, C),    //
+    (C, B, A),    //
+    (Ae, Be, Ce), //
+    (Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(4-tuple)",  //
-    (0, 1, 2, 3), //
-    (3, 2, 1, 0), //
-    (A, B, C, D), //
-    (D, C, B, A), //
+    "(4-tuple)",      //
+    (0, 1, 2, 3),     //
+    (3, 2, 1, 0),     //
+    (A, B, C, D),     //
+    (D, C, B, A),     //
+    (Ae, Be, Ce, De), //
+    (De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(5-tuple)",     //
-    (0, 1, 2, 3, 4), //
-    (4, 3, 2, 1, 0), //
-    (A, B, C, D, E), //
-    (E, D, C, B, A), //
+    "(5-tuple)",          //
+    (0, 1, 2, 3, 4),      //
+    (4, 3, 2, 1, 0),      //
+    (A, B, C, D, E),      //
+    (E, D, C, B, A),      //
+    (Ae, Be, Ce, De, Ee), //
+    (Ee, De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(6-tuple)",        //
-    (0, 1, 2, 3, 4, 5), //
-    (5, 4, 3, 2, 1, 0), //
-    (A, B, C, D, E, F), //
-    (F, E, D, C, B, A), //
+    "(6-tuple)",              //
+    (0, 1, 2, 3, 4, 5),       //
+    (5, 4, 3, 2, 1, 0),       //
+    (A, B, C, D, E, F),       //
+    (F, E, D, C, B, A),       //
+    (Ae, Be, Ce, De, Ee, Fe), //
+    (Fe, Ee, De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(7-tuple)",           //
-    (0, 1, 2, 3, 4, 5, 6), //
-    (6, 5, 4, 3, 2, 1, 0), //
-    (A, B, C, D, E, F, G), //
-    (G, F, E, D, C, B, A), //
+    "(7-tuple)",                  //
+    (0, 1, 2, 3, 4, 5, 6),        //
+    (6, 5, 4, 3, 2, 1, 0),        //
+    (A, B, C, D, E, F, G),        //
+    (G, F, E, D, C, B, A),        //
+    (Ae, Be, Ce, De, Ee, Fe, Ge), //
+    (Ge, Fe, Ee, De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(8-tuple)",              //
-    (0, 1, 2, 3, 4, 5, 6, 7), //
-    (7, 6, 5, 4, 3, 2, 1, 0), //
-    (A, B, C, D, E, F, G, H), //
-    (H, G, F, E, D, C, B, A), //
+    "(8-tuple)",                      //
+    (0, 1, 2, 3, 4, 5, 6, 7),         //
+    (7, 6, 5, 4, 3, 2, 1, 0),         //
+    (A, B, C, D, E, F, G, H),         //
+    (H, G, F, E, D, C, B, A),         //
+    (Ae, Be, Ce, De, Ee, Fe, Ge, He), //
+    (He, Ge, Fe, Ee, De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(9-tuple)",                 //
-    (0, 1, 2, 3, 4, 5, 6, 7, 8), //
-    (8, 7, 6, 5, 4, 3, 2, 1, 0), //
-    (A, B, C, D, E, F, G, H, I), //
-    (I, H, G, F, E, D, C, B, A), //
+    "(9-tuple)",                          //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8),          //
+    (8, 7, 6, 5, 4, 3, 2, 1, 0),          //
+    (A, B, C, D, E, F, G, H, I),          //
+    (I, H, G, F, E, D, C, B, A),          //
+    (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie), //
+    (Ie, He, Ge, Fe, Ee, De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(10-tuple)",                   //
-    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9), //
-    (9, 8, 7, 6, 5, 4, 3, 2, 1, 0), //
-    (A, B, C, D, E, F, G, H, I, J), //
-    (J, I, H, G, F, E, D, C, B, A), //
+    "(10-tuple)",                             //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),           //
+    (9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
+    (A, B, C, D, E, F, G, H, I, J),           //
+    (J, I, H, G, F, E, D, C, B, A),           //
+    (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je), //
+    (Je, Ie, He, Ge, Fe, Ee, De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(11-tuple)",                       //
-    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), //
-    (10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0), //
-    (A, B, C, D, E, F, G, H, I, J, K),  //
-    (K, J, I, H, G, F, E, D, C, B, A),  //
+    "(11-tuple)",                                 //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),           //
+    (10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
+    (A, B, C, D, E, F, G, H, I, J, K),            //
+    (K, J, I, H, G, F, E, D, C, B, A),            //
+    (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke), //
+    (Ke, Je, Ie, He, Ge, Fe, Ee, De, Ce, Be, Ae), //
 );
 impl_tuple!(
-    "(12-tuple)",                           //
-    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), //
-    (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0), //
-    (A, B, C, D, E, F, G, H, I, J, K, L),   //
-    (L, K, J, I, H, G, F, E, D, C, B, A),   //
+    "(12-tuple)",                                     //
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11),           //
+    (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
+    (A, B, C, D, E, F, G, H, I, J, K, L),             //
+    (L, K, J, I, H, G, F, E, D, C, B, A),             //
+    (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke, Le), //
+    (Le, Ke, Je, Ie, He, Ge, Fe, Ee, De, Ce, Be, Ae), //
 );
