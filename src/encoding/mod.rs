@@ -20,6 +20,7 @@ mod map;
 pub mod opaque;
 mod packed;
 mod plain_bytes;
+mod tuple;
 mod unpacked;
 mod value_traits;
 mod varint;
@@ -1847,12 +1848,15 @@ macro_rules! delegate_value_encoding {
             $($($where_clause)+ ,)?
         {
             #[inline]
-            fn encode_value<B: $crate::bytes::BufMut + ?Sized>(value: &$value_ty, buf: &mut B) {
+            fn encode_value<__B: $crate::bytes::BufMut + ?Sized>(value: &$value_ty, buf: &mut __B) {
                 $crate::encoding::ValueEncoder::<$to_ty>::encode_value(value, buf)
             }
 
             #[inline]
-            fn prepend_value<B: $crate::buf::ReverseBuf + ?Sized>(value: &$value_ty, buf: &mut B) {
+            fn prepend_value<__B: $crate::buf::ReverseBuf + ?Sized>(
+                value: &$value_ty,
+                buf: &mut __B,
+            ) {
                 $crate::encoding::ValueEncoder::<$to_ty>::prepend_value(value, buf)
             }
 
@@ -1862,18 +1866,18 @@ macro_rules! delegate_value_encoding {
             }
 
             #[inline]
-            fn many_values_encoded_len<I>(values: I) -> usize
+            fn many_values_encoded_len<__I>(values: __I) -> usize
             where
-                I: ExactSizeIterator,
-                I::Item: core::ops::Deref<Target = $value_ty>,
+                __I: ExactSizeIterator,
+                __I::Item: core::ops::Deref<Target = $value_ty>,
             {
                 $crate::encoding::ValueEncoder::<$to_ty>::many_values_encoded_len(values)
             }
 
             #[inline]
-            fn decode_value<B: $crate::bytes::Buf + ?Sized>(
+            fn decode_value<__B: $crate::bytes::Buf + ?Sized>(
                 value: &mut $value_ty,
-                buf: $crate::encoding::Capped<B>,
+                buf: $crate::encoding::Capped<__B>,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<(), $crate::DecodeError> {
                 $crate::encoding::ValueEncoder::<$to_ty>::decode_value(value, buf, ctx)
@@ -1901,9 +1905,9 @@ macro_rules! delegate_value_encoding {
             $($($distinguished_where)+ ,)?
         {
             #[inline]
-            fn decode_value_distinguished<B: Buf + ?Sized>(
+            fn decode_value_distinguished<__B: Buf + ?Sized>(
                 value: &mut $value_ty,
-                buf: $crate::encoding::Capped<B>,
+                buf: $crate::encoding::Capped<__B>,
                 allow_empty: bool,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
