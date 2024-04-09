@@ -222,7 +222,7 @@ impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
     }
 }
 
-// TODO(widders): ArrayVec
+// TODO(widders): ArrayVec (from arrayvec and tinyvec crates)
 
 #[cfg(test)]
 mod u8_array {

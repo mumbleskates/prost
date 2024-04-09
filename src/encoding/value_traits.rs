@@ -455,6 +455,8 @@ where
     }
 }
 
+// TODO(widders): ArrayVec (from arrayvec and tinyvec crates)
+
 impl<T> EmptyState for BTreeSet<T> {
     #[inline]
     fn empty() -> Self {

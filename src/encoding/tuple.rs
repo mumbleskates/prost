@@ -336,3 +336,5 @@ delegate_value_encoding!(
     for type ((A, B, C, D, E, F, G, H, I, J, K, L))
     with generics (A, B, C, D, E, F, G, H, I, J, K, L)
 );
+
+// TODO(widders): check type tests for tuples!

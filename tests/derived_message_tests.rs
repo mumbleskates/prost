@@ -2471,3 +2471,5 @@ fn unknown_fields_distinguished() {
         NotCanonical,
     );
 }
+
+// TODO(widders): tuple encoding and tuple equivalency to message types
