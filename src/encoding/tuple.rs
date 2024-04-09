@@ -134,6 +134,12 @@ macro_rules! impl_tuple {
             where
                 Self: Sized,
             {
+                // Since tuples emulate messages, empty values always encode and decode from zero
+                // bytes. It is far cheaper to check here than to check after the value has been
+                // decoded and checking the value's `is_empty()`.
+                if !allow_empty && buf.remaining_before_cap() == 0 {
+                    return Ok(Canonicity::NotCanonical);
+                }
                 ctx.limit_reached()?;
                 let mut canon = Canonicity::Canonical;
                 let ctx = ctx.enter_recursion();
@@ -163,11 +169,7 @@ macro_rules! impl_tuple {
                         },
                     }
                 }
-                Ok(if !allow_empty && value.is_empty() {
-                    Canonicity::NotCanonical
-                } else {
-                    Canonicity::Canonical
-                })
+                Ok(canon)
             }
         }
     }
