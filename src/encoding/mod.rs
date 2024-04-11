@@ -550,11 +550,11 @@ impl TagRevWriter {
 
 /// Simulator for writing tags, capable of outputting their encoded length.
 #[derive(Default)]
-pub struct TagMeasurer {
+pub struct TagMeasurer<const ALWAYS_SMALL: bool = false> {
     last_tag: u32,
 }
 
-impl TagMeasurer {
+impl<const ALWAYS_SMALL: bool> TagMeasurer<ALWAYS_SMALL> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -563,11 +563,15 @@ impl TagMeasurer {
     /// also advances the state of the encoder as if that tag was written.
     #[inline(always)]
     pub fn key_len(&mut self, tag: u32) -> usize {
-        let tag_delta = tag
-            .checked_sub(self.last_tag)
-            .expect("fields encoded out of order");
-        self.last_tag = tag;
-        encoded_len_varint((tag_delta as u64) << 2)
+        if ALWAYS_SMALL {
+            1
+        } else {
+            let tag_delta = tag
+                .checked_sub(self.last_tag)
+                .expect("fields encoded out of order");
+            self.last_tag = tag;
+            encoded_len_varint((tag_delta as u64) << 2)
+        }
     }
 }
 
