@@ -58,8 +58,9 @@ macro_rules! impl_tuple {
         {
             #[inline]
             fn encode_value<__B: BufMut + ?Sized>(value: &Self, buf: &mut __B) {
-                let message_len = Self::value_encoded_len(value) as u64;
-                encode_varint(encoded_len_varint(message_len) as u64, buf);
+                let tm = &mut TagMeasurer::new();
+                let message_len = 0usize $(+ $letters::encoded_len($numbers, &value.$numbers, tm))*;
+                encode_varint(message_len as u64, buf);
                 let tw = &mut TagWriter::new();
                 $($letters::encode($numbers, &value.$numbers, buf, tw);)*
             }
