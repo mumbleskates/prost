@@ -6,13 +6,14 @@ use std::borrow::Cow;
 use std::default::Default;
 use std::fmt::Debug;
 use std::iter;
+use std::marker::PhantomData;
 
 use itertools::{repeat_n, Itertools};
 
 use bilrost::encoding::opaque::{OpaqueMessage, OpaqueValue as OV};
 use bilrost::encoding::{
     self, encode_varint, Collection, DistinguishedOneof, EmptyState, Fixed, General, Mapping,
-    Oneof, Packed,
+    Oneof, Packed, Varint,
 };
 use bilrost::Canonicity::{HasExtensions, NotCanonical};
 use bilrost::DecodeErrorKind::{
@@ -844,6 +845,27 @@ fn field_clearing() {
 
     assert::decodes(Clearable::default().encode_to_vec(), Clearable::default());
     assert::decodes([], Clearable::empty());
+}
+
+#[test]
+fn generic_encodings() {
+    // It's possible to provide the encoding that a field uses generically to the struct type, too!
+    // This works perfectly because all usages of that name appear in-scope with the generic.
+    #[derive(Message)]
+    struct Foo<T, E>(#[bilrost(encoding(E))] T, #[bilrost(ignore)] PhantomData<E>);
+
+    impl<T, E> Default for Foo<T, E>
+    where
+        T: Default,
+    {
+        fn default() -> Self {
+            Self(Default::default(), PhantomData)
+        }
+    }
+
+    static_assertions::assert_impl_all!(Foo<String, General>: Message);
+    static_assertions::assert_not_impl_any!(Foo<u8, General>: Message);
+    static_assertions::assert_impl_all!(Foo<u8, Varint>: Message);
 }
 
 // Varint tests

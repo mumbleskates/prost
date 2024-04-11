@@ -6,6 +6,11 @@
 
 ### Fixes
 
+* Added a `Self: Default` bound to the impl for `Message` when there are ignored
+  fields. This means that it can be possible to have a message type with ignored
+  fields and generically typed fields that don't implement `Default`; rather
+  than failing to compile, it will now simply not implement `Message`.
+
 ### Cleanups
 
 ## v0.1005.1
@@ -46,7 +51,7 @@ This release changes nothing, just fixes the link to the logo in the docs :)
 ### Cleanups
 
 * The "opaque" message types are now always available, and no longer require a
-  dependency or a crate feature. The "opaque" feature qill be removed in a
+  dependency or a crate feature. The "opaque" feature will be removed in a
   future version.
 * The "derived message tests" have been moved from a binary with required
   features to an integration test. The "derive" feature and the "bilrost-derive"

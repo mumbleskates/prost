@@ -26,16 +26,19 @@ impl Wiretyped<PlainBytes> for Vec<u8> {
 }
 
 impl ValueEncoder<PlainBytes> for Vec<u8> {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &Vec<u8>, buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         buf.put_slice(value.as_slice());
     }
 
+    #[inline]
     fn prepend_value<B: ReverseBuf + ?Sized>(value: &Vec<u8>, buf: &mut B) {
         buf.prepend_slice(value);
         prepend_varint(value.len() as u64, buf);
     }
 
+    #[inline]
     fn value_encoded_len(value: &Vec<u8>) -> usize {
         encoded_len_varint(value.len() as u64) + value.len()
     }
@@ -98,6 +101,7 @@ impl ValueEncoder<PlainBytes> for Cow<'_, [u8]> {
         buf.put_slice(value.as_ref());
     }
 
+    #[inline]
     fn prepend_value<B: ReverseBuf + ?Sized>(value: &Cow<[u8]>, buf: &mut B) {
         buf.prepend_slice(value);
         prepend_varint(value.len() as u64, buf);
@@ -170,26 +174,30 @@ impl<const N: usize> Wiretyped<PlainBytes> for [u8; N] {
 }
 
 impl<const N: usize> ValueEncoder<PlainBytes> for [u8; N] {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &[u8; N], mut buf: &mut B) {
         buf.put_slice(&const_varint(N as u64));
         (&mut buf).put(value.as_slice())
     }
 
+    #[inline]
     fn prepend_value<B: ReverseBuf + ?Sized>(value: &[u8; N], buf: &mut B) {
         buf.prepend_slice(value);
         buf.prepend_slice(&const_varint(N as u64))
     }
 
+    #[inline]
     fn value_encoded_len(_value: &[u8; N]) -> usize {
-        encoded_len_varint(N as u64) + N
+        const_varint(N as u64).len() + N
     }
 
+    #[inline]
     fn many_values_encoded_len<I>(values: I) -> usize
     where
         I: ExactSizeIterator,
         I::Item: Deref<Target = [u8; N]>,
     {
-        values.len() * (encoded_len_varint(N as u64) + N)
+        values.len() * (const_varint(N as u64).len() + N)
     }
 
     fn decode_value<B: Buf + ?Sized>(
