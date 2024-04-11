@@ -365,7 +365,8 @@ impl RawMessage for OpaqueMessage<'_> {
     }
 
     fn raw_encoded_len(&self) -> usize {
-        let mut tm = TagMeasurer::new();
+        // TODO(widders): why does this specific one require a turbofish? what's going on with that
+        let mut tm = TagMeasurer::<false>::new();
         self.iter()
             .map(|(tag, value)| tm.key_len(*tag) + value.value_encoded_len())
             .sum()
