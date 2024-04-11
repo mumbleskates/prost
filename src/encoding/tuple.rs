@@ -90,6 +90,7 @@ macro_rules! impl_tuple {
                 mut buf: Capped<__B>,
                 ctx: DecodeContext,
             ) -> Result<(), DecodeError> {
+                let mut buf = buf.take_length_delimited()?;
                 ctx.limit_reached()?;
                 let ctx = ctx.enter_recursion();
                 let tr = &mut TagReader::new();
@@ -135,6 +136,7 @@ macro_rules! impl_tuple {
             where
                 Self: Sized,
             {
+                let mut buf = buf.take_length_delimited()?;
                 // Since tuples emulate messages, empty values always encode and decode from zero
                 // bytes. It is far cheaper to check here than to check after the value has been
                 // decoded and checking the value's `is_empty()`.

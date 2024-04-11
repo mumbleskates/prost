@@ -2333,6 +2333,38 @@ fn truncated_submessage() {
 }
 
 #[test]
+fn tuples() {
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Pair<T, U>(#[bilrost(tag(0), encoding(varint))] T, #[bilrost(1)] U);
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Foo<T, U>(Pair<T, U>);
+
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct FooTuple<T, U>(#[bilrost(encoding((varint, general)))] (T, U));
+
+    assert::decodes_distinguished(
+        [(
+            1,
+            OV::message(&[(0, OV::i32(1)), (1, OV::string("foo"))].into_opaque_message()),
+        )],
+        Foo(Pair(1i8, "foo".to_string())),
+    );
+    let output = FooTuple((1i8, "foo".to_string())).encode_to_vec();
+    println!("{output:02x?}");
+    let opaque_decoded = OpaqueMessage::decode(output.as_slice()).unwrap();
+    let Some((_, &OV::LengthDelimited(ref inner_field))) = opaque_decoded.iter().next() else { panic!()};
+    let inner_output = OpaqueMessage::decode(inner_field.as_ref()).unwrap();
+    dbg!(inner_output);
+    assert::decodes_distinguished(
+        [(
+            1,
+            OV::message(&[(0, OV::i32(1)), (1, OV::string("foo"))].into_opaque_message()),
+        )],
+        FooTuple((1i8, "foo".to_string())),
+    );
+}
+
+#[test]
 fn unknown_fields_distinguished() {
     #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
     struct Nested(i64);
