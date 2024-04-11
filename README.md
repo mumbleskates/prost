@@ -51,10 +51,12 @@ decoding harder and more prone to mistakes in implementation.
 
 [^memcpy-fast]: Many of the decisions made in Bilrost in order to achieve stable
 representation across versions of an evolving schema, extensibility, and general
-simplicity preclude the ability to perform the kind of fast, branchless encoding
-seen in many other encodings that often has more similarity to directly copying
-the memory of a struct than it does to discretely encoding the value of each
-field in that struct.
+simplicity sacrifice opportunities for extreme performance. These are deliberate
+tradeoffs that often preclude the ability to perform fast & branchless encoding
+similar to what is seen in some other encodings, which are often more similar to
+directly copying the memory of a struct than to distinctly encoding the value of
+each field. In exchange schemas are simpler to describe and more portable and
+the encoded data is more durable.
 
 Bilrost at the encoding level is based upon [Protocol Buffers][pb] (protobuf)
 and shares many of its traits, but is incompatible. It is in some ways simpler
@@ -753,8 +755,8 @@ struct Foo {
 
 * **"ignore"**: Must be alone, with no tag or other attribute. This causes the
   field to be ignored by the generated message implementation. If any fields in
-  a message are ignored, it must implement `Default` to implement `Message`, so
-  there is a value for those fields to take on when they are created from
+  a message are ignored, it must implement `Default` to implement `Message` so
+  there will be a value for those fields to take on when they are created from
   encoded data.
 
   Ignored fields are not currently considered compatible with distinguished
