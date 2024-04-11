@@ -6,6 +6,11 @@
 
 ### Fixes
 
+* Added a `Self: Default` bound to the impl for `Message` when there are ignored
+  fields. This means that it can be possible to have a message type with ignored
+  fields and generically typed fields that don't implement `Default`; rather
+  than failing to compile, it will now simply not implement `Message`.
+
 ### Cleanups
 
 ## v0.1005.1
