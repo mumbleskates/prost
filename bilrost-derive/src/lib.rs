@@ -400,7 +400,17 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
         has_ignored_fields,
     } = preprocess_message(&input)?;
     let fields = sort_fields(unsorted_fields.clone());
-    let where_clause = append_expedient_encoder_wheres(where_clause, None, &unsorted_fields);
+    let where_clause = append_expedient_encoder_wheres(
+        where_clause,
+        if has_ignored_fields {
+            // When there are ignored fields, the whole message impl should be bounded by
+            // Self: Default
+            Some(quote!(Self: core::default::Default))
+        } else {
+            None
+        },
+        &unsorted_fields,
+    );
 
     let encoded_len = fields.iter().map(|chunk| match chunk {
         AlwaysOrdered((field_ident, field)) => field.encoded_len(quote!(self.#field_ident)),
