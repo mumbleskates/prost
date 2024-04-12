@@ -18,7 +18,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::iter;
 use core::mem::take;
-use core::ops::Deref;
+use core::ops::{Deref, RangeInclusive};
 
 use anyhow::{anyhow, bail, Error};
 use itertools::Itertools;
@@ -108,6 +108,7 @@ struct PreprocessedMessage<'a> {
     where_clause: Option<&'a WhereClause>,
     unsorted_fields: Vec<(TokenStream, Field)>,
     has_ignored_fields: bool,
+    tag_range: Option<RangeInclusive<u32>>,
 }
 
 fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error> {
@@ -201,6 +202,10 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
             bail!("message {ident} field {field_ident} has reserved tag {forbidden_tag}");
         }
     }
+    let tag_range = all_tags
+        .iter()
+        .next()
+        .map(|(first_tag, _)| *first_tag..=*all_tags.iter().next_back().unwrap().0);
 
     if let Some((duplicate_tag, _)) = unsorted_fields
         .iter()
@@ -221,6 +226,7 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
         where_clause,
         unsorted_fields,
         has_ignored_fields,
+        tag_range,
     })
 }
 
@@ -398,6 +404,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
         where_clause,
         unsorted_fields,
         has_ignored_fields,
+        tag_range,
     } = preprocess_message(&input)?;
     let fields = sort_fields(unsorted_fields.clone());
     let where_clause = append_expedient_encoder_wheres(
@@ -411,6 +418,15 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
         },
         &unsorted_fields,
     );
+
+    // If there can never be a tag delta larger than 31, field keys will never be more than 1 byte.
+    let can_use_trivial_tag_measurer = tag_range.map_or(false, |range| *range.end() < 32);
+
+    let tag_measurer_ty = if can_use_trivial_tag_measurer {
+        quote!(::bilrost::encoding::TrivialTagMeasurer)
+    } else {
+        quote!(::bilrost::encoding::RuntimeTagMeasurer)
+    };
 
     let encoded_len = fields.iter().map(|chunk| match chunk {
         AlwaysOrdered((field_ident, field)) => field.encoded_len(quote!(self.#field_ident)),
@@ -453,7 +469,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
                 {
                     let mut parts = [
                         (0u32, ::core::option::Option::None::<
-                                   fn(&Self, &mut ::bilrost::encoding::RuntimeTagMeasurer) -> usize
+                                   fn(&Self, &mut #tag_measurer_ty) -> usize
                                >);
                         #max_parts
                     ];
@@ -690,8 +706,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
             #[inline]
             fn raw_encoded_len(&self) -> usize {
                 let _ = <Self as ::bilrost::RawMessage>::__ASSERTIONS;
-                // TODO(widders): use trivial tag measurer where possible
-                let tm = &mut ::bilrost::encoding::RuntimeTagMeasurer::new();
+                let tm = &mut #tag_measurer_ty::new();
                 0 #(+ #encoded_len)*
             }
         }
@@ -744,6 +759,7 @@ fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
         where_clause,
         unsorted_fields,
         has_ignored_fields,
+        tag_range: _,
     } = preprocess_message(&input)?;
 
     if has_ignored_fields {

@@ -577,11 +577,27 @@ impl TagMeasurer for RuntimeTagMeasurer {
     }
 }
 
-pub struct TrivialTagMeasurer;
+#[derive(Default)]
+pub struct TrivialTagMeasurer {
+    #[cfg(debug_assertions)]
+    last_tag: u32,
+}
+
+impl TrivialTagMeasurer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 impl TagMeasurer for TrivialTagMeasurer {
     #[inline(always)]
     fn key_len(&mut self, _tag: u32) -> usize {
+        #[cfg(debug_assertions)]
+        {
+            assert!(_tag >= self.last_tag, "fields encoded out of order");
+            assert!(_tag < 32);
+            self.last_tag = _tag;
+        }
         1
     }
 }
