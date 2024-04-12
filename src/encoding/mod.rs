@@ -547,26 +547,57 @@ impl TagRevWriter {
     }
 }
 
+pub trait TagMeasurer {
+    fn key_len(&mut self, tag: u32) -> usize;
+}
+
 /// Simulator for writing tags, capable of outputting their encoded length.
 #[derive(Default)]
-pub struct TagMeasurer {
+pub struct RuntimeTagMeasurer {
     last_tag: u32,
 }
 
-impl TagMeasurer {
+impl RuntimeTagMeasurer {
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
+}
 
+impl TagMeasurer for RuntimeTagMeasurer {
     /// Returns the number of bytes that would be written if the given tag was encoded next, and
     /// also advances the state of the encoder as if that tag was written.
     #[inline(always)]
-    pub fn key_len(&mut self, tag: u32) -> usize {
+    fn key_len(&mut self, tag: u32) -> usize {
         let tag_delta = tag
             .checked_sub(self.last_tag)
             .expect("fields encoded out of order");
         self.last_tag = tag;
         encoded_len_varint((tag_delta as u64) << 2)
+    }
+}
+
+#[derive(Default)]
+pub struct TrivialTagMeasurer {
+    #[cfg(debug_assertions)]
+    last_tag: u32,
+}
+
+impl TrivialTagMeasurer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl TagMeasurer for TrivialTagMeasurer {
+    #[inline(always)]
+    fn key_len(&mut self, _tag: u32) -> usize {
+        #[cfg(debug_assertions)]
+        {
+            assert!(_tag >= self.last_tag, "fields encoded out of order");
+            assert!(_tag < 32);
+            self.last_tag = _tag;
+        }
+        1
     }
 }
 
@@ -763,7 +794,7 @@ pub trait Encoder<E> {
     // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
     //  emit-reversed
     /// Returns the encoded length of the field, including the key.
-    fn encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
+    fn encoded_len(tag: u32, value: &Self, tm: &mut impl TagMeasurer) -> usize;
 
     /// Decodes a field with the given wire type; the field's key should have already been consumed
     /// from the buffer.
@@ -1377,7 +1408,7 @@ pub trait FieldEncoder<E> {
         tw: &mut TagRevWriter,
     );
     /// Returns the encoded length of the field including its key.
-    fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize;
+    fn field_encoded_len(tag: u32, value: &Self, tm: &mut impl TagMeasurer) -> usize;
     /// Decodes a field directly from the buffer, also checking the wire type.
     fn decode_field<B: Buf + ?Sized>(
         wire_type: WireType,
@@ -1409,7 +1440,7 @@ where
     }
 
     #[inline]
-    fn field_encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize {
+    fn field_encoded_len(tag: u32, value: &Self, tm: &mut impl TagMeasurer) -> usize {
         tm.key_len(tag) + Self::value_encoded_len(value)
     }
 
@@ -1483,7 +1514,7 @@ where
     }
 
     #[inline]
-    fn encoded_len(tag: u32, value: &Self, tm: &mut TagMeasurer) -> usize {
+    fn encoded_len(tag: u32, value: &Self, tm: &mut impl TagMeasurer) -> usize {
         if let Some(value) = value {
             <T as FieldEncoder<E>>::field_encoded_len(tag, value, tm)
         } else {
@@ -1551,7 +1582,7 @@ pub trait Oneof: EmptyState {
     fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter);
 
     /// Measures the number of bytes that would encode this oneof.
-    fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize;
+    fn oneof_encoded_len(&self, tm: &mut impl TagMeasurer) -> usize;
 
     /// Returns the current tag of the oneof, if any.
     fn oneof_current_tag(&self) -> Option<u32>;
@@ -1579,7 +1610,7 @@ pub trait NonEmptyOneof: Sized {
     fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter);
 
     /// Measures the number of bytes that would encode this oneof.
-    fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize;
+    fn oneof_encoded_len(&self, tm: &mut impl TagMeasurer) -> usize;
 
     /// Returns the current tag of the oneof, if any.
     fn oneof_current_tag(&self) -> u32;
@@ -1616,7 +1647,7 @@ where
     }
 
     #[inline]
-    fn oneof_encoded_len(&self, tm: &mut TagMeasurer) -> usize {
+    fn oneof_encoded_len(&self, tm: &mut impl TagMeasurer) -> usize {
         if let Some(value) = self {
             value.oneof_encoded_len(tm)
         } else {
@@ -1766,7 +1797,7 @@ macro_rules! delegate_encoding {
             fn encoded_len(
                 tag: u32,
                 value: &$value_ty,
-                tm: &mut $crate::encoding::TagMeasurer,
+                tm: &mut impl $crate::encoding::TagMeasurer,
             ) -> usize {
                 $crate::encoding::Encoder::<$to_ty>::encoded_len(tag, value, tm)
             }
@@ -1965,7 +1996,11 @@ macro_rules! encoder_where_value_encoder {
             }
 
             #[inline]
-            fn encoded_len(tag: u32, value: &T, tm: &mut $crate::encoding::TagMeasurer) -> usize {
+            fn encoded_len(
+                tag: u32,
+                value: &T,
+                tm: &mut impl $crate::encoding::TagMeasurer,
+            ) -> usize {
                 if !$crate::encoding::EmptyState::is_empty(value) {
                     $crate::encoding::FieldEncoder::<$encoding>::field_encoded_len(
                         tag, value, tm)
@@ -2157,7 +2192,7 @@ mod test {
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
                         &value,
-                        &mut TagMeasurer::new(),
+                        &mut RuntimeTagMeasurer::new(),
                     );
 
                     let mut forward_buf = BytesMut::with_capacity(expected_len);
@@ -2251,7 +2286,7 @@ mod test {
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
                         value.borrow(),
-                        &mut TagMeasurer::new(),
+                        &mut RuntimeTagMeasurer::new(),
                     );
 
                     let mut buf = BytesMut::with_capacity(expected_len);

@@ -132,7 +132,7 @@ where
     }
 
     #[inline]
-    fn encoded_len(tag: u32, value: &C, tm: &mut TagMeasurer) -> usize {
+    fn encoded_len(tag: u32, value: &C, tm: &mut impl TagMeasurer) -> usize {
         if !value.is_empty() {
             Self::field_encoded_len(tag, value, tm)
         } else {
