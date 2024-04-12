@@ -1355,6 +1355,7 @@ where
     /// Decodes a field assuming the encoder's wire type directly from the buffer, also performing
     /// any additional validation required to guarantee that the value would be re-encoded into the
     /// exact same bytes.
+    // TODO(widders): consider making allow_empty a const generic param
     fn decode_value_distinguished<B: Buf + ?Sized>(
         value: &mut Self,
         buf: Capped<B>,
