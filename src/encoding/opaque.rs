@@ -10,7 +10,7 @@ use bytes::{Buf, BufMut};
 use crate::buf::ReverseBuf;
 use crate::encoding::{
     encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState,
-    TagMeasurer, TagRevWriter, TagWriter, WireType,
+    RuntimeTagMeasurer, TagMeasurer, TagRevWriter, TagWriter, WireType,
 };
 use crate::iter::FlatAdapter;
 use crate::DecodeErrorKind::Truncated;
@@ -366,7 +366,7 @@ impl RawMessage for OpaqueMessage<'_> {
 
     fn raw_encoded_len(&self) -> usize {
         // TODO(widders): why does this specific one require a turbofish? what's going on with that
-        let mut tm = TagMeasurer::<false>::new();
+        let mut tm = RuntimeTagMeasurer::new();
         self.iter()
             .map(|(tag, value)| tm.key_len(*tag) + value.value_encoded_len())
             .sum()

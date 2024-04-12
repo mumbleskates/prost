@@ -453,7 +453,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
                 {
                     let mut parts = [
                         (0u32, ::core::option::Option::None::<
-                                   fn(&Self, &mut ::bilrost::encoding::TagMeasurer) -> usize
+                                   fn(&Self, &mut ::bilrost::encoding::RuntimeTagMeasurer) -> usize
                                >);
                         #max_parts
                     ];
@@ -690,7 +690,8 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
             #[inline]
             fn raw_encoded_len(&self) -> usize {
                 let _ = <Self as ::bilrost::RawMessage>::__ASSERTIONS;
-                let tm = &mut ::bilrost::encoding::TagMeasurer::new();
+                // TODO(widders): use trivial tag measurer where possible
+                let tm = &mut ::bilrost::encoding::RuntimeTagMeasurer::new();
                 0 #(+ #encoded_len)*
             }
         }
@@ -1259,7 +1260,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
 
                 fn oneof_encoded_len(
                     &self,
-                    tm: &mut ::bilrost::encoding::TagMeasurer,
+                    tm: &mut impl ::bilrost::encoding::TagMeasurer,
                 ) -> usize {
                     match self {
                         #ident::#empty_ident => 0,
@@ -1370,7 +1371,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
 
                 fn oneof_encoded_len(
                     &self,
-                    tm: &mut ::bilrost::encoding::TagMeasurer,
+                    tm: &mut impl ::bilrost::encoding::TagMeasurer,
                 ) -> usize {
                     match self {
                         #(#encoded_len,)*

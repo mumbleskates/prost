@@ -4,7 +4,7 @@ use crate::buf::ReverseBuf;
 use crate::encoding::{
     delegate_value_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder,
     prepend_varint, skip_field, Canonicity, Capped, DecodeContext, DistinguishedEncoder,
-    DistinguishedValueEncoder, EmptyState, Encoder, General, TagMeasurer, TagReader, TagRevWriter,
+    DistinguishedValueEncoder, EmptyState, Encoder, General, TrivialTagMeasurer, TagReader, TagRevWriter,
     TagWriter, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeError;
@@ -58,7 +58,7 @@ macro_rules! impl_tuple {
         {
             #[inline]
             fn encode_value<__B: BufMut + ?Sized>(value: &Self, buf: &mut __B) {
-                let tm = &mut TagMeasurer::new();
+                let tm = &mut TrivialTagMeasurer;
                 let message_len = 0usize $(+ $letters::encoded_len($numbers, &value.$numbers, tm))*;
                 encode_varint(message_len as u64, buf);
                 let tw = &mut TagWriter::new();
@@ -79,7 +79,7 @@ macro_rules! impl_tuple {
 
             #[inline]
             fn value_encoded_len(value: &Self) -> usize {
-                let tm = &mut TagMeasurer::new();
+                let tm = &mut TrivialTagMeasurer;
                 let message_len = 0usize $(+ $letters::encoded_len($numbers, &value.$numbers, tm))*;
                 encoded_len_varint(message_len as u64) + message_len
             }
