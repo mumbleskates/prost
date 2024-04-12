@@ -2352,7 +2352,9 @@ fn tuples() {
     let output = FooTuple((1i8, "foo".to_string())).encode_to_vec();
     println!("{output:02x?}");
     let opaque_decoded = OpaqueMessage::decode(output.as_slice()).unwrap();
-    let Some((_, &OV::LengthDelimited(ref inner_field))) = opaque_decoded.iter().next() else { panic!()};
+    let Some((_, OV::LengthDelimited(inner_field))) = opaque_decoded.iter().next() else {
+        panic!()
+    };
     let inner_output = OpaqueMessage::decode(inner_field.as_ref()).unwrap();
     dbg!(inner_output);
     assert::decodes_distinguished(

@@ -4,8 +4,8 @@ use crate::buf::ReverseBuf;
 use crate::encoding::{
     delegate_value_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder,
     prepend_varint, skip_field, Canonicity, Capped, DecodeContext, DistinguishedEncoder,
-    DistinguishedValueEncoder, EmptyState, Encoder, General, TrivialTagMeasurer, TagReader, TagRevWriter,
-    TagWriter, ValueEncoder, WireType, Wiretyped,
+    DistinguishedValueEncoder, EmptyState, Encoder, General, TagReader, TagRevWriter, TagWriter,
+    TrivialTagMeasurer, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeError;
 

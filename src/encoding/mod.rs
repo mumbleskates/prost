@@ -553,13 +553,14 @@ pub trait TagMeasurer {
 }
 
 /// Simulator for writing tags, capable of outputting their encoded length.
+#[derive(Default)]
 pub struct RuntimeTagMeasurer {
     last_tag: u32,
 }
 
 impl RuntimeTagMeasurer {
     pub fn new() -> Self {
-        Self { last_tag: 0 }
+        Self::default()
     }
 }
 
