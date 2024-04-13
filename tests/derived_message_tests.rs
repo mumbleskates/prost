@@ -1508,7 +1508,7 @@ fn custom_hashers_std() {
     use core::hash::{BuildHasher, Hasher};
 
     #[derive(Default)]
-    struct CustomHasher(<std::hash::RandomState as BuildHasher>::Hasher);
+    struct CustomHasher(<std::collections::hash_map::RandomState as BuildHasher>::Hasher);
 
     impl Hasher for CustomHasher {
         fn finish(&self) -> u64 {
