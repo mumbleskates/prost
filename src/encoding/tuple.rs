@@ -15,6 +15,7 @@ use crate::DecodeError;
 macro_rules! impl_tuple {
     (
         $name:tt,
+        $test_mod_name:ident,
         ($($numbers:tt),*),
         ($($numbers_desc:tt),*),
         ($($letters:ident),*),
@@ -174,11 +175,29 @@ macro_rules! impl_tuple {
                 Ok(canon)
             }
         }
+
+        #[cfg(test)]
+        mod $test_mod_name {
+            mod delegated_bools {
+                use crate::encoding::General;
+                use crate::encoding::test::check_type_test;
+                $(type $letters = bool;)*
+                $(type $encoders = General;)*
+
+                check_type_test!(
+                    ($($encoders,)*),
+                    distinguished,
+                    ($($letters,)*),
+                    WireType::LengthDelimited
+                );
+            }
+        }
     }
 }
 
 impl_tuple!(
     "(1-tuple)", //
+    tuple_arity_1, //
     (0),         //
     (0),         //
     (A),         //
@@ -187,6 +206,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(2-tuple)", //
+    tuple_arity_2, //
     (0, 1),      //
     (1, 0),      //
     (A, B),      //
@@ -195,6 +215,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(3-tuple)",  //
+    tuple_arity_3, //
     (0, 1, 2),    //
     (2, 1, 0),    //
     (A, B, C),    //
@@ -203,6 +224,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(4-tuple)",      //
+    tuple_arity_4, //
     (0, 1, 2, 3),     //
     (3, 2, 1, 0),     //
     (A, B, C, D),     //
@@ -211,6 +233,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(5-tuple)",          //
+    tuple_arity_5, //
     (0, 1, 2, 3, 4),      //
     (4, 3, 2, 1, 0),      //
     (A, B, C, D, E),      //
@@ -219,6 +242,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(6-tuple)",              //
+    tuple_arity_6, //
     (0, 1, 2, 3, 4, 5),       //
     (5, 4, 3, 2, 1, 0),       //
     (A, B, C, D, E, F),       //
@@ -227,6 +251,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(7-tuple)",                  //
+    tuple_arity_7, //
     (0, 1, 2, 3, 4, 5, 6),        //
     (6, 5, 4, 3, 2, 1, 0),        //
     (A, B, C, D, E, F, G),        //
@@ -235,6 +260,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(8-tuple)",                      //
+    tuple_arity_8, //
     (0, 1, 2, 3, 4, 5, 6, 7),         //
     (7, 6, 5, 4, 3, 2, 1, 0),         //
     (A, B, C, D, E, F, G, H),         //
@@ -243,6 +269,7 @@ impl_tuple!(
 );
 impl_tuple!(
     "(9-tuple)",                          //
+    tuple_arity_9, //
     (0, 1, 2, 3, 4, 5, 6, 7, 8),          //
     (8, 7, 6, 5, 4, 3, 2, 1, 0),          //
     (A, B, C, D, E, F, G, H, I),          //
@@ -251,28 +278,31 @@ impl_tuple!(
 );
 impl_tuple!(
     "(10-tuple)",                             //
+    tuple_arity_10, //
     (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),           //
     (9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
     (A, B, C, D, E, F, G, H, I, J),           //
     (J, I, H, G, F, E, D, C, B, A),           //
     (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je), //
 );
-impl_tuple!(
-    "(11-tuple)",                                 //
-    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),           //
-    (10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
-    (A, B, C, D, E, F, G, H, I, J, K),            //
-    (K, J, I, H, G, F, E, D, C, B, A),            //
-    (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke), //
-);
-impl_tuple!(
-    "(12-tuple)",                                     //
-    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11),           //
-    (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
-    (A, B, C, D, E, F, G, H, I, J, K, L),             //
-    (L, K, J, I, H, G, F, E, D, C, B, A),             //
-    (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke, Le), //
-);
+// impl_tuple!(
+//     "(11-tuple)",                                 //
+//     tuple_arity_11, //
+//     (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),           //
+//     (10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
+//     (A, B, C, D, E, F, G, H, I, J, K),            //
+//     (K, J, I, H, G, F, E, D, C, B, A),            //
+//     (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke), //
+// );
+// impl_tuple!(
+//     "(12-tuple)",                                     //
+//     tuple_arity_12, //
+//     (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11),           //
+//     (11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0),           //
+//     (A, B, C, D, E, F, G, H, I, J, K, L),             //
+//     (L, K, J, I, H, G, F, E, D, C, B, A),             //
+//     (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke, Le), //
+// );
 
 delegate_value_encoding!(
     delegate from (General) to ((General,))
