@@ -246,3 +246,5 @@ mod test {
         }
     }
 }
+
+// TODO(widders): fixed-size arrays, not as a Collection but as must-be-present-when-not-all-empty
