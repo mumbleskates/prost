@@ -1,7 +1,7 @@
 //! Every tuple type starting at arity 1 and up to arity 12 implements ValueEncoder for the encoding
-//! (E, ...) where its elements are encoded by the corresponding sub-encoder. The representation on
-//! the wire is exactly the same as if it were a message type that had fields with tags 0 through
-//! arity-minus-1.
+//! (E1, ... EN) where its elements are encoded with the corresponding sub-encoding. The
+//! representation on the wire is exactly the same as if it were a message type that had fields with
+//! tags 0 through arity-minus-1.
 //!
 //! Note again that these tags start at zero, not at 1 as they do by default when deriving `Message`
 //! for a struct. This is for similar reasons; struct fields "feel" more natural when numbered
