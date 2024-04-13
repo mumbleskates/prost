@@ -572,13 +572,13 @@ fn ignored_fields() {
         },
     );
 
-    let mut foo = FooPlus {
+    let mut foo_msg = FooPlus {
         x: 5,
         y: 10,
         also: 123,
     };
     assert::decodes(
-        foo.encode_to_vec(),
+        foo_msg.encode_to_vec(),
         FooPlus {
             x: 5,
             y: 10,
@@ -586,7 +586,7 @@ fn ignored_fields() {
         },
     );
 
-    foo.replace_from(
+    foo_msg.replace_from(
         [
             (1, OV::i64(6)),
             (2, OV::i64(12)),
@@ -598,7 +598,7 @@ fn ignored_fields() {
     )
     .expect("replace failed unexpectedly");
     assert_eq!(
-        foo,
+        foo_msg,
         FooPlus {
             x: 6,
             y: 12,
@@ -607,7 +607,7 @@ fn ignored_fields() {
     );
 
     assert_eq!(
-        foo.replace_from(
+        foo_msg.replace_from(
             [(1, OV::i64(456)), (2, OV::string("wrong wire type"))]
                 .into_opaque_message()
                 .encode_to_vec()
@@ -620,7 +620,7 @@ fn ignored_fields() {
     // After a failed decode, the message's non-ignored fields should be cleared rather than
     // incompletely populated
     assert_eq!(
-        foo,
+        foo_msg,
         FooPlus {
             x: 0,
             y: 0,
