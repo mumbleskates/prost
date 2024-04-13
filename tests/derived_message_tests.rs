@@ -586,17 +586,18 @@ fn ignored_fields() {
         },
     );
 
-    foo_msg.replace_from(
-        [
-            (1, OV::i64(6)),
-            (2, OV::i64(12)),
-            (333, OV::string("unknown")),
-        ]
-        .into_opaque_message()
-        .encode_to_vec()
-        .as_slice(),
-    )
-    .expect("replace failed unexpectedly");
+    foo_msg
+        .replace_from(
+            [
+                (1, OV::i64(6)),
+                (2, OV::i64(12)),
+                (333, OV::string("unknown")),
+            ]
+            .into_opaque_message()
+            .encode_to_vec()
+            .as_slice(),
+        )
+        .expect("replace failed unexpectedly");
     assert_eq!(
         foo_msg,
         FooPlus {
@@ -607,14 +608,15 @@ fn ignored_fields() {
     );
 
     assert_eq!(
-        foo_msg.replace_from(
-            [(1, OV::i64(456)), (2, OV::string("wrong wire type"))]
-                .into_opaque_message()
-                .encode_to_vec()
-                .as_slice()
-        )
-        .expect_err("replace with wrong wire type succeeded unexpectedly")
-        .kind(),
+        foo_msg
+            .replace_from(
+                [(1, OV::i64(456)), (2, OV::string("wrong wire type"))]
+                    .into_opaque_message()
+                    .encode_to_vec()
+                    .as_slice()
+            )
+            .expect_err("replace with wrong wire type succeeded unexpectedly")
+            .kind(),
         WrongWireType
     );
     // After a failed decode, the message's non-ignored fields should be cleared rather than
