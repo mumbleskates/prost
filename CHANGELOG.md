@@ -4,8 +4,8 @@
 
 ### New features
 
-* Hash maps and hash sets can now have any kind of hasher, as long as it is
-  `Default`.
+* Hash maps and hash sets can now have any kind of hasher, as long as the
+  `BuildHasher` implements `Default`.
 
 ### Fixes
 
