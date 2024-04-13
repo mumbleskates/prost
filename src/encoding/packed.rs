@@ -93,11 +93,13 @@ where
         let mut canon = Canonicity::Canonical;
         while capped.has_remaining()? {
             let mut new_val = T::new_for_overwrite();
-            canon.update(DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
-                &mut new_val,
-                capped.lend(),
-                ctx.clone(),
-            )?);
+            canon.update(
+                DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
+                    &mut new_val,
+                    capped.lend(),
+                    ctx.clone(),
+                )?,
+            );
             canon.update(value.insert_distinguished(new_val)?);
         }
         Ok(canon)

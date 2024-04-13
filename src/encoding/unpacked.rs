@@ -78,11 +78,13 @@ where
         // Decode one item
         let mut new_item = T::Item::new_for_overwrite();
         // Decoded field values are nested within the collection; empty values are OK
-        canon.update(DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
-            &mut new_item,
-            buf.lend(),
-            ctx.clone(),
-        )?);
+        canon.update(
+            DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
+                &mut new_item,
+                buf.lend(),
+                ctx.clone(),
+            )?,
+        );
         canon.update(collection.insert_distinguished(new_item)?);
 
         if let Some(next_wire_type) = peek_repeated_field(&mut buf) {
