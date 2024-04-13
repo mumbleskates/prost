@@ -2433,27 +2433,60 @@ fn tuples() {
     #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
     struct FooTuple<T, U>(#[bilrost(encoding((varint, general)))] (T, U));
 
-    assert::decodes_distinguished(
-        [(
-            1,
-            OV::message(&[(0, OV::i32(1)), (1, OV::string("foo"))].into_opaque_message()),
-        )],
-        Foo(Pair(1i8, "foo".to_string())),
+    static_assertions::assert_impl_all!(FooTuple<bool, bool>: Message, DistinguishedMessage);
+    static_assertions::assert_impl_all!(FooTuple<bool, f32>: Message);
+    static_assertions::assert_not_impl_any!(FooTuple<bool, f32>: DistinguishedMessage);
+    // f32 doesn't support the "varint" encoding.
+    static_assertions::assert_not_impl_any!(FooTuple<f32, f32>: Message);
+
+    assert_eq!(
+        FooTuple((1i8, "foo".to_string())).encode_to_vec(),
+        Foo(Pair(1i8, "foo".to_string())).encode_to_vec(),
     );
-    let output = FooTuple((1i8, "foo".to_string())).encode_to_vec();
-    println!("{output:02x?}");
-    let opaque_decoded = OpaqueMessage::decode(output.as_slice()).unwrap();
-    let Some((_, OV::LengthDelimited(inner_field))) = opaque_decoded.iter().next() else {
-        panic!()
-    };
-    let inner_output = OpaqueMessage::decode(inner_field.as_ref()).unwrap();
-    dbg!(inner_output);
     assert::decodes_distinguished(
+        Foo(Pair(1i8, "foo".to_string())).encode_to_vec(),
+        FooTuple((1i8, "foo".to_string())),
+    );
+    assert::decodes_non_canonically(
         [(
             1,
-            OV::message(&[(0, OV::i32(1)), (1, OV::string("foo"))].into_opaque_message()),
+            OV::message(&[(0, OV::i8(0)), (1, OV::str("bar"))].into_opaque_message()),
         )],
-        FooTuple((1i8, "foo".to_string())),
+        FooTuple((0, "bar".to_string())),
+        NotCanonical,
+    );
+    assert::decodes_non_canonically(
+        [(
+            1,
+            OV::message(&[(0, OV::i8(2)), (1, OV::str(""))].into_opaque_message()),
+        )],
+        FooTuple((2, "".to_string())),
+        NotCanonical,
+    );
+    assert::decodes_non_canonically(
+        [(
+            1,
+            OV::message(
+                &[(0, OV::i8(3)), (1, OV::str("bar")), (2, OV::bool(true))].into_opaque_message(),
+            ),
+        )],
+        FooTuple((3, "bar".to_string())),
+        HasExtensions,
+    );
+    assert::decodes_non_canonically(
+        [(
+            1,
+            OV::message(
+                &[(2, OV::bool(true))].into_opaque_message(),
+            ),
+        )],
+        FooTuple((0, "".to_string())),
+        HasExtensions,
+    );
+    assert::decodes_non_canonically(
+        [(1, OV::message(&()))],
+        FooTuple((0, "".to_string())),
+        NotCanonical,
     );
 }
 
