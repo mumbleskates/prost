@@ -14,8 +14,8 @@ use crate::DecodeError;
 /// exactly the same as if it were a message type that has fields with tags 0 through arity-1.
 macro_rules! impl_tuple {
     (
-        $arity:tt,
-        $name:tt,
+        $arity:expr,
+        $name:expr,
         $test_mod_name:ident,
         ($($numbers:tt),*),
         ($($numbers_desc:tt),*),
