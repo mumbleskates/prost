@@ -1,3 +1,20 @@
+//! Every tuple type starting at arity 1 and up to arity 12 implements ValueEncoder for the encoding
+//! (E, ...) where its elements are encoded by the corresponding sub-encoder. The representation on
+//! the wire is exactly the same as if it were a message type that had fields with tags 0 through
+//! arity-minus-1.
+//!
+//! Note again that these tags start at zero, not at 1 as they do by default when deriving `Message`
+//! for a struct. This is for similar reasons; struct fields "feel" more natural when numbered
+//! ordinally, but tuple types in rust are *indexed* starting at zero so we prefer to maintain
+//! parity with that.
+//!
+//! The arity-zero unit tuple encodes the same way, but it does so independently of this file.
+//! Because it has no fields, it has a privileged lack of ambiguity regarding *how* it will encode,
+//! where every other tuple type might appear differently when included in a message depending on
+//! which encodings are chosen for each member. For this reason, it is the only tuple type that
+//! implements `Message` itself, and it stands as the prototype for a message with no defined
+//! fields.
+
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
@@ -9,9 +26,6 @@ use crate::encoding::{
 };
 use crate::DecodeError;
 
-/// Every other tuple type (up to arity 12) implements ValueEncoder for the encoding (E, ...) where
-/// its elements are encoded by the corresponding sub-encoder. The representation on the wire is
-/// exactly the same as if it were a message type that has fields with tags 0 through arity-1.
 macro_rules! impl_tuple {
     (
         $arity:expr,
