@@ -22,6 +22,7 @@ macro_rules! impl_tuple {
         ($($letters:ident),*),
         ($($letters_desc:ident),*),
         ($($encodings:ident),*),
+        ($($tees:ident),*),
     ) => {
         // All tuple types encode as nested messages, so all of them implement ValueEncoder and
         // should therefore implement Encoder in terms of that.
@@ -183,76 +184,88 @@ macro_rules! impl_tuple {
 
         #[cfg(test)]
         mod $test_mod_name {
+            // MSRV: impl From<[T; N]> for (T, ...{N}) is new in rust 1.71
+            fn array_to_tuple<T: Clone>(arr: [T; $arity]) -> ($($tees,)*) {
+                ($(arr[$numbers].clone(),)*)
+            }
+
             mod delegated_bools {
                 use crate::encoding::General;
                 use crate::encoding::test::check_type_test;
-                $(type $letters = bool;)*
+                type T = bool;
 
                 check_type_test!(
                     General,
                     expedient,
-                    from [bool; $arity],
-                    into ($($letters,)*),
+                    from [T; $arity],
+                    into ($($tees,)*),
+                    converter(value) { super::super::array_to_tuple(value) },
                     WireType::LengthDelimited
                 );
                 check_type_test!(
                     General,
                     distinguished,
-                    from [bool; $arity],
-                    into ($($letters,)*),
+                    from [T; $arity],
+                    into ($($tees,)*),
+                    converter(value) { super::super::array_to_tuple(value) },
                     WireType::LengthDelimited
                 );
             }
             mod varint_bools {
                 use crate::encoding::test::check_type_test;
-                $(type $letters = bool;)*
+                type T = bool;
                 $(type $encodings = crate::encoding::Varint;)*
 
                 check_type_test!(
                     ($($encodings,)*),
                     expedient,
-                    from [bool; $arity],
-                    into ($($letters,)*),
+                    from [T; $arity],
+                    into ($($tees,)*),
+                    converter(value) { super::super::array_to_tuple(value) },
                     WireType::LengthDelimited
                 );
                 check_type_test!(
                     ($($encodings,)*),
                     distinguished,
-                    from [bool; $arity],
-                    into ($($letters,)*),
+                    from [T; $arity],
+                    into ($($tees,)*),
+                    converter(value) { super::super::array_to_tuple(value) },
                     WireType::LengthDelimited
                 );
             }
             mod fixed_floats {
                 use crate::encoding::test::check_type_test;
-                $(type $letters = f32;)*
+                type T = f32;
                 $(type $encodings = crate::encoding::Fixed;)*
 
                 check_type_test!(
                     ($($encodings,)*),
                     expedient,
-                    from [f32; $arity],
-                    into ($($letters,)*),
+                    from [T; $arity],
+                    into ($($tees,)*),
+                    converter(value) { super::super::array_to_tuple(value) },
                     WireType::LengthDelimited
                 );
             }
             mod small_arrays {
                 use crate::encoding::test::check_type_test;
-                $(type $letters = [u8; 1];)*
+                type T = [u8; 1];
                 $(type $encodings = crate::encoding::PlainBytes;)*
 
                 check_type_test!(
                     ($($encodings,)*),
                     expedient,
-                    from [[u8; 1]; $arity],
-                    into ($($letters,)*),
+                    from [T; $arity],
+                    into ($($tees,)*),
+                    converter(value) { super::super::array_to_tuple(value) },
                     WireType::LengthDelimited
                 );
                 check_type_test!(
                     ($($encodings,)*),
                     distinguished,
-                    from [[u8; 1]; $arity],
-                    into ($($letters,)*),
+                    from [T; $arity],
+                    into ($($tees,)*),
+                    converter(value) { super::super::array_to_tuple(value) },
                     WireType::LengthDelimited
                 );
             }
@@ -269,6 +282,7 @@ impl_tuple!(
     (A),           //
     (A),           //
     (Ae),          //
+    (T),           //
 );
 impl_tuple!(
     2,             //
@@ -279,6 +293,7 @@ impl_tuple!(
     (A, B),        //
     (B, A),        //
     (Ae, Be),      //
+    (T, T),        //
 );
 impl_tuple!(
     3,             //
@@ -289,6 +304,7 @@ impl_tuple!(
     (A, B, C),     //
     (C, B, A),     //
     (Ae, Be, Ce),  //
+    (T, T, T),     //
 );
 impl_tuple!(
     4,                //
@@ -299,6 +315,7 @@ impl_tuple!(
     (A, B, C, D),     //
     (D, C, B, A),     //
     (Ae, Be, Ce, De), //
+    (T, T, T, T),     //
 );
 impl_tuple!(
     5,                    //
@@ -309,6 +326,7 @@ impl_tuple!(
     (A, B, C, D, E),      //
     (E, D, C, B, A),      //
     (Ae, Be, Ce, De, Ee), //
+    (T, T, T, T, T),      //
 );
 impl_tuple!(
     6,                        //
@@ -319,6 +337,7 @@ impl_tuple!(
     (A, B, C, D, E, F),       //
     (F, E, D, C, B, A),       //
     (Ae, Be, Ce, De, Ee, Fe), //
+    (T, T, T, T, T, T),       //
 );
 impl_tuple!(
     7,                            //
@@ -329,6 +348,7 @@ impl_tuple!(
     (A, B, C, D, E, F, G),        //
     (G, F, E, D, C, B, A),        //
     (Ae, Be, Ce, De, Ee, Fe, Ge), //
+    (T, T, T, T, T, T, T),        //
 );
 impl_tuple!(
     8,                                //
@@ -339,6 +359,7 @@ impl_tuple!(
     (A, B, C, D, E, F, G, H),         //
     (H, G, F, E, D, C, B, A),         //
     (Ae, Be, Ce, De, Ee, Fe, Ge, He), //
+    (T, T, T, T, T, T, T, T),         //
 );
 impl_tuple!(
     9,                                    //
@@ -349,6 +370,7 @@ impl_tuple!(
     (A, B, C, D, E, F, G, H, I),          //
     (I, H, G, F, E, D, C, B, A),          //
     (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie), //
+    (T, T, T, T, T, T, T, T, T),          //
 );
 impl_tuple!(
     10,                                       //
@@ -359,6 +381,7 @@ impl_tuple!(
     (A, B, C, D, E, F, G, H, I, J),           //
     (J, I, H, G, F, E, D, C, B, A),           //
     (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je), //
+    (T, T, T, T, T, T, T, T, T, T),           //
 );
 impl_tuple!(
     11,                                           //
@@ -369,6 +392,7 @@ impl_tuple!(
     (A, B, C, D, E, F, G, H, I, J, K),            //
     (K, J, I, H, G, F, E, D, C, B, A),            //
     (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke), //
+    (T, T, T, T, T, T, T, T, T, T, T),            //
 );
 impl_tuple!(
     12,                                               //
@@ -379,6 +403,7 @@ impl_tuple!(
     (A, B, C, D, E, F, G, H, I, J, K, L),             //
     (L, K, J, I, H, G, F, E, D, C, B, A),             //
     (Ae, Be, Ce, De, Ee, Fe, Ge, He, Ie, Je, Ke, Le), //
+    (T, T, T, T, T, T, T, T, T, T, T, T),             //
 );
 
 delegate_value_encoding!(
