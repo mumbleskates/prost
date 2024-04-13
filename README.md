@@ -1176,6 +1176,9 @@ The `general` encoding is also directly applicable to tuple types as long as
 each of the tuple's fields is compatible with the `general` encoding itself, and
 all the fields will use that encoding.
 
+Like most of the Rust standard library, `bilrost` implements encoding for tuples
+up to arity 12.
+
 #### Enumerations
 
 `bilrost` can derive the required implementations for a numeric enumeration type
