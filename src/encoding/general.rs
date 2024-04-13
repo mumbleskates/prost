@@ -52,20 +52,24 @@ delegate_value_encoding!(delegate from (General) to (Map<General, General>)
     with generics (K, V));
 #[cfg(feature = "std")]
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (std::collections::HashSet<T>) with generics (T));
+    for type (std::collections::HashSet<T, S>)
+    with where clause (S: Default + core::hash::BuildHasher)
+    with generics (T, S));
 #[cfg(feature = "std")]
 delegate_value_encoding!(delegate from (General) to (Map<General, General>)
-    for type (std::collections::HashMap<K, V>)
-    with where clause (K: Eq + core::hash::Hash)
-    with generics (K, V));
+    for type (std::collections::HashMap<K, V, S>)
+    with where clause (K: Eq + core::hash::Hash, S: Default + core::hash::BuildHasher)
+    with generics (K, V, S));
 #[cfg(feature = "hashbrown")]
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (hashbrown::HashSet<T>) with generics (T));
+    for type (hashbrown::HashSet<T, S>)
+    with where clause (S: Default + core::hash::BuildHasher)
+    with generics (T, S));
 #[cfg(feature = "hashbrown")]
 delegate_value_encoding!(delegate from (General) to (Map<General, General>)
-    for type (hashbrown::HashMap<K, V>)
-    with where clause (K: Eq + core::hash::Hash)
-    with generics (K, V));
+    for type (hashbrown::HashMap<K, V, S>)
+    with where clause (K: Eq + core::hash::Hash, S: Default + core::hash::BuildHasher)
+    with generics (K, V, S));
 
 // General encodes bool and integers as varints.
 delegate_value_encoding!(delegate from (General) to (Varint)

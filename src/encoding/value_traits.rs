@@ -112,10 +112,6 @@ pub trait Mapping: EmptyState {
         Self: 'a;
 
     fn len(&self) -> usize;
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
     fn iter(&self) -> Self::RefIter<'_>;
     fn reversed(&self) -> Self::ReverseIter<'_>;
     fn insert(&mut self, key: Self::Key, value: Self::Value) -> Result<(), DecodeErrorKind>;
@@ -535,27 +531,31 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<T> EmptyState for HashSet<T> {
+impl<T, S> EmptyState for HashSet<T, S>
+where
+    S: Default + core::hash::BuildHasher,
+{
     #[inline]
     fn empty() -> Self {
-        Self::new()
+        HashSet::with_hasher(Default::default())
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        Self::is_empty(self)
+        HashSet::is_empty(self)
     }
 
     #[inline]
     fn clear(&mut self) {
-        Self::clear(self)
+        HashSet::clear(self)
     }
 }
 
 #[cfg(feature = "std")]
-impl<T> Collection for HashSet<T>
+impl<T, S> Collection for HashSet<T, S>
 where
     T: Eq + core::hash::Hash,
+    S: Default + core::hash::BuildHasher,
 {
     type Item = T;
     type RefIter<'a> = hash_set::Iter<'a, T>
@@ -592,27 +592,31 @@ where
 }
 
 #[cfg(feature = "hashbrown")]
-impl<T> EmptyState for hashbrown::HashSet<T> {
+impl<T, S> EmptyState for hashbrown::HashSet<T, S>
+where
+    S: Default + core::hash::BuildHasher,
+{
     #[inline]
     fn empty() -> Self {
-        Self::new()
+        hashbrown::HashSet::with_hasher(Default::default())
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        Self::is_empty(self)
+        hashbrown::HashSet::is_empty(self)
     }
 
     #[inline]
     fn clear(&mut self) {
-        Self::clear(self)
+        hashbrown::HashSet::clear(self)
     }
 }
 
 #[cfg(feature = "hashbrown")]
-impl<T> Collection for hashbrown::HashSet<T>
+impl<T, S> Collection for hashbrown::HashSet<T, S>
 where
     T: Eq + core::hash::Hash,
+    S: Default + core::hash::BuildHasher,
 {
     type Item = T;
     type RefIter<'a> = hashbrown::hash_set::Iter<'a, T>
@@ -737,27 +741,31 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<K, V> EmptyState for HashMap<K, V> {
+impl<K, V, S> EmptyState for HashMap<K, V, S>
+where
+    S: Default + core::hash::BuildHasher,
+{
     #[inline]
     fn empty() -> Self {
-        Self::new()
+        HashMap::with_hasher(Default::default())
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        Self::is_empty(self)
+        HashMap::is_empty(self)
     }
 
     #[inline]
     fn clear(&mut self) {
-        Self::clear(self)
+        HashMap::clear(self)
     }
 }
 
 #[cfg(feature = "std")]
-impl<K, V> Mapping for HashMap<K, V>
+impl<K, V, S> Mapping for HashMap<K, V, S>
 where
     K: Eq + core::hash::Hash,
+    S: Default + core::hash::BuildHasher,
 {
     type Key = K;
     type Value = V;
@@ -799,27 +807,31 @@ where
 }
 
 #[cfg(feature = "hashbrown")]
-impl<K, V> EmptyState for hashbrown::HashMap<K, V> {
+impl<K, V, S> EmptyState for hashbrown::HashMap<K, V, S>
+where
+    S: Default + core::hash::BuildHasher,
+{
     #[inline]
     fn empty() -> Self {
-        Self::new()
+        hashbrown::HashMap::with_hasher(Default::default())
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        Self::is_empty(self)
+        hashbrown::HashMap::is_empty(self)
     }
 
     #[inline]
     fn clear(&mut self) {
-        Self::clear(self)
+        hashbrown::HashMap::clear(self)
     }
 }
 
 #[cfg(feature = "hashbrown")]
-impl<K, V> Mapping for hashbrown::HashMap<K, V>
+impl<K, V, S> Mapping for hashbrown::HashMap<K, V, S>
 where
     K: Eq + core::hash::Hash,
+    S: Default + core::hash::BuildHasher,
 {
     type Key = K;
     type Value = V;
