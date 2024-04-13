@@ -97,14 +97,13 @@ macro_rules! varint {
 
         impl DistinguishedValueEncoder<Varint> for $ty {
             #[inline]
-            fn decode_value_distinguished<B: Buf + ?Sized>(
+            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $ty,
-                buf: Capped<B>,
-                allow_empty: bool,
+                buf: Capped<impl Buf + ?Sized>,
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError> {
                 ValueEncoder::<Varint>::decode_value(value, buf, ctx)?;
-                Ok(if !allow_empty && value.is_empty() {
+                Ok(if !ALLOW_EMPTY && value.is_empty() {
                     Canonicity::NotCanonical
                 } else {
                     Canonicity::Canonical

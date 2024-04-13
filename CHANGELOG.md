@@ -2,6 +2,10 @@
 
 ### Breaking changes
 
+* The (unstable) internal encoding traits continue to evolve, now varying the
+  implementation of `TagMeasurer` and moving the "allow empty" argument of
+  distinguished value decoding into a const generic param.
+
 ### New features
 
 * Hash maps and hash sets can now have any kind of hasher, as long as the

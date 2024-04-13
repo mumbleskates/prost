@@ -217,15 +217,14 @@ impl Field {
         let ty = &self.ty;
         if self.in_oneof {
             quote!(
-                <
-                    #ty as ::bilrost::encoding::DistinguishedFieldEncoder<#encoder>
-                >::decode_field_distinguished(
-                    wire_type,
-                    #ident,
-                    buf,
-                    true, // Allow empty values: oneof field values are nested
-                    ctx,
-                )
+                // Allow empty values: oneof field values are nested
+                <#ty as ::bilrost::encoding::DistinguishedFieldEncoder<#encoder>>
+                    ::decode_field_distinguished::<true>(
+                        wire_type,
+                        #ident,
+                        buf,
+                        ctx,
+                    )
             )
         } else {
             quote!(

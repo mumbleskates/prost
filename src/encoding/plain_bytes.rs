@@ -57,14 +57,13 @@ impl ValueEncoder<PlainBytes> for Vec<u8> {
 }
 
 impl DistinguishedValueEncoder<PlainBytes> for Vec<u8> {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Vec<u8>,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
-        Ok(if !allow_empty && value.is_empty() {
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
             Canonicity::Canonical
@@ -124,16 +123,14 @@ impl ValueEncoder<PlainBytes> for Cow<'_, [u8]> {
 
 impl DistinguishedValueEncoder<PlainBytes> for Cow<'_, [u8]> {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Cow<[u8]>,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished(
+        DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished::<ALLOW_EMPTY>(
             value.to_mut(),
             buf,
-            allow_empty,
             ctx,
         )
     }
@@ -215,14 +212,13 @@ impl<const N: usize> ValueEncoder<PlainBytes> for [u8; N] {
 }
 
 impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut [u8; N],
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         Self::decode_value(value, buf, ctx)?;
-        Ok(if !allow_empty && value.is_empty() {
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
             Canonicity::Canonical

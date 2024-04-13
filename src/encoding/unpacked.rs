@@ -77,10 +77,10 @@ where
     loop {
         // Decode one item
         let mut new_item = T::Item::new_for_overwrite();
-        canon.update(DistinguishedValueEncoder::<E>::decode_value_distinguished(
+        // Decoded field values are nested within the collection; empty values are OK
+        canon.update(DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
             &mut new_item,
             buf.lend(),
-            true,
             ctx.clone(),
         )?);
         canon.update(collection.insert_distinguished(new_item)?);

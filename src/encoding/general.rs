@@ -178,14 +178,13 @@ impl ValueEncoder<General> for String {
 
 impl DistinguishedValueEncoder<General> for String {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut String,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         Self::decode_value(value, buf, ctx)?;
-        Ok(if !allow_empty && value.is_empty() {
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
             Canonicity::Canonical
@@ -259,16 +258,14 @@ impl ValueEncoder<General> for Cow<'_, str> {
 
 impl DistinguishedValueEncoder<General> for Cow<'_, str> {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Cow<str>,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        DistinguishedValueEncoder::<General>::decode_value_distinguished(
+        DistinguishedValueEncoder::<General>::decode_value_distinguished::<ALLOW_EMPTY>(
             value.to_mut(),
             buf,
-            allow_empty,
             ctx,
         )
     }
@@ -341,14 +338,13 @@ impl ValueEncoder<General> for bytestring::ByteString {
 #[cfg(feature = "bytestring")]
 impl DistinguishedValueEncoder<General> for bytestring::ByteString {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut bytestring::ByteString,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         Self::decode_value(value, buf, ctx)?;
-        Ok(if !allow_empty && value.is_empty() {
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
             Canonicity::Canonical
@@ -420,14 +416,13 @@ impl ValueEncoder<General> for Bytes {
 
 impl DistinguishedValueEncoder<General> for Bytes {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Bytes,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         Self::decode_value(value, buf, ctx)?;
-        Ok(if !allow_empty && value.is_empty() {
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
             Canonicity::Canonical
@@ -476,16 +471,14 @@ impl ValueEncoder<General> for Blob {
 
 impl DistinguishedValueEncoder<General> for Blob {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Blob,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished(
+        DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished::<ALLOW_EMPTY>(
             &mut **value,
             buf,
-            allow_empty,
             ctx,
         )
     }
@@ -545,10 +538,9 @@ where
     T: RawDistinguishedMessage + Eq,
 {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut T,
-        mut buf: Capped<B>,
-        allow_empty: bool,
+        mut buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         ctx.limit_reached()?;
@@ -556,7 +548,7 @@ where
         // Empty message types always encode and decode from zero bytes. It is far cheaper to check
         // here than to check after the value has been decoded and checking the message's
         // `is_empty()`.
-        if !allow_empty && buf.remaining_before_cap() == 0 {
+        if !ALLOW_EMPTY && buf.remaining_before_cap() == 0 {
             return Ok(Canonicity::NotCanonical);
         }
         merge_distinguished(value, buf, ctx.enter_recursion())
