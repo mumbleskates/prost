@@ -2188,7 +2188,6 @@ mod test {
                 where
                     T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
                 {
-                    // TODO(widders): prepend
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
                         &value,
