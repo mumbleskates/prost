@@ -131,16 +131,20 @@ where
         while capped.has_remaining()? {
             let mut new_key = K::new_for_overwrite();
             let mut new_val = V::new_for_overwrite();
-            canon.update(DistinguishedValueEncoder::<KE>::decode_value_distinguished::<true>(
-                &mut new_key,
-                capped.lend(),
-                ctx.clone(),
-            )?);
-            canon.update(DistinguishedValueEncoder::<VE>::decode_value_distinguished::<true>(
-                &mut new_val,
-                capped.lend(),
-                ctx.clone(),
-            )?);
+            canon.update(
+                DistinguishedValueEncoder::<KE>::decode_value_distinguished::<true>(
+                    &mut new_key,
+                    capped.lend(),
+                    ctx.clone(),
+                )?,
+            );
+            canon.update(
+                DistinguishedValueEncoder::<VE>::decode_value_distinguished::<true>(
+                    &mut new_val,
+                    capped.lend(),
+                    ctx.clone(),
+                )?,
+            );
             canon.update(value.insert_distinguished(new_key, new_val)?);
         }
         Ok(canon)

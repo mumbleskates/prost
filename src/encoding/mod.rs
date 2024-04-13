@@ -2539,12 +2539,11 @@ mod test {
                 .kind(),
             Truncated
         );
-        let res = DistinguishedValueEncoder::<Map<Fixed, Fixed>>
-            ::decode_value_distinguished::<true>(
-                &mut parsed,
-                Capped::new(&mut buf.as_slice()),
-                DecodeContext::default(),
-            );
+        let res = DistinguishedValueEncoder::<Map<Fixed, Fixed>>::decode_value_distinguished::<true>(
+            &mut parsed,
+            Capped::new(&mut buf.as_slice()),
+            DecodeContext::default(),
+        );
         assert_eq!(
             res.expect_err("unaligned 12-byte map decoded without error")
                 .kind(),
