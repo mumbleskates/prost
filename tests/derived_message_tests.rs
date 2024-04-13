@@ -17,7 +17,7 @@ use bilrost::encoding::{
 };
 use bilrost::Canonicity::{HasExtensions, NotCanonical};
 use bilrost::DecodeErrorKind::{
-    ConflictingFields, InvalidValue, OutOfDomainValue, TagOverflowed, Truncated,
+    ConflictingFields, InvalidValue, InvalidVarint, OutOfDomainValue, TagOverflowed, Truncated,
     UnexpectedlyRepeated, WrongWireType,
 };
 use bilrost::{DecodeErrorKind, DistinguishedMessage, Enumeration, Message, Oneof};
@@ -960,6 +960,10 @@ fn truncated_nested_varint() {
         // \x05: field 1, length-delimited; \x04: 4 bytes; \x04: field 1, varint;
         // \xff...: data that will be greedily decoded as an valid varint that still runs over.
         b"\x05\x04\x04\xff\xff\xff\xff\xff\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09";
+    let invalid_not_truncated =
+        // \x05: field 1, length-delimited; \x0a: 0 bytes; \x04: field 1, varint;
+        // \xff...: an invalid varint
+        b"\x05\x0a\x04\xff\xff\xff\xff\xff\xff\xff\xff\xff";
 
     // The desired result is that we can tell the difference between the inner region being
     // truncated before the varint ends and finding an invalid varint fully inside the inner
@@ -969,6 +973,8 @@ fn truncated_nested_varint() {
     // When decoding a varint succeeds but runs over, we want to detect that too.
     assert::is_invalid::<Outer>(truncated_inner_valid, Truncated);
     assert::is_invalid_distinguished::<Outer>(truncated_inner_valid, Truncated);
+    // When decoding an inner varint, we do see when it is invalid.
+    assert::is_invalid::<Outer>(invalid_not_truncated, InvalidVarint);
 }
 
 // Fixed width int tests
