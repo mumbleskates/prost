@@ -125,7 +125,7 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
     let mut reserved_tags: Option<TagList> = None;
     let mut unknown_attrs = Vec::new();
     for attr in bilrost_attrs(input.attrs.clone())? {
-        if let Some(tags) = tag_list_attr("reserved_tags", None, &attr)? {
+        if let Some(tags) = tag_list_attr(&attr, "reserved_tags", None)? {
             set_option(
                 &mut reserved_tags,
                 tags,

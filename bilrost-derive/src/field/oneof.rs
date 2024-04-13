@@ -21,7 +21,7 @@ impl Field {
         let mut unknown_attrs = Vec::new();
 
         for attr in attrs {
-            if let Some(tags) = tag_list_attr("oneof", Some(100), attr)? {
+            if let Some(tags) = tag_list_attr(attr, "oneof", Some(100))? {
                 set_option(&mut oneof_tags, tags, "duplicate oneof attribute")?;
             } else {
                 unknown_attrs.push(attr);

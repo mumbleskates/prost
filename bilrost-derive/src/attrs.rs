@@ -112,9 +112,9 @@ impl parse::Parse for TagList {
 }
 
 pub fn tag_list_attr(
+    attr: &Meta,
     name: &str,
     range_size_limit: Option<usize>,
-    attr: &Meta,
 ) -> Result<Option<TagList>, Error> {
     if !attr.path().is_ident(name) {
         return Ok(None);
