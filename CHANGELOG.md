@@ -4,6 +4,9 @@
 
 ### New features
 
+* Hash maps and hash sets can now have any kind of hasher, as long as it is
+  `Default`.
+
 ### Fixes
 
 * Added a `Self: Default` bound to the impl for `Message` when there are ignored
