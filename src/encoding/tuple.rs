@@ -60,6 +60,8 @@ macro_rules! impl_tuple {
         {
             #[inline]
             fn encode_value<__B: BufMut + ?Sized>(value: &Self, buf: &mut __B) {
+                // Because we do not implement tuples with more than arity 32, we can always use
+                // the trivial tag measurer implementation.
                 let tm = &mut TrivialTagMeasurer::new();
                 let message_len = 0usize $(+ $letters::encoded_len($numbers, &value.$numbers, tm))*;
                 encode_varint(message_len as u64, buf);
@@ -81,6 +83,8 @@ macro_rules! impl_tuple {
 
             #[inline]
             fn value_encoded_len(value: &Self) -> usize {
+                // Because we do not implement tuples with more than arity 32, we can always use
+                // the trivial tag measurer implementation.
                 let tm = &mut TrivialTagMeasurer::new();
                 let message_len = 0usize $(+ $letters::encoded_len($numbers, &value.$numbers, tm))*;
                 encoded_len_varint(message_len as u64) + message_len
