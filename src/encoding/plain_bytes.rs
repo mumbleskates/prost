@@ -200,7 +200,7 @@ impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
         buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx)?;
+        ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
         Ok(if !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
