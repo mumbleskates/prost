@@ -2474,12 +2474,7 @@ fn tuples() {
         HasExtensions,
     );
     assert::decodes_non_canonically(
-        [(
-            1,
-            OV::message(
-                &[(2, OV::bool(true))].into_opaque_message(),
-            ),
-        )],
+        [(1, OV::message(&[(2, OV::bool(true))].into_opaque_message()))],
         FooTuple((0, "".to_string())),
         HasExtensions,
     );
