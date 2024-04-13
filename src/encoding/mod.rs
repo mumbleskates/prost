@@ -2425,6 +2425,54 @@ mod test {
             Vec<BTreeMap<Vec<u8>, Vec<u8>>>,
             Packed<Map<PlainBytes, PlainBytes>>,
         >();
+
+        present_empty_not_canon::<(bool,), General>();
+        present_empty_not_canon::<(bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool, bool, bool, bool), General>(
+        );
+        present_empty_not_canon::<(u16, u16, u16, u16, u16, u16, u16, u16, u16, u16), General>();
+        present_empty_not_canon::<(u16, u16, u16, u16, u16, u16, u16, u16, u16, u16, u16), General>(
+        );
+        present_empty_not_canon::<
+            (u16, u16, u16, u16, u16, u16, u16, u16, u16, u16, u16, u16),
+            General,
+        >();
+        present_empty_not_canon::<(bool,), General>();
+        present_empty_not_canon::<(bool, u32), General>();
+        present_empty_not_canon::<(bool, bool, String), General>();
+        present_empty_not_canon::<(bool, i64, Blob, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, (), bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bytes::Bytes, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, u16, bool, i16, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, String, bool, bool, bool, bool, bool, bool, bool), General>(
+        );
+        present_empty_not_canon::<(String, u16, u16, u16, u16, u16, i64, u16, u16, u16), General>();
+        present_empty_not_canon::<(u16, u16, u16, bool, u16, u16, u16, u16, bool, u16, u16), General>(
+        );
+        present_empty_not_canon::<
+            (
+                u16,
+                u16,
+                u16,
+                u16,
+                u16,
+                bool,
+                u16,
+                String,
+                u64,
+                u16,
+                u16,
+                u16,
+            ),
+            General,
+        >();
     }
 
     #[test]
