@@ -109,14 +109,13 @@ where
     K: NewForOverwrite + Eq + DistinguishedValueEncoder<KE>,
     V: NewForOverwrite + Eq + DistinguishedValueEncoder<VE>,
 {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut M,
-        mut buf: Capped<B>,
-        allow_empty: bool,
+        mut buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut capped = buf.take_length_delimited()?;
-        if !allow_empty && capped.remaining_before_cap() == 0 {
+        if !ALLOW_EMPTY && capped.remaining_before_cap() == 0 {
             return Ok(Canonicity::NotCanonical);
         }
         if combined_fixed_size(
@@ -132,16 +131,14 @@ where
         while capped.has_remaining()? {
             let mut new_key = K::new_for_overwrite();
             let mut new_val = V::new_for_overwrite();
-            canon.update(DistinguishedValueEncoder::<KE>::decode_value_distinguished(
+            canon.update(DistinguishedValueEncoder::<KE>::decode_value_distinguished::<true>(
                 &mut new_key,
                 capped.lend(),
-                true,
                 ctx.clone(),
             )?);
-            canon.update(DistinguishedValueEncoder::<VE>::decode_value_distinguished(
+            canon.update(DistinguishedValueEncoder::<VE>::decode_value_distinguished::<true>(
                 &mut new_val,
                 capped.lend(),
-                true,
                 ctx.clone(),
             )?);
             canon.update(value.insert_distinguished(new_key, new_val)?);

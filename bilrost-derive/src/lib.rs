@@ -125,7 +125,7 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
     let mut reserved_tags: Option<TagList> = None;
     let mut unknown_attrs = Vec::new();
     for attr in bilrost_attrs(input.attrs.clone())? {
-        if let Some(tags) = tag_list_attr("reserved_tags", None, &attr)? {
+        if let Some(tags) = tag_list_attr(&attr, "reserved_tags", None)? {
             set_option(
                 &mut reserved_tags,
                 tags,
@@ -938,7 +938,7 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
 
     let check_empty = if zero_variant_ident.is_some() {
         quote! {
-            if !allow_empty && ::bilrost::encoding::EmptyState::is_empty(value) {
+            if !ALLOW_EMPTY && ::bilrost::encoding::EmptyState::is_empty(value) {
                 return Ok(::bilrost::Canonicity::NotCanonical);
             }
         }
@@ -1028,10 +1028,9 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
         ::bilrost::encoding::DistinguishedValueEncoder<::bilrost::encoding::General>
         for #ident #ty_generics #where_clause {
             #[inline]
-            fn decode_value_distinguished<__B: ::bilrost::bytes::Buf + ?Sized>(
+            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut Self,
-                buf: ::bilrost::encoding::Capped<__B>,
-                allow_empty: bool,
+                buf: ::bilrost::encoding::Capped<impl ::bilrost::bytes::Buf + ?Sized>,
                 ctx: ::bilrost::encoding::DecodeContext,
             ) -> Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
                 ::bilrost::encoding::ValueEncoder::<::bilrost::encoding::General>::decode_value(

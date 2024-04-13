@@ -127,10 +127,9 @@ macro_rules! impl_tuple {
             $($letters: EmptyState + DistinguishedEncoder<$encoders>,)*
         {
             #[inline]
-            fn decode_value_distinguished<__B: Buf + ?Sized>(
+            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut Self,
-                mut buf: Capped<__B>,
-                allow_empty: bool,
+                mut buf: Capped<impl Buf + ?Sized>,
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError>
             where
@@ -140,7 +139,7 @@ macro_rules! impl_tuple {
                 // Since tuples emulate messages, empty values always encode and decode from zero
                 // bytes. It is far cheaper to check here than to check after the value has been
                 // decoded and checking the value's `is_empty()`.
-                if !allow_empty && buf.remaining_before_cap() == 0 {
+                if !ALLOW_EMPTY && buf.remaining_before_cap() == 0 {
                     return Ok(Canonicity::NotCanonical);
                 }
                 ctx.limit_reached()?;

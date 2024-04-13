@@ -1387,11 +1387,9 @@ where
     /// Decodes a field assuming the encoder's wire type directly from the buffer, also performing
     /// any additional validation required to guarantee that the value would be re-encoded into the
     /// exact same bytes.
-    // TODO(widders): consider making allow_empty a const generic param
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Self,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError>;
 }
@@ -1461,11 +1459,10 @@ where
 /// handling field keys and wire types.
 pub trait DistinguishedFieldEncoder<E> {
     /// Decodes a field directly from the buffer, also checking the wire type.
-    fn decode_field_distinguished<B: Buf + ?Sized>(
+    fn decode_field_distinguished<const ALLOW_EMPTY: bool>(
         wire_type: WireType,
         value: &mut Self,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError>;
 }
@@ -1475,15 +1472,14 @@ where
     Self: DistinguishedValueEncoder<E> + Eq,
 {
     #[inline]
-    fn decode_field_distinguished<B: Buf + ?Sized>(
+    fn decode_field_distinguished<const ALLOW_EMPTY: bool>(
         wire_type: WireType,
         value: &mut T,
-        buf: Capped<B>,
-        allow_empty: bool,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         check_wire_type(Self::WIRE_TYPE, wire_type)?;
-        Self::decode_value_distinguished(value, buf, allow_empty, ctx)
+        Self::decode_value_distinguished::<ALLOW_EMPTY>(value, buf, ctx)
     }
 }
 
@@ -1561,11 +1557,11 @@ where
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
         }
-        <T as DistinguishedFieldEncoder<E>>::decode_field_distinguished(
+        // Decoding an option, empty values are meaningful
+        <T as DistinguishedFieldEncoder<E>>::decode_field_distinguished::<true>(
             wire_type,
             value.get_or_insert_with(T::new_for_overwrite),
             buf,
-            true, // Decoding an option, empty values are meaningful
             ctx,
         )
     }
@@ -1940,16 +1936,14 @@ macro_rules! delegate_value_encoding {
             $($($distinguished_where)+ ,)?
         {
             #[inline]
-            fn decode_value_distinguished<__B: Buf + ?Sized>(
+            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $value_ty,
-                buf: $crate::encoding::Capped<__B>,
-                allow_empty: bool,
+                buf: $crate::encoding::Capped<impl Buf + ?Sized>,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
-                DistinguishedValueEncoder::<$to_ty>::decode_value_distinguished(
+                DistinguishedValueEncoder::<$to_ty>::decode_value_distinguished::<ALLOW_EMPTY>(
                     value,
                     buf,
-                    allow_empty,
                     ctx,
                 )
             }
@@ -2054,12 +2048,12 @@ macro_rules! encoder_where_value_encoder {
                         $crate::DecodeError::new(crate::DecodeErrorKind::UnexpectedlyRepeated)
                     );
                 }
+                // decoding a bare value, empty values are unacceptable
                 $crate::encoding::DistinguishedFieldEncoder::<$encoding>
-                    ::decode_field_distinguished(
+                    ::decode_field_distinguished::<false>(
                         wire_type,
                         value,
                         buf,
-                        false, // decoding a bare value, empty values are unacceptable
                         ctx,
                     )
             }
@@ -2192,7 +2186,6 @@ mod test {
                 where
                     T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
                 {
-                    // TODO(widders): prepend
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
                         &value,
@@ -2483,10 +2476,9 @@ mod test {
                 .kind(),
             Truncated
         );
-        let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished(
+        let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished::<true>(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
-            true,
             DecodeContext::default(),
         );
         assert_eq!(
@@ -2514,10 +2506,9 @@ mod test {
                 .kind(),
             Truncated
         );
-        let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished(
+        let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished::<true>(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
-            true,
             DecodeContext::default(),
         );
         assert_eq!(
@@ -2548,12 +2539,12 @@ mod test {
                 .kind(),
             Truncated
         );
-        let res = DistinguishedValueEncoder::<Map<Fixed, Fixed>>::decode_value_distinguished(
-            &mut parsed,
-            Capped::new(&mut buf.as_slice()),
-            true,
-            DecodeContext::default(),
-        );
+        let res = DistinguishedValueEncoder::<Map<Fixed, Fixed>>
+            ::decode_value_distinguished::<true>(
+                &mut parsed,
+                Capped::new(&mut buf.as_slice()),
+                DecodeContext::default(),
+            );
         assert_eq!(
             res.expect_err("unaligned 12-byte map decoded without error")
                 .kind(),

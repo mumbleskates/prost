@@ -76,14 +76,13 @@ macro_rules! fixed_width_int {
 
         impl DistinguishedValueEncoder<Fixed> for $ty {
             #[inline]
-            fn decode_value_distinguished<B: Buf + ?Sized>(
+            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $ty,
-                buf: Capped<B>,
-                allow_empty: bool,
+                buf: Capped<impl Buf + ?Sized>,
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError> {
                 ValueEncoder::<Fixed>::decode_value(value, buf, ctx)?;
-                Ok(if !allow_empty && value.is_empty() {
+                Ok(if !ALLOW_EMPTY && value.is_empty() {
                     Canonicity::NotCanonical
                 } else {
                     Canonicity::Canonical
@@ -191,14 +190,13 @@ macro_rules! fixed_width_array {
 
         impl DistinguishedValueEncoder<Fixed> for [u8; $N] {
             #[inline]
-            fn decode_value_distinguished<B: Buf + ?Sized>(
+            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut [u8; $N],
-                buf: Capped<B>,
-                allow_empty: bool,
+                buf: Capped<impl Buf + ?Sized>,
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError> {
                 ValueEncoder::<Fixed>::decode_value(value, buf, ctx)?;
-                Ok(if !allow_empty && value.is_empty() {
+                Ok(if !ALLOW_EMPTY && value.is_empty() {
                     Canonicity::NotCanonical
                 } else {
                     Canonicity::Canonical

@@ -1502,6 +1502,91 @@ fn decoding_maps() {
     }
 }
 
+#[cfg(feature = "std")]
+#[test]
+fn custom_hashers_std() {
+    use core::hash::{BuildHasher, Hasher};
+
+    #[derive(Default)]
+    struct CustomHasher(<std::collections::hash_map::RandomState as BuildHasher>::Hasher);
+
+    impl Hasher for CustomHasher {
+        fn finish(&self) -> u64 {
+            self.0.finish().wrapping_add(1)
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            self.0.write(bytes);
+        }
+    }
+
+    type MapType =
+        std::collections::HashMap<i32, i32, core::hash::BuildHasherDefault<CustomHasher>>;
+    type SetType = std::collections::HashSet<i32, core::hash::BuildHasherDefault<CustomHasher>>;
+
+    #[derive(Debug, PartialEq, Message)]
+    struct Foo(MapType, SetType);
+
+    assert::decodes(
+        [
+            (
+                1,
+                OV::packed([OV::i32(1), OV::i32(10), OV::i32(2), OV::i32(20)]),
+            ),
+            (2, OV::i32(2)),
+            (2, OV::i32(3)),
+            (2, OV::i32(5)),
+            (2, OV::i32(8)),
+        ],
+        Foo(
+            [(1, 10), (2, 20)].into_iter().collect(),
+            [2, 3, 5, 8].into_iter().collect(),
+        ),
+    );
+}
+
+#[cfg(feature = "hashbrown")]
+#[test]
+fn custom_hashers_hashbrown() {
+    use core::hash::{BuildHasher, Hasher};
+
+    #[derive(Default)]
+    struct CustomHasher(<hashbrown::hash_map::DefaultHashBuilder as BuildHasher>::Hasher);
+
+    impl Hasher for CustomHasher {
+        fn finish(&self) -> u64 {
+            self.0.finish().wrapping_add(1)
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            self.0.write(bytes);
+        }
+    }
+
+    type MapType = hashbrown::HashMap<i32, i32, core::hash::BuildHasherDefault<CustomHasher>>;
+    type SetType = hashbrown::HashSet<i32, core::hash::BuildHasherDefault<CustomHasher>>;
+
+    #[derive(Debug, PartialEq, Message)]
+    struct Foo(MapType, SetType);
+
+    assert::decodes(
+        [
+            (
+                1,
+                OV::packed([OV::i32(1), OV::i32(10), OV::i32(2), OV::i32(20)]),
+            ),
+            (2, OV::i32(2)),
+            (2, OV::i32(3)),
+            (2, OV::i32(5)),
+            (2, OV::i32(8)),
+        ],
+        Foo(
+            [(1, 10), (2, 20)].into_iter().collect(),
+            [2, 3, 5, 8].into_iter().collect(),
+        ),
+    );
+}
+
 fn truncated_bool_string_map<T>()
 where
     T: Debug + EmptyState + Mapping<Key = bool, Value = String> + encoding::Encoder<General>,

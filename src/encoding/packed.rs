@@ -73,14 +73,13 @@ where
     C: DistinguishedCollection<Item = T> + Eq,
     T: NewForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut C,
-        mut buf: Capped<B>,
-        allow_empty: bool,
+        mut buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut capped = buf.take_length_delimited()?;
-        if !allow_empty && capped.remaining_before_cap() == 0 {
+        if !ALLOW_EMPTY && capped.remaining_before_cap() == 0 {
             return Ok(Canonicity::NotCanonical);
         }
         if <T as Wiretyped<E>>::WIRE_TYPE
@@ -94,10 +93,9 @@ where
         let mut canon = Canonicity::Canonical;
         while capped.has_remaining()? {
             let mut new_val = T::new_for_overwrite();
-            canon.update(DistinguishedValueEncoder::<E>::decode_value_distinguished(
+            canon.update(DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
                 &mut new_val,
                 capped.lend(),
-                true,
                 ctx.clone(),
             )?);
             canon.update(value.insert_distinguished(new_val)?);
@@ -179,9 +177,9 @@ where
         }
         if wire_type == WireType::LengthDelimited {
             // We've encountered the expected length-delimited type: decode it in packed format.
-            // Set allow_empty=false: empty collections are not canonical
-            DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished(
-                value, buf, false, ctx,
+            // Set ALLOW_EMPTY to false: empty collections are not canonical
+            DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
+                value, buf, ctx,
             )
         } else {
             // Otherwise, try decoding it in the unpacked representation
