@@ -2062,37 +2062,6 @@ macro_rules! encoder_where_value_encoder {
 }
 pub(crate) use encoder_where_value_encoder;
 
-/// Implements `EmptyState` in terms of `Default`.
-macro_rules! empty_state_via_default {
-    (
-        $ty:ty
-        $(, with generics ($($generics:tt)*))?
-        $(, with where clause ($($where_clause:tt)*))?
-    ) => {
-        impl<$($($generics)*)?> $crate::encoding::EmptyState for $ty
-        where
-            Self: Default + PartialEq,
-            $($($where_clause)*)?
-        {
-            #[inline]
-            fn empty() -> Self {
-                Self::default()
-            }
-
-            #[inline]
-            fn is_empty(&self) -> bool {
-                *self == Self::default()
-            }
-
-    #[inline]
-    fn clear(&mut self) {
-        *self = Self::empty();
-    }
-        }
-    };
-}
-pub(crate) use empty_state_via_default;
-
 #[cfg(test)]
 mod test {
     use alloc::collections::{BTreeMap, BTreeSet};

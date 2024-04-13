@@ -1,12 +1,31 @@
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::collections::{btree_map, btree_set, BTreeMap, BTreeSet};
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering::{Equal, Greater, Less};
 #[cfg(feature = "std")]
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
 
+use crate::Blob;
 use crate::DecodeErrorKind::UnexpectedlyRepeated;
 use crate::{Canonicity, DecodeErrorKind};
+
+/// Trait for types that have a state that is considered "empty".
+///
+/// This type must be implemented for every type encodable as a directly included field in a bilrost
+/// message.
+pub trait EmptyState {
+    /// Produces the empty state for this type.
+    fn empty() -> Self
+    where
+        Self: Sized;
+
+    /// Returns true iff this instance is in the empty state.
+    fn is_empty(&self) -> bool;
+
+    fn clear(&mut self);
+}
 
 /// Trait for cheaply producing a new value that will always be overwritten or decoded into, rather
 /// than a value that is definitely empty. This is implemented for types that can be present
@@ -27,31 +46,119 @@ where
     }
 }
 
-/// Trait for types that have a state that is considered "empty".
-///
-/// This type must be implemented for every type encodable as a directly included field in a bilrost
-/// message.
-pub trait EmptyState {
-    /// Produces the empty state for this type.
-    fn empty() -> Self
-    where
-        Self: Sized;
+/// Implements `EmptyState` in terms of `Default`.
+macro_rules! empty_state_via_default {
+    (
+        $ty:ty
+        $(, with generics ($($generics:tt)*))?
+        $(, with where clause ($($where_clause:tt)*))?
+    ) => {
+        impl<$($($generics)*)?> $crate::encoding::EmptyState for $ty
+        where
+            Self: Default + PartialEq,
+            $($($where_clause)*)?
+        {
+            #[inline]
+            fn empty() -> Self {
+                Self::default()
+            }
 
-    /// Returns true iff this instance is in the empty state.
-    fn is_empty(&self) -> bool;
+            #[inline]
+            fn is_empty(&self) -> bool {
+                *self == Self::default()
+            }
 
-    fn clear(&mut self);
+    #[inline]
+    fn clear(&mut self) {
+        *self = Self::empty();
+    }
+        }
+    };
 }
+empty_state_via_default!(bool);
+empty_state_via_default!(u8);
+empty_state_via_default!(i8);
+empty_state_via_default!(u16);
+empty_state_via_default!(i16);
+empty_state_via_default!(u32);
+empty_state_via_default!(i32);
+empty_state_via_default!(u64);
+empty_state_via_default!(i64);
 
-impl<T> EmptyState for Option<T> {
+macro_rules! empty_state_for_float {
+    ($ty:ty) => {
+        impl EmptyState for $ty {
+            #[inline]
+            fn empty() -> Self {
+                0.0
+            }
+
+            #[inline]
+            fn is_empty(&self) -> bool {
+                // Preserve -0.0. This is actually the original motivation for `EmptyState`.
+                self.to_bits() == 0
+            }
+
+            #[inline]
+            fn clear(&mut self) {
+                *self = Self::empty();
+            }
+        }
+    };
+}
+empty_state_for_float!(f32);
+empty_state_for_float!(f64);
+
+impl EmptyState for String {
     #[inline]
     fn empty() -> Self {
-        None
+        Self::new()
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        Self::is_none(self)
+        Self::is_empty(self)
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        Self::clear(self)
+    }
+}
+
+impl EmptyState for Cow<'_, str> {
+    #[inline]
+    fn empty() -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        str::is_empty(self)
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        match self {
+            Cow::Borrowed(_) => {
+                *self = Cow::default();
+            }
+            Cow::Owned(owned) => {
+                owned.clear();
+            }
+        }
+    }
+}
+
+impl EmptyState for bytes::Bytes {
+    #[inline]
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        Self::is_empty(self)
     }
 
     #[inline]
@@ -59,6 +166,153 @@ impl<T> EmptyState for Option<T> {
         *self = Self::empty();
     }
 }
+
+impl EmptyState for Blob {
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    fn is_empty(&self) -> bool {
+        Vec::is_empty(self)
+    }
+
+    fn clear(&mut self) {
+        Vec::clear(self)
+    }
+}
+
+#[cfg(feature = "bytestring")]
+impl EmptyState for bytestring::ByteString {
+    #[inline]
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        str::is_empty(self)
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        *self = Self::empty();
+    }
+}
+
+impl<T> EmptyState for Option<T> {
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        None
+    }
+
+    fn is_empty(&self) -> bool {
+        self.is_none()
+    }
+
+    fn clear(&mut self) {
+        *self = None;
+    }
+}
+
+impl<T> EmptyState for Box<T>
+where
+    T: EmptyState,
+{
+    fn empty() -> Self {
+        Self::new(T::empty())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.as_ref().is_empty()
+    }
+
+    fn clear(&mut self) {
+        self.as_mut().clear()
+    }
+}
+
+impl<T, const N: usize> EmptyState for [T; N]
+where
+    T: EmptyState,
+{
+    #[inline]
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        core::array::from_fn(|_| T::empty())
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.iter().all(EmptyState::is_empty)
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        for v in self {
+            v.clear();
+        }
+    }
+}
+
+impl EmptyState for () {
+    fn empty() -> Self {}
+
+    fn is_empty(&self) -> bool {
+        true
+    }
+
+    fn clear(&mut self) {}
+}
+
+macro_rules! empty_state_for_tuple {
+    (($($letters:ident),*), ($($numbers:tt),*),) => {
+
+        impl<$($letters,)*> EmptyState for ($($letters,)*)
+        where
+            $($letters: EmptyState,)*
+        {
+            #[inline]
+            fn empty() -> Self {
+                ($($letters::empty(),)*)
+            }
+
+            #[inline]
+            fn is_empty(&self) -> bool {
+                true $(&& self.$numbers.is_empty())*
+            }
+
+            #[inline]
+            fn clear(&mut self) {
+                $(self.$numbers.clear();)*
+            }
+        }
+    };
+}
+empty_state_for_tuple!((A), (0),);
+empty_state_for_tuple!((A, B), (0, 1),);
+empty_state_for_tuple!((A, B, C), (0, 1, 2),);
+empty_state_for_tuple!((A, B, C, D), (0, 1, 2, 3),);
+empty_state_for_tuple!((A, B, C, D, E), (0, 1, 2, 3, 4),);
+empty_state_for_tuple!((A, B, C, D, E, F), (0, 1, 2, 3, 4, 5),);
+empty_state_for_tuple!((A, B, C, D, E, F, G), (0, 1, 2, 3, 4, 5, 6),);
+empty_state_for_tuple!((A, B, C, D, E, F, G, H), (0, 1, 2, 3, 4, 5, 6, 7),);
+empty_state_for_tuple!((A, B, C, D, E, F, G, H, I), (0, 1, 2, 3, 4, 5, 6, 7, 8),);
+empty_state_for_tuple!(
+    (A, B, C, D, E, F, G, H, I, J),
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+);
+empty_state_for_tuple!(
+    (A, B, C, D, E, F, G, H, I, J, K),
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+);
+empty_state_for_tuple!(
+    (A, B, C, D, E, F, G, H, I, J, K, L),
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11),
+);
 
 /// Proxy trait for enumeration types conversions to and from `u32`
 pub trait Enumeration: Eq + Sized {

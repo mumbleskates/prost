@@ -11,7 +11,7 @@ use crate::buf::ReverseBuf;
 use crate::encoding::{
     delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint,
     encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
-    DistinguishedValueEncoder, EmptyState, Encoder, Fixed, Map, PlainBytes, Unpacked, ValueEncoder,
+    DistinguishedValueEncoder, Encoder, Fixed, Map, PlainBytes, Unpacked, ValueEncoder,
     Varint, WireType, Wiretyped,
 };
 use crate::message::{merge, merge_distinguished, RawDistinguishedMessage, RawMessage};
@@ -90,23 +90,6 @@ delegate_value_encoding!(delegate from (General) to (Varint)
 // General also encodes floating point values.
 delegate_value_encoding!(delegate from (General) to (Fixed) for type (f32));
 delegate_value_encoding!(delegate from (General) to (Fixed) for type (f64));
-
-impl EmptyState for String {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        Self::is_empty(self)
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        Self::clear(self)
-    }
-}
 
 impl Wiretyped<General> for String {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
@@ -200,30 +183,6 @@ mod string {
     check_type_test!(General, distinguished, String, WireType::LengthDelimited);
 }
 
-impl EmptyState for Cow<'_, str> {
-    #[inline]
-    fn empty() -> Self {
-        Self::default()
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        str::is_empty(self)
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        match self {
-            Cow::Borrowed(_) => {
-                *self = Cow::default();
-            }
-            Cow::Owned(owned) => {
-                owned.clear();
-            }
-        }
-    }
-}
-
 impl Wiretyped<General> for Cow<'_, str> {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }
@@ -277,24 +236,6 @@ mod cow_string {
     use crate::encoding::test::check_type_test;
     check_type_test!(General, expedient, Cow<str>, WireType::LengthDelimited);
     check_type_test!(General, distinguished, Cow<str>, WireType::LengthDelimited);
-}
-
-#[cfg(feature = "bytestring")]
-impl EmptyState for bytestring::ByteString {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        str::is_empty(self)
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        *self = Self::empty();
-    }
 }
 
 #[cfg(feature = "bytestring")]
@@ -360,23 +301,6 @@ mod bytestring_string {
     check_type_test!(General, expedient, from String, into bytestring::ByteString, WireType::LengthDelimited);
     check_type_test!(General, distinguished, from String, into bytestring::ByteString,
         WireType::LengthDelimited);
-}
-
-impl EmptyState for Bytes {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        Self::is_empty(self)
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        *self = Self::empty();
-    }
 }
 
 impl Wiretyped<General> for Bytes {

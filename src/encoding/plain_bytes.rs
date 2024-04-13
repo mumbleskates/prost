@@ -149,23 +149,6 @@ mod cow_bytes {
     );
 }
 
-impl<const N: usize> EmptyState for [u8; N] {
-    #[inline]
-    fn empty() -> Self {
-        [0; N]
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.iter().all(|&byte| byte == 0)
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        *self = Self::empty();
-    }
-}
-
 impl<const N: usize> Wiretyped<PlainBytes> for [u8; N] {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }

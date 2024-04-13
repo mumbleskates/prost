@@ -7,7 +7,7 @@ use core::ops::{Deref, DerefMut};
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::{skip_field, Canonicity, Capped, DecodeContext, EmptyState, WireType};
+use crate::encoding::{skip_field, Canonicity, Capped, DecodeContext, WireType};
 use crate::message::{RawDistinguishedMessage, RawMessage};
 use crate::DecodeError;
 
@@ -30,20 +30,6 @@ impl Blob {
 
     pub fn into_inner(self) -> Vec<u8> {
         self.0
-    }
-}
-
-impl EmptyState for Blob {
-    fn empty() -> Self {
-        Self::new()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    fn clear(&mut self) {
-        self.0.clear()
     }
 }
 
@@ -153,16 +139,6 @@ impl proptest::arbitrary::Arbitrary for Blob {
         <Vec<u8> as proptest::arbitrary::Arbitrary>::Strategy,
         fn(Vec<u8>) -> Self,
     >;
-}
-
-impl EmptyState for () {
-    fn empty() -> Self {}
-
-    fn is_empty(&self) -> bool {
-        true
-    }
-
-    fn clear(&mut self) {}
 }
 
 /// The empty tuple unit is the only native tuple type that implements Message because there are no

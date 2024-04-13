@@ -116,24 +116,6 @@ macro_rules! fixed_width_float {
     ) => {
         fixed_width_common!($ty, $wire_type, $put, $prepend, $get);
 
-        impl EmptyState for $ty {
-            #[inline]
-            fn empty() -> Self {
-                0.0
-            }
-
-            #[inline]
-            fn is_empty(&self) -> bool {
-                // Preserve -0.0. This is actually the original motivation for `EmptyState`.
-                self.to_bits() == 0
-            }
-
-            #[inline]
-            fn clear(&mut self) {
-                *self = Self::empty();
-            }
-        }
-
         #[cfg(test)]
         mod $test_name {
             use crate::encoding::Fixed;
