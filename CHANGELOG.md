@@ -10,6 +10,9 @@
 
 * Hash maps and hash sets can now have any kind of hasher, as long as the
   `BuildHasher` implements `Default`.
+* Plain tuples can now be encoded as message fields! Tuples encode exactly the
+  same as messages with field tags 0 through N-1, but the encoding of each field
+  in the tuple can be specified. See the readme for more information.
 
 ### Fixes
 
@@ -19,6 +22,9 @@
   than failing to compile, it will now simply not implement `Message`.
 
 ### Cleanups
+
+* Consolidated (almost) all the standard impls of the `EmptyState` trait into
+  the same module.
 
 ## v0.1005.1
 

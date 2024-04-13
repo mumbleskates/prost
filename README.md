@@ -1026,20 +1026,21 @@ assert_eq!(registry, decoded);
 
 `bilrost` structs can encode fields with a wide variety of types:
 
-| Encoding             | Value type                                    | Encoded representation | Distinguished |
-|----------------------|-----------------------------------------------|------------------------|---------------|
-| `general` & `fixed`  | [`f32`][prim]                                 | fixed-size 32 bits     | no            |
-| `general` & `fixed`  | [`u32`][prim], [`i32`][prim]                  | fixed-size 32 bits     | yes           |
-| `general` & `fixed`  | [`f64`][prim]                                 | fixed-size 64 bits     | no            |
-| `general` & `fixed`  | [`u64`][prim], [`i64`][prim]                  | fixed-size 64 bits     | yes           |
-| `general` & `varint` | [`u64`][prim], [`u32`][prim], [`u16`][prim]   | varint                 | yes           |
-| `general` & `varint` | [`i64`][prim], [`i32`][prim], [`i16`][prim]   | varint                 | yes           |
-| `general` & `varint` | [`bool`][prim]                                | varint                 | yes           |
-| `general`            | derived [`Enumeration`](#enumerations)[^enum] | varint                 | yes           |
-| `general`            | [`String`][str]*                              | length-delimited       | yes           |
-| `general`            | impl [`Message`](#derive-macros)[^boxmsg]     | length-delimited       | maybe         |
-| `varint`             | [`u8`][prim], [`i8`][prim]                    | varint                 | yes           |
-| `plainbytes`         | [`Vec<u8>`][vec]*                             | length-delimited       | yes           |
+| Encoding                      | Value type                                    | Encoded representation | Distinguished    |
+|-------------------------------|-----------------------------------------------|------------------------|------------------|
+| `general` & `fixed`           | [`f32`][prim]                                 | fixed-size 32 bits     | no               |
+| `general` & `fixed`           | [`u32`][prim], [`i32`][prim]                  | fixed-size 32 bits     | yes              |
+| `general` & `fixed`           | [`f64`][prim]                                 | fixed-size 64 bits     | no               |
+| `general` & `fixed`           | [`u64`][prim], [`i64`][prim]                  | fixed-size 64 bits     | yes              |
+| `general` & `varint`          | [`u64`][prim], [`u32`][prim], [`u16`][prim]   | varint                 | yes              |
+| `general` & `varint`          | [`i64`][prim], [`i32`][prim], [`i16`][prim]   | varint                 | yes              |
+| `general` & `varint`          | [`bool`][prim]                                | varint                 | yes              |
+| `general`                     | derived [`Enumeration`](#enumerations)[^enum] | varint                 | yes              |
+| `general`                     | [`String`][str]*                              | length-delimited       | yes              |
+| `general`                     | impl [`Message`](#derive-macros)[^boxmsg]     | length-delimited       | maybe            |
+| `varint`                      | [`u8`][prim], [`i8`][prim]                    | varint                 | yes              |
+| `plainbytes`                  | [`Vec<u8>`][vec]*                             | length-delimited       | yes              |
+| [`(E1, E2, ... EN)`](#tuples) | [`(T1, T2, ... TN)`][tuple]                   | length-delimited       | if each field is |
 
 *Alternative types are available! See below.
 
@@ -1139,6 +1140,8 @@ value.
 
 [tinyvec]: https://docs.rs/tinyvec/latest/tinyvec/enum.TinyVec.html
 
+[tuple]: https://doc.rust-lang.org/std/primitive.tuple.html
+
 [vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 
 [^hashnoncanon]: Hash-table-based maps and sets are implemented, but are not
@@ -1152,6 +1155,26 @@ should not be able to become *infinite* as implemented, but if the situation
 were induced to happen anyway it would not end well. (Note that creative usage
 of `Cow<[T]>` can create messages that encode absurdly large, but the borrow
 checker keeps them from becoming infinite mathematically if not practically.)
+
+#### Tuples
+
+Tuple types can be included in messages, but there are some notable features
+that merit additional explanation.
+
+Tuples can have each of their members' encodings specified by using
+an encoding that is shaped just like the value. For example, `(i8, String, u32)`
+can use the encoding `(varint, general, fixed)`! This method of specifying the
+encoding can be nested as well.
+
+Tuples encode and decode exactly as if they were nested messages with the same
+field types and encodings, and the tags assigned to those fields are the same as
+the index of the member of the tuple. So, he assigned tags start at zero; this
+is in contrast to derived message implementations which *by default* will assign
+tags starting at 1.
+
+The `general` encoding is also directly applicable to tuple types as long as
+each of the tuple's fields is compatible with the `general` encoding itself, and
+all the fields will use that encoding.
 
 #### Enumerations
 
