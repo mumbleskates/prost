@@ -705,7 +705,102 @@ where
     }
 }
 
-// TODO(widders): ArrayVec (from arrayvec and tinyvec crates)
+#[cfg(feature = "tinyvec")]
+impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::ArrayVec<A> {
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        Self::new()
+    }
+
+    fn is_empty(&self) -> bool {
+        tinyvec::ArrayVec::is_empty(self)
+    }
+
+    fn clear(&mut self) {
+        tinyvec::ArrayVec::clear(self)
+    }
+}
+
+#[cfg(feature = "tinyvec")]
+impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::ArrayVec<A> {
+    type Item = T;
+    type RefIter<'a> = core::slice::Iter<'a, T>
+        where
+            T: 'a,
+            Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
+
+    fn len(&self) -> usize {
+        tinyvec::ArrayVec::len(self)
+    }
+
+    fn iter(&self) -> Self::RefIter<'_> {
+        self.as_slice().iter()
+    }
+
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        self.as_slice().iter().rev()
+    }
+
+    fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
+        match self.try_push(item) {
+            None => Ok(()),
+            Some(_) => Err(DecodeErrorKind::InvalidValue),
+        }
+    }
+}
+
+#[cfg(feature = "arrayvec")]
+impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        Self::new()
+    }
+
+    fn is_empty(&self) -> bool {
+        arrayvec::ArrayVec::is_empty(self)
+    }
+
+    fn clear(&mut self) {
+        arrayvec::ArrayVec::clear(self)
+    }
+}
+
+#[cfg(feature = "arrayvec")]
+impl<T, const N: usize> Collection for arrayvec::ArrayVec<T, N> {
+    type Item = T;
+    type RefIter<'a> = core::slice::Iter<'a, T>
+        where
+            T: 'a,
+            Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
+
+    fn len(&self) -> usize {
+        arrayvec::ArrayVec::len(self)
+    }
+
+    fn iter(&self) -> Self::RefIter<'_> {
+        self.as_slice().iter()
+    }
+
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        self.as_slice().iter().rev()
+    }
+
+    fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
+        self.try_push(item).map_err(|_| DecodeErrorKind::InvalidValue)
+    }
+}
 
 impl<T> EmptyState for BTreeSet<T> {
     #[inline]

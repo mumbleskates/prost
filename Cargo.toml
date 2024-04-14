@@ -40,12 +40,14 @@ std = []
 opaque = []
 
 third-party-type-support = [
+    "arrayvec",
     "bytestring",
     "hashbrown",
     "smallvec",
     "thin-vec",
     "tinyvec",
 ]
+arrayvec = ["dep:arrayvec"]
 bytestring = ["dep:bytestring"]
 hashbrown = ["dep:hashbrown"]
 smallvec = ["dep:smallvec"]
@@ -94,6 +96,7 @@ full-test-suite = [
 pprof = ["dep:pprof"]
 
 [dependencies]
+arrayvec = { version = ">=0.6", default-features = false, optional = true }
 bilrost-derive = { version = "=0.1006.0-dev", path = "bilrost-derive", optional = true }
 bytes = { version = "1", default-features = false }
 bytestring = { version = ">=1", default-features = false, optional = true }
@@ -101,7 +104,7 @@ const_panic = { version = "0.2", default-features = false, features = ["non_basi
 hashbrown = { version = ">=0.1.0", default-features = false, optional = true }
 smallvec = { version = ">=1.6.1", default-features = false, features = ["const_generics"], optional = true }
 thin-vec = { version = ">=0.2", default-features = false, optional = true }
-tinyvec = { version = ">=1", default-features = false, features = ["alloc"], optional = true }
+tinyvec = { version = ">=1", default-features = false, features = ["alloc", "rustc_1_57"], optional = true }
 
 # pprof prevents building on windows, so must be an optional feature
 pprof = { version = "0.13", features = ["flamegraph"], optional = true }
