@@ -350,6 +350,29 @@ pub trait DistinguishedCollection: Collection + Eq {
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind>;
 }
 
+macro_rules! trivially_distinguished_collection {
+    (
+        $ty:ty
+        $(, with generics ($($generics:tt)*))?
+        $(, with where clause ($($where_clause:tt)*))?
+    ) => {
+        impl<T, $($($generics)*)?> DistinguishedCollection for $ty
+        where
+            T: Eq,
+            $($($where_clause)*)?
+        {
+            #[inline]
+            fn insert_distinguished(
+                &mut self,
+                item: <Self as Collection>::Item
+            ) -> Result<Canonicity, DecodeErrorKind> {
+                <Self as Collection>::insert(self, item)?;
+                Ok(Canonicity::Canonical)
+            }
+        }
+    }
+}
+
 /// Trait for associative containers, such as `BTreeMap` and `HashMap`.
 pub trait Mapping: EmptyState {
     type Key;
@@ -431,16 +454,7 @@ impl<T> Collection for Vec<T> {
     }
 }
 
-impl<T> DistinguishedCollection for Vec<T>
-where
-    T: Eq,
-{
-    #[inline]
-    fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
-        Vec::push(self, item);
-        Ok(Canonicity::Canonical)
-    }
-}
+trivially_distinguished_collection!(Vec<T>);
 
 impl<T> EmptyState for Cow<'_, [T]>
 where
@@ -502,16 +516,61 @@ where
     }
 }
 
-impl<T> DistinguishedCollection for Cow<'_, [T]>
-where
-    T: Clone + Eq,
-{
-    #[inline]
-    fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
-        self.to_mut().push(item);
-        Ok(Canonicity::Canonical)
+trivially_distinguished_collection!(Cow<'_, [T]>, with where clause (T: Clone));
+
+#[cfg(feature = "arrayvec")]
+impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        Self::new()
+    }
+
+    fn is_empty(&self) -> bool {
+        arrayvec::ArrayVec::is_empty(self)
+    }
+
+    fn clear(&mut self) {
+        arrayvec::ArrayVec::clear(self)
     }
 }
+
+#[cfg(feature = "arrayvec")]
+impl<T, const N: usize> Collection for arrayvec::ArrayVec<T, N> {
+    type Item = T;
+    type RefIter<'a> = core::slice::Iter<'a, T>
+        where
+            T: 'a,
+            Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
+
+    fn len(&self) -> usize {
+        arrayvec::ArrayVec::len(self)
+    }
+
+    fn iter(&self) -> Self::RefIter<'_> {
+        self.as_slice().iter()
+    }
+
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        self.as_slice().iter().rev()
+    }
+
+    fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
+        self.try_push(item)
+            .map_err(|_| DecodeErrorKind::InvalidValue)
+    }
+}
+
+#[cfg(feature = "arrayvec")]
+trivially_distinguished_collection!(
+    arrayvec::ArrayVec<T, N>,
+    with generics (const N: usize)
+);
 
 #[cfg(feature = "smallvec")]
 impl<T, A: smallvec::Array<Item = T>> EmptyState for smallvec::SmallVec<A> {
@@ -566,16 +625,10 @@ impl<T, A: smallvec::Array<Item = T>> Collection for smallvec::SmallVec<A> {
 }
 
 #[cfg(feature = "smallvec")]
-impl<T, A: smallvec::Array<Item = T>> DistinguishedCollection for smallvec::SmallVec<A>
-where
-    T: Eq,
-{
-    #[inline]
-    fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
-        smallvec::SmallVec::push(self, item);
-        Ok(Canonicity::Canonical)
-    }
-}
+trivially_distinguished_collection!(
+    smallvec::SmallVec<A>,
+    with generics (A: smallvec::Array<Item = T>)
+);
 
 #[cfg(feature = "thin-vec")]
 impl<T> EmptyState for thin_vec::ThinVec<T> {
@@ -630,16 +683,63 @@ impl<T> Collection for thin_vec::ThinVec<T> {
 }
 
 #[cfg(feature = "thin-vec")]
-impl<T> DistinguishedCollection for thin_vec::ThinVec<T>
-where
-    T: Eq,
-{
-    #[inline]
-    fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
-        thin_vec::ThinVec::push(self, item);
-        Ok(Canonicity::Canonical)
+trivially_distinguished_collection!(thin_vec::ThinVec<T>);
+
+#[cfg(feature = "tinyvec")]
+impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::ArrayVec<A> {
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        Self::new()
+    }
+
+    fn is_empty(&self) -> bool {
+        tinyvec::ArrayVec::is_empty(self)
+    }
+
+    fn clear(&mut self) {
+        tinyvec::ArrayVec::clear(self)
     }
 }
+
+#[cfg(feature = "tinyvec")]
+impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::ArrayVec<A> {
+    type Item = T;
+    type RefIter<'a> = core::slice::Iter<'a, T>
+        where
+            T: 'a,
+            Self: 'a;
+    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
+        where
+            Self::Item: 'a,
+            Self: 'a;
+
+    fn len(&self) -> usize {
+        tinyvec::ArrayVec::len(self)
+    }
+
+    fn iter(&self) -> Self::RefIter<'_> {
+        self.as_slice().iter()
+    }
+
+    fn reversed(&self) -> Self::ReverseIter<'_> {
+        self.as_slice().iter().rev()
+    }
+
+    fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
+        match self.try_push(item) {
+            None => Ok(()),
+            Some(_) => Err(DecodeErrorKind::InvalidValue),
+        }
+    }
+}
+
+#[cfg(feature = "tinyvec")]
+trivially_distinguished_collection!(
+    tinyvec::ArrayVec<A>,
+    with generics (A: tinyvec::Array<Item = T>)
+);
 
 #[cfg(feature = "tinyvec")]
 impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::TinyVec<A> {
@@ -694,114 +794,10 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::TinyVec<A> {
 }
 
 #[cfg(feature = "tinyvec")]
-impl<T, A: tinyvec::Array<Item = T>> DistinguishedCollection for tinyvec::TinyVec<A>
-where
-    T: Eq,
-{
-    #[inline]
-    fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
-        tinyvec::TinyVec::push(self, item);
-        Ok(Canonicity::Canonical)
-    }
-}
-
-#[cfg(feature = "tinyvec")]
-impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::ArrayVec<A> {
-    fn empty() -> Self
-    where
-        Self: Sized,
-    {
-        Self::new()
-    }
-
-    fn is_empty(&self) -> bool {
-        tinyvec::ArrayVec::is_empty(self)
-    }
-
-    fn clear(&mut self) {
-        tinyvec::ArrayVec::clear(self)
-    }
-}
-
-#[cfg(feature = "tinyvec")]
-impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::ArrayVec<A> {
-    type Item = T;
-    type RefIter<'a> = core::slice::Iter<'a, T>
-        where
-            T: 'a,
-            Self: 'a;
-    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    fn len(&self) -> usize {
-        tinyvec::ArrayVec::len(self)
-    }
-
-    fn iter(&self) -> Self::RefIter<'_> {
-        self.as_slice().iter()
-    }
-
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        self.as_slice().iter().rev()
-    }
-
-    fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
-        match self.try_push(item) {
-            None => Ok(()),
-            Some(_) => Err(DecodeErrorKind::InvalidValue),
-        }
-    }
-}
-
-#[cfg(feature = "arrayvec")]
-impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
-    fn empty() -> Self
-    where
-        Self: Sized,
-    {
-        Self::new()
-    }
-
-    fn is_empty(&self) -> bool {
-        arrayvec::ArrayVec::is_empty(self)
-    }
-
-    fn clear(&mut self) {
-        arrayvec::ArrayVec::clear(self)
-    }
-}
-
-#[cfg(feature = "arrayvec")]
-impl<T, const N: usize> Collection for arrayvec::ArrayVec<T, N> {
-    type Item = T;
-    type RefIter<'a> = core::slice::Iter<'a, T>
-        where
-            T: 'a,
-            Self: 'a;
-    type ReverseIter<'a> = core::iter::Rev<core::slice::Iter<'a, T>>
-        where
-            Self::Item: 'a,
-            Self: 'a;
-
-    fn len(&self) -> usize {
-        arrayvec::ArrayVec::len(self)
-    }
-
-    fn iter(&self) -> Self::RefIter<'_> {
-        self.as_slice().iter()
-    }
-
-    fn reversed(&self) -> Self::ReverseIter<'_> {
-        self.as_slice().iter().rev()
-    }
-
-    fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
-        self.try_push(item)
-            .map_err(|_| DecodeErrorKind::InvalidValue)
-    }
-}
+trivially_distinguished_collection!(
+    tinyvec::TinyVec<A>,
+    with generics (A: tinyvec::Array<Item = T>)
+);
 
 impl<T> EmptyState for BTreeSet<T> {
     #[inline]
