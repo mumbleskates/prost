@@ -134,8 +134,8 @@ where
     Ok(canon)
 }
 
-/// Decodes a collection value from the unpacked representation in distinguished mode. This greedily
-/// consumes consecutive fields as long as they have the same tag.
+/// Decodes a collection value from the unpacked representation in distinguished mode. If there are
+/// not exactly the expected number of fields the value is considered to be invalid.
 #[inline]
 pub(crate) fn decode_distinguished_array<T, const N: usize, E>(
     wire_type: WireType,
@@ -180,7 +180,7 @@ where
     }
 }
 
-/// Unpacked encodes vecs as repeated fields and in expeident decoding mode will accept both packed
+/// Unpacked encodes vecs as repeated fields and in expedient decoding mode will accept both packed
 /// and un-packed encodings.
 impl<C, T, E> Encoder<Unpacked<E>> for C
 where
