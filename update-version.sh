@@ -39,7 +39,7 @@ sed -i -E "s/^version = \"${VERSION_MATCHER}\"$/version = \"${VERSION}\"/" \
   "${DIR}/bilrost-types/Cargo.toml"
 
 # Update Cargo.toml dependency versions.
-sed -i -E "s/^${BILROST_CRATE_MATCHER} = \{ version = \"${VERSION_MATCHER}\"/\1 = { version = \"${VERSION}\"/" \
+sed -i -E "s/^${BILROST_CRATE_MATCHER} = \{ version = \"=${VERSION_MATCHER}\"/\1 = { version = \"=${VERSION}\"/" \
   "${DIR}/Cargo.toml" \
   "${DIR}/bilrost-derive/Cargo.toml" \
   "${DIR}/bilrost-types/Cargo.toml"
