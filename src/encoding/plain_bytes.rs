@@ -212,8 +212,8 @@ impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
 #[cfg(test)]
 mod u8_array {
     mod length_0 {
-        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
+        use crate::encoding::PlainBytes;
         check_type_test!(PlainBytes, expedient, [u8; 0], WireType::LengthDelimited);
         check_type_test!(
             PlainBytes,
@@ -224,8 +224,8 @@ mod u8_array {
     }
 
     mod length_1 {
-        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
+        use crate::encoding::PlainBytes;
         check_type_test!(PlainBytes, expedient, [u8; 1], WireType::LengthDelimited);
         check_type_test!(
             PlainBytes,
@@ -236,8 +236,8 @@ mod u8_array {
     }
 
     mod length_8 {
-        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
+        use crate::encoding::PlainBytes;
         check_type_test!(PlainBytes, expedient, [u8; 8], WireType::LengthDelimited);
         check_type_test!(
             PlainBytes,
@@ -248,8 +248,8 @@ mod u8_array {
     }
 
     mod length_13 {
-        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
+        use crate::encoding::PlainBytes;
         check_type_test!(PlainBytes, expedient, [u8; 13], WireType::LengthDelimited);
         check_type_test!(
             PlainBytes,
@@ -325,7 +325,9 @@ macro_rules! plain_bytes_vec_impl {
 #[cfg(feature = "arrayvec")]
 plain_bytes_vec_impl!(
     arrayvec::ArrayVec<u8, N>,
-    value, buf, chunk,
+    value,
+    buf,
+    chunk,
     if buf.remaining() > N {
         return Err(DecodeError::new(InvalidValue));
     },
@@ -336,7 +338,9 @@ plain_bytes_vec_impl!(
 #[cfg(feature = "smallvec")]
 plain_bytes_vec_impl!(
     smallvec::SmallVec<A>,
-    value, buf, chunk,
+    value,
+    buf,
+    chunk,
     value.reserve(buf.remaining()),
     value.extend_from_slice(chunk),
     with generics (A: smallvec::Array<Item = u8>)
@@ -345,7 +349,9 @@ plain_bytes_vec_impl!(
 #[cfg(feature = "thin-vec")]
 plain_bytes_vec_impl!(
     thin_vec::ThinVec<u8>,
-    value, buf, chunk,
+    value,
+    buf,
+    chunk,
     value.reserve(buf.remaining()),
     value.extend_from_slice(chunk)
 );
@@ -353,7 +359,9 @@ plain_bytes_vec_impl!(
 #[cfg(feature = "tinyvec")]
 plain_bytes_vec_impl!(
     tinyvec::ArrayVec<A>,
-    value, buf, chunk,
+    value,
+    buf,
+    chunk,
     if buf.remaining() > A::CAPACITY {
         return Err(DecodeError::new(InvalidValue));
     },
@@ -364,8 +372,95 @@ plain_bytes_vec_impl!(
 #[cfg(feature = "tinyvec")]
 plain_bytes_vec_impl!(
     tinyvec::TinyVec<A>,
-    value, buf, chunk,
+    value,
+    buf,
+    chunk,
     value.reserve(buf.remaining()),
     value.extend_from_slice(chunk),
     with generics (A: tinyvec::Array<Item = u8>)
 );
+
+#[cfg(test)]
+mod third_party_vecs {
+    macro_rules! check_unbounded {
+        ($ty:ty) => {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::PlainBytes;
+            use alloc::vec::Vec;
+            check_type_test!(
+                PlainBytes,
+                expedient,
+                from Vec<u8>,
+                into smallvec::SmallVec<[u8; 8]>,
+                converter(val) val.into_iter().collect(),
+                WireType::LengthDelimited
+            );
+            check_type_test!(
+                PlainBytes,
+                distinguished,
+                from Vec<u8>,
+                into smallvec::SmallVec<[u8; 8]>,
+                converter(val) val.into_iter().collect(),
+                WireType::LengthDelimited
+            );
+        }
+    }
+    macro_rules! check_bounded {
+        ($ty:ty, $N:expr) => {
+            use proptest::prelude::*;
+            use crate::encoding::{PlainBytes, WireType};
+            use crate::encoding::test::{distinguished, expedient};
+            proptest! {
+                #[test]
+                fn check(from in prop::collection::vec(any::<u8>(), 0..=$N), tag: u32) {
+                    let into: $ty = from.into_iter().collect();
+                    expedient::check_type::<$ty, PlainBytes>(
+                        into.clone(),
+                        tag,
+                        WireType::LengthDelimited,
+                    )?;
+                    distinguished::check_type::<$ty, PlainBytes>(
+                        into,
+                        tag,
+                        WireType::LengthDelimited,
+                    )?;
+                }
+                #[test]
+                fn check_optional(from in prop::option::of(prop::collection::vec(any::<u8>(), 0..=$N)), tag: u32) {
+                    let into: Option<$ty> = from.map(|val| val.into_iter().collect());
+                    expedient::check_type::<Option<$ty>, PlainBytes>(
+                        into.clone(),
+                        tag,
+                        WireType::LengthDelimited,
+                    )?;
+                    distinguished::check_type::<Option<$ty>, PlainBytes>(
+                        into,
+                        tag,
+                        WireType::LengthDelimited,
+                    )?;
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "arrayvec")]
+    mod arrayvec {
+        check_bounded!(arrayvec::ArrayVec<u8, 8>, 8);
+    }
+    #[cfg(feature = "smallvec")]
+    mod smallvec {
+        check_unbounded!(smallvec::SmallVec<[u8; 8]>);
+    }
+    #[cfg(feature = "thin-vec")]
+    mod thin_vec {
+        check_unbounded!(thin_vec::ThinVec<u8>);
+    }
+    #[cfg(feature = "tinyvec")]
+    mod tinyarrayvec {
+        check_bounded!(tinyvec::ArrayVec<[u8; 8]>, 8);
+    }
+    #[cfg(feature = "tinyvec")]
+    mod tinyvec {
+        check_unbounded!(tinyvec::TinyVec<[u8; 8]>);
+    }
+}
