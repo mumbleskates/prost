@@ -89,7 +89,7 @@ where
         // Decode one item
         ValueEncoder::<E>::decode_value(dest, buf.lend(), ctx.clone())?;
     }
-    if let Some(_) = peek_repeated_field(&mut buf) {
+    if peek_repeated_field(&mut buf).is_some() {
         // Too many value fields
         Err(DecodeError::new(InvalidValue))
     } else {
