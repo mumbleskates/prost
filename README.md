@@ -1026,21 +1026,21 @@ assert_eq!(registry, decoded);
 
 `bilrost` structs can encode fields with a wide variety of types:
 
-| Encoding                      | Value type                                    | Encoded representation | Distinguished    |
-|-------------------------------|-----------------------------------------------|------------------------|------------------|
-| `general` & `fixed`           | [`f32`][prim]                                 | fixed-size 32 bits     | no               |
-| `general` & `fixed`           | [`u32`][prim], [`i32`][prim]                  | fixed-size 32 bits     | yes              |
-| `general` & `fixed`           | [`f64`][prim]                                 | fixed-size 64 bits     | no               |
-| `general` & `fixed`           | [`u64`][prim], [`i64`][prim]                  | fixed-size 64 bits     | yes              |
-| `general` & `varint`          | [`u64`][prim], [`u32`][prim], [`u16`][prim]   | varint                 | yes              |
-| `general` & `varint`          | [`i64`][prim], [`i32`][prim], [`i16`][prim]   | varint                 | yes              |
-| `general` & `varint`          | [`bool`][prim]                                | varint                 | yes              |
-| `general`                     | derived [`Enumeration`](#enumerations)[^enum] | varint                 | yes              |
-| `general`                     | [`String`][str]*                              | length-delimited       | yes              |
-| `general`                     | impl [`Message`](#derive-macros)[^boxmsg]     | length-delimited       | maybe            |
-| `varint`                      | [`u8`][prim], [`i8`][prim]                    | varint                 | yes              |
-| `plainbytes`                  | [`Vec<u8>`][vec]*                             | length-delimited       | yes              |
-| [`(E1, E2, ... EN)`](#tuples) | [`(T1, T2, ... TN)`][tuple]                   | length-delimited       | if each field is |
+| Encoding                      | Value type                                    | Encoded representation           | Distinguished    |
+|-------------------------------|-----------------------------------------------|----------------------------------|------------------|
+| `general` & `fixed`           | [`f32`][prim]                                 | fixed-size 32 bits               | no               |
+| `general` & `fixed`           | [`u32`][prim], [`i32`][prim]                  | fixed-size 32 bits               | yes              |
+| `general` & `fixed`           | [`f64`][prim]                                 | fixed-size 64 bits               | no               |
+| `general` & `fixed`           | [`u64`][prim], [`i64`][prim]                  | fixed-size 64 bits               | yes              |
+| `general` & `varint`          | [`u64`][prim], [`u32`][prim], [`u16`][prim]   | varint                           | yes              |
+| `general` & `varint`          | [`i64`][prim], [`i32`][prim], [`i16`][prim]   | varint                           | yes              |
+| `general` & `varint`          | [`bool`][prim]                                | varint                           | yes              |
+| `general`                     | derived [`Enumeration`](#enumerations)[^enum] | varint                           | yes              |
+| `general`                     | [`String`][str]*                              | length-delimited                 | yes              |
+| `general`                     | impl [`Message`](#derive-macros)[^boxmsg]     | length-delimited                 | maybe            |
+| `varint`                      | [`u8`][prim], [`i8`][prim]                    | varint                           | yes              |
+| `plainbytes`                  | [`Vec<u8>`][vec]*                             | length-delimited                 | yes              |
+| [`(E1, E2, ... EN)`](#tuples) | [`(T1, T2, ... TN)`][tuple]                   | length-delimited                 | if each field is |
 
 *Alternative types are available! See below.
 
@@ -1064,12 +1064,19 @@ several different containers:
 |---------------|-----------------------------------------|--------------------------------------------------------------------------------|-------------|--------------------|
 | any encoding  | [`Option<T>`][opt]                      | identical; at least some bytes are always encoded if `Some`, nothing if `None` | no          | when `T` is        |
 | `unpacked<E>` | [`Vec<T>`][vec], [`BTreeSet<T>`][btset] | the same as encoding `E`, one field per value                                  | no          | when `T` is        |
+| `unpacked<E>` | [`[T; N]`][array][^arrays]              | the same as encoding `E`, one field per value                                  | no          | when `T` is        |
 | `unpacked`    | *                                       | (the same as `unpacked<general>`)                                              | no          | *                  |
 | `packed<E>`   | [`Vec<T>`][vec], [`BTreeSet<T>`][btset] | always length-delimited, successively encoded with `E`                         | yes         | when `T` is        |
+| `packed<E>`   | [`[T; N]`][array][^arrays]              | always length-delimited, successively encoded with `E`                         | yes         | when `T` is        |
 | `packed`      | *                                       | (the same as `packed<general>`)                                                | yes         | *                  |
 | `map<KE, VE>` | [`BTreeMap<K, V>`][btmap]               | always length-delimited, alternately encoded with `KE` and `VE`                | yes         | when `K` & `V` are |
 | `general`     | [`Vec<T>`][vec], [`BTreeSet<T>`][btset] | (the same as `unpacked`)                                                       | no          | *                  |
 | `general`     | [`BTreeMap`][btmap]                     | (the same as `map<general, general>`)                                          | yes         | *                  |
+
+[^arrays]: Fixed-size array types (`[T; N]`) act similarly to collections that
+additionally require an exact number of items. Where other kinds of collections
+are considered [empty](#empty-values) when they have no items, arrays are
+considered empty when each of their values is empty.
 
 Many alternative types are also available for both scalar values and containers!
 
@@ -1107,6 +1114,8 @@ value.
 | `BTreeSet<T>`  | [`HashSet<T>`][hashset][^hashnoncanon]          | no            | "std" (default)   |
 | `BTreeMap<T>`  | [`hashbrown::HashMap<T>`][hbmap][^hashnoncanon] | no            | "hashbrown"       |
 | `BTreeSet<T>`  | [`hashbrown::HashSet<T>`][hbset][^hashnoncanon] | no            | "hashbrown"       |
+
+[array]: https://doc.rust-lang.org/std/primitive.array.html
 
 [box]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 
@@ -1251,14 +1260,15 @@ Old message data will always decode to an equivalent/corresponding value, and
 those corresponding values will re-encode from the new widened struct into the
 same representation.
 
-| Change                                                                                 | Corresponding values                | Backwards compatibility breaks when...                         |
-|----------------------------------------------------------------------------------------|-------------------------------------|----------------------------------------------------------------|
-| `bool` --> `u8` --> `u16` --> `u32` --> `u64`, all with `general` or `varint` encoding | `true`/`false` becomes 1/0          | value is out of range of the narrower type                     |
-| `bool` --> `i8` --> `i16` --> `i32` --> `i64`, all with `general` or `varint` encoding | `true`/`false` becomes -1/0         | value is out of range of the narrower type                     |
-| `String` --> `Vec<u8>`                                                                 | string becomes its UTF-8 data       | value contains invalid UTF-8                                   |
-| `[u8; N]` with `general` encoding --> `Vec<u8>`                                        | no change                           | data is a different length than the array                      |
-| `T` --> `Option<T>`                                                                    | default value of `T` becomes `None` | `Some(default)` is encoded, then decoded in distinguished mode |
-| `Option<T>` --> `Vec<T>` (with `unpacked` encoding)                                    | maybe-contained value is identical  | multiple values are in the `Vec`                               |
+| Change                                                                                 | Corresponding values                                                                        | Backwards compatibility breaks when...                         |
+|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|----------------------------------------------------------------|
+| `bool` --> `u8` --> `u16` --> `u32` --> `u64`, all with `general` or `varint` encoding | `true`/`false` becomes 1/0                                                                  | value is out of range of the narrower type                     |
+| `bool` --> `i8` --> `i16` --> `i32` --> `i64`, all with `general` or `varint` encoding | `true`/`false` becomes -1/0                                                                 | value is out of range of the narrower type                     |
+| `String` --> `Vec<u8>`                                                                 | string becomes its UTF-8 data                                                               | value contains invalid UTF-8                                   |
+| `T` --> `Option<T>`                                                                    | default value of `T` becomes `None`                                                         | `Some(default)` is encoded, then decoded in distinguished mode |
+| `Option<T>` --> `Vec<T>` (with `unpacked` encoding)                                    | maybe-contained value is identical                                                          | multiple values are in the `Vec`                               |
+| `[T; N]` --> `Vec<T>`                                                                  | when each array value is empty, the `Vec` will be empty instead of filled with empty values | data is a nonzero length different than that of the array      |
+| `Option<[T; N]>` --> `Vec<T>`                                                          | no change                                                                                   | data is a length different than that of the array              |
 
 `Vec<T>` and other list- and set-like collections that contain repeated values
 can also be changed between `unpacked` and `packed` encoding, as long as the
@@ -1643,6 +1653,8 @@ represented as encoded data on the wire.
 | any floating point number                             | exactly +0.0                       |
 | fixed-size byte array                                 | all zeros                          |
 | text string, byte string, collection, mapping, or set | containing zero bytes or items     |
+| tuples `(A, B, C, ...)`                               | each item is empty                 |
+| arrays `[T; N]`                                       | each item is empty                 |
 | `Enumeration` type                                    | the variant represented by 0       |
 | `Message`                                             | each field of the message is empty |
 | `Oneof`                                               | `None` or the empty variant        |
