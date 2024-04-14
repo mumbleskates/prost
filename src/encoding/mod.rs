@@ -1766,7 +1766,7 @@ macro_rules! delegate_encoding {
             Self: $crate::encoding::Encoder<$to_ty>,
             $($($where_clause)*)?
         {
-            #[inline]
+            #[inline(always)]
             fn encode<B: $crate::bytes::BufMut + ?Sized>(
                 tag: u32,
                 value: &$value_ty,
@@ -1776,7 +1776,7 @@ macro_rules! delegate_encoding {
                 $crate::encoding::Encoder::<$to_ty>::encode(tag, value, buf, tw)
             }
 
-            #[inline]
+            #[inline(always)]
             fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(
                 tag: u32,
                 value: &$value_ty,
@@ -1786,7 +1786,7 @@ macro_rules! delegate_encoding {
                 $crate::encoding::Encoder::<$to_ty>::prepend_encode(tag, value, buf, tw)
             }
 
-            #[inline]
+            #[inline(always)]
             fn encoded_len(
                 tag: u32,
                 value: &$value_ty,
@@ -1795,7 +1795,7 @@ macro_rules! delegate_encoding {
                 $crate::encoding::Encoder::<$to_ty>::encoded_len(tag, value, tm)
             }
 
-            #[inline]
+            #[inline(always)]
             fn decode<B: $crate::bytes::Buf + ?Sized>(
                 wire_type: $crate::encoding::WireType,
                 duplicated: bool,
@@ -1832,7 +1832,7 @@ macro_rules! delegate_encoding {
                 + $crate::encoding::Encoder<$to_ty>,
             $($($where_clause)*)?
         {
-            #[inline]
+            #[inline(always)]
             fn decode_distinguished<B: $crate::bytes::Buf + ?Sized>(
                 wire_type: $crate::encoding::WireType,
                 duplicated: bool,
@@ -1874,12 +1874,12 @@ macro_rules! delegate_value_encoding {
             Self: $crate::encoding::ValueEncoder<$to_ty>,
             $($($where_clause)+ ,)?
         {
-            #[inline]
+            #[inline(always)]
             fn encode_value<__B: $crate::bytes::BufMut + ?Sized>(value: &$value_ty, buf: &mut __B) {
                 $crate::encoding::ValueEncoder::<$to_ty>::encode_value(value, buf)
             }
 
-            #[inline]
+            #[inline(always)]
             fn prepend_value<__B: $crate::buf::ReverseBuf + ?Sized>(
                 value: &$value_ty,
                 buf: &mut __B,
@@ -1887,12 +1887,12 @@ macro_rules! delegate_value_encoding {
                 $crate::encoding::ValueEncoder::<$to_ty>::prepend_value(value, buf)
             }
 
-            #[inline]
+            #[inline(always)]
             fn value_encoded_len(value: &$value_ty) -> usize {
                 $crate::encoding::ValueEncoder::<$to_ty>::value_encoded_len(value)
             }
 
-            #[inline]
+            #[inline(always)]
             fn many_values_encoded_len<__I>(values: __I) -> usize
             where
                 __I: ExactSizeIterator,
@@ -1901,7 +1901,7 @@ macro_rules! delegate_value_encoding {
                 $crate::encoding::ValueEncoder::<$to_ty>::many_values_encoded_len(values)
             }
 
-            #[inline]
+            #[inline(always)]
             fn decode_value<__B: $crate::bytes::Buf + ?Sized>(
                 value: &mut $value_ty,
                 buf: $crate::encoding::Capped<__B>,
@@ -1931,7 +1931,7 @@ macro_rules! delegate_value_encoding {
             $($($expedient_where)+ ,)?
             $($($distinguished_where)+ ,)?
         {
-            #[inline]
+            #[inline(always)]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $value_ty,
                 buf: $crate::encoding::Capped<impl Buf + ?Sized>,
@@ -1963,7 +1963,7 @@ macro_rules! encoder_where_value_encoder {
             T: $crate::encoding::EmptyState + ValueEncoder<$encoding>,
             $($($where_clause)*)?
         {
-            #[inline]
+            #[inline(always)]
             fn encode<B: BufMut + ?Sized>(
                 tag: u32,
                 value: &T,
@@ -1976,7 +1976,7 @@ macro_rules! encoder_where_value_encoder {
                 }
             }
 
-            #[inline]
+            #[inline(always)]
             fn prepend_encode<B: $crate::buf::ReverseBuf + ?Sized>(
                 tag: u32,
                 value: &T,
@@ -1989,7 +1989,7 @@ macro_rules! encoder_where_value_encoder {
                 }
             }
 
-            #[inline]
+            #[inline(always)]
             fn encoded_len(
                 tag: u32,
                 value: &T,
@@ -2003,7 +2003,7 @@ macro_rules! encoder_where_value_encoder {
                 }
             }
 
-            #[inline]
+            #[inline(always)]
             fn decode<B: Buf + ?Sized>(
                 wire_type: WireType,
                 duplicated: bool,
@@ -2031,7 +2031,7 @@ macro_rules! encoder_where_value_encoder {
                 + $crate::encoding::Encoder<$encoding>,
             $($($where_clause)*)?
         {
-            #[inline]
+            #[inline(always)]
             fn decode_distinguished<B: Buf + ?Sized>(
                 wire_type: WireType,
                 duplicated: bool,

@@ -66,22 +66,22 @@ macro_rules! varint {
         }
 
         impl ValueEncoder<Varint> for $ty {
-            #[inline]
+            #[inline(always)]
             fn encode_value<B: BufMut + ?Sized>($to_uint64_value: &$ty, buf: &mut B) {
                 encode_varint($to_uint64, buf);
             }
 
-            #[inline]
+            #[inline(always)]
             fn prepend_value<B: ReverseBuf + ?Sized>($to_uint64_value: &$ty, buf: &mut B) {
                 prepend_varint($to_uint64, buf);
             }
 
-            #[inline]
+            #[inline(always)]
             fn value_encoded_len($to_uint64_value: &$ty) -> usize {
                 encoded_len_varint($to_uint64)
             }
 
-            #[inline]
+            #[inline(always)]
             fn decode_value<B: Buf + ?Sized>(
                 __value: &mut $ty,
                 mut buf: Capped<B>,

@@ -32,22 +32,22 @@ macro_rules! fixed_width_common {
         }
 
         impl ValueEncoder<Fixed> for $ty {
-            #[inline]
+            #[inline(always)]
             fn encode_value<B: BufMut + ?Sized>(value: &$ty, buf: &mut B) {
                 buf.$put(*value);
             }
 
-            #[inline]
+            #[inline(always)]
             fn prepend_value<B: ReverseBuf + ?Sized>(value: &$ty, buf: &mut B) {
                 buf.$prepend(*value);
             }
 
-            #[inline]
+            #[inline(always)]
             fn value_encoded_len(_value: &$ty) -> usize {
                 WireType::$wire_type.fixed_size().unwrap()
             }
 
-            #[inline]
+            #[inline(always)]
             fn decode_value<B: Buf + ?Sized>(
                 value: &mut $ty,
                 mut buf: Capped<B>,
@@ -75,7 +75,7 @@ macro_rules! fixed_width_int {
         fixed_width_common!($ty, $wire_type, $put, $prepend, $get);
 
         impl DistinguishedValueEncoder<Fixed> for $ty {
-            #[inline]
+            #[inline(always)]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $ty,
                 buf: Capped<impl Buf + ?Sized>,
@@ -141,22 +141,22 @@ macro_rules! fixed_width_array {
         }
 
         impl ValueEncoder<Fixed> for [u8; $N] {
-            #[inline]
+            #[inline(always)]
             fn encode_value<B: BufMut + ?Sized>(value: &[u8; $N], mut buf: &mut B) {
                 (&mut buf).put(value.as_slice());
             }
 
-            #[inline]
+            #[inline(always)]
             fn prepend_value<B: ReverseBuf + ?Sized>(value: &[u8; $N], buf: &mut B) {
                 buf.prepend_slice(value.as_slice());
             }
 
-            #[inline]
+            #[inline(always)]
             fn value_encoded_len(_value: &[u8; $N]) -> usize {
                 $N
             }
 
-            #[inline]
+            #[inline(always)]
             fn decode_value<B: Buf + ?Sized>(
                 value: &mut [u8; $N],
                 mut buf: Capped<B>,
@@ -171,7 +171,7 @@ macro_rules! fixed_width_array {
         }
 
         impl DistinguishedValueEncoder<Fixed> for [u8; $N] {
-            #[inline]
+            #[inline(always)]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut [u8; $N],
                 buf: Capped<impl Buf + ?Sized>,
