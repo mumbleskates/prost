@@ -382,6 +382,7 @@ plain_bytes_vec_impl!(
 
 #[cfg(test)]
 mod third_party_vecs {
+    #[allow(unused_macros)]
     macro_rules! check_unbounded {
         ($ty:ty) => {
             use crate::encoding::test::check_type_test;
@@ -405,6 +406,7 @@ mod third_party_vecs {
             );
         }
     }
+    #[allow(unused_macros)]
     macro_rules! check_bounded {
         ($ty:ty, $N:expr) => {
             use proptest::prelude::*;
