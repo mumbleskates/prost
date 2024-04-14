@@ -1026,21 +1026,21 @@ assert_eq!(registry, decoded);
 
 `bilrost` structs can encode fields with a wide variety of types:
 
-| Encoding                      | Value type                                    | Encoded representation           | Distinguished    |
-|-------------------------------|-----------------------------------------------|----------------------------------|------------------|
-| `general` & `fixed`           | [`f32`][prim]                                 | fixed-size 32 bits               | no               |
-| `general` & `fixed`           | [`u32`][prim], [`i32`][prim]                  | fixed-size 32 bits               | yes              |
-| `general` & `fixed`           | [`f64`][prim]                                 | fixed-size 64 bits               | no               |
-| `general` & `fixed`           | [`u64`][prim], [`i64`][prim]                  | fixed-size 64 bits               | yes              |
-| `general` & `varint`          | [`u64`][prim], [`u32`][prim], [`u16`][prim]   | varint                           | yes              |
-| `general` & `varint`          | [`i64`][prim], [`i32`][prim], [`i16`][prim]   | varint                           | yes              |
-| `general` & `varint`          | [`bool`][prim]                                | varint                           | yes              |
-| `general`                     | derived [`Enumeration`](#enumerations)[^enum] | varint                           | yes              |
-| `general`                     | [`String`][str]*                              | length-delimited                 | yes              |
-| `general`                     | impl [`Message`](#derive-macros)[^boxmsg]     | length-delimited                 | maybe            |
-| `varint`                      | [`u8`][prim], [`i8`][prim]                    | varint                           | yes              |
-| `plainbytes`                  | [`Vec<u8>`][vec]*                             | length-delimited                 | yes              |
-| [`(E1, E2, ... EN)`](#tuples) | [`(T1, T2, ... TN)`][tuple]                   | length-delimited                 | if each field is |
+| Encoding                      | Value type                                    | Encoded representation | Distinguished    |
+|-------------------------------|-----------------------------------------------|------------------------|------------------|
+| `general` & `fixed`           | [`f32`][prim]                                 | fixed-size 32 bits     | no               |
+| `general` & `fixed`           | [`u32`][prim], [`i32`][prim]                  | fixed-size 32 bits     | yes              |
+| `general` & `fixed`           | [`f64`][prim]                                 | fixed-size 64 bits     | no               |
+| `general` & `fixed`           | [`u64`][prim], [`i64`][prim]                  | fixed-size 64 bits     | yes              |
+| `general` & `varint`          | [`u64`][prim], [`u32`][prim], [`u16`][prim]   | varint                 | yes              |
+| `general` & `varint`          | [`i64`][prim], [`i32`][prim], [`i16`][prim]   | varint                 | yes              |
+| `general` & `varint`          | [`bool`][prim]                                | varint                 | yes              |
+| `general`                     | derived [`Enumeration`](#enumerations)[^enum] | varint                 | yes              |
+| `general`                     | [`String`][str]*                              | length-delimited       | yes              |
+| `general`                     | impl [`Message`](#derive-macros)[^boxmsg]     | length-delimited       | maybe            |
+| `varint`                      | [`u8`][prim], [`i8`][prim]                    | varint                 | yes              |
+| `plainbytes`                  | [`Vec<u8>`][vec]*                             | length-delimited       | yes              |
+| [`(E1, E2, ... EN)`](#tuples) | [`(T1, T2, ... TN)`][tuple]                   | length-delimited       | if each field is |
 
 *Alternative types are available! See below.
 
