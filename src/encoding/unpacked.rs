@@ -187,12 +187,14 @@ where
     C: Collection<Item = T>,
     T: NewForOverwrite + ValueEncoder<E>,
 {
+    #[inline]
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &C, buf: &mut B, tw: &mut TagWriter) {
         for val in value.iter() {
             FieldEncoder::<E>::encode_field(tag, val, buf, tw);
         }
     }
 
+    #[inline]
     fn prepend_encode<B: ReverseBuf + ?Sized>(
         tag: u32,
         value: &Self,
@@ -204,6 +206,7 @@ where
         }
     }
 
+    #[inline]
     fn encoded_len(tag: u32, value: &C, tm: &mut impl TagMeasurer) -> usize {
         if !value.is_empty() {
             // Each *additional* field encoded after the first needs only 1 byte for the field key.
@@ -214,6 +217,7 @@ where
         }
     }
 
+    #[inline]
     fn decode<B: Buf + ?Sized>(
         wire_type: WireType,
         duplicated: bool,
@@ -243,6 +247,7 @@ where
     Self: DistinguishedCollection<Item = T> + ValueEncoder<Packed<E>> + Encoder<Unpacked<E>>,
     T: NewForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
+    #[inline]
     fn decode_distinguished<B: Buf + ?Sized>(
         wire_type: WireType,
         duplicated: bool,

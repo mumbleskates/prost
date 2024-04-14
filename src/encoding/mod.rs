@@ -632,7 +632,7 @@ impl TagReader {
 
 /// Checks that the expected wire type matches the actual wire type,
 /// or returns an error result.
-#[inline]
+#[inline(always)]
 pub fn check_wire_type(expected: WireType, actual: WireType) -> Result<(), DecodeError> {
     if expected != actual {
         return Err(DecodeError::new(WrongWireType));
@@ -704,13 +704,13 @@ impl<'a, B: 'a + Buf + ?Sized> Capped<'a, B> {
         self.buf
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn take_all(self) -> Take<&'a mut B> {
         let len = self.remaining_before_cap();
         self.buf.take(len)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn decode_varint(&mut self) -> Result<u64, DecodeError> {
         decode_varint(self.buf).map_err(|err| {
             // Varints are always decoded greedily from the underlying buffer, so we want to

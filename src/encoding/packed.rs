@@ -23,6 +23,7 @@ where
     C: Collection<Item = T>,
     T: NewForOverwrite + ValueEncoder<E>,
 {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &C, buf: &mut B) {
         encode_varint(
             ValueEncoder::<E>::many_values_encoded_len(value.iter()) as u64,
@@ -33,6 +34,7 @@ where
         }
     }
 
+    #[inline]
     fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
         let end = buf.remaining();
         for val in value.reversed() {
@@ -41,12 +43,14 @@ where
         prepend_varint((buf.remaining() - end) as u64, buf);
     }
 
+    #[inline]
     fn value_encoded_len(value: &C) -> usize {
         let inner_len = ValueEncoder::<E>::many_values_encoded_len(value.iter());
         // TODO(widders): address general cases where u64 may overflow usize, with care
         encoded_len_varint(inner_len as u64) + inner_len
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut C,
         mut buf: Capped<B>,
@@ -75,6 +79,7 @@ where
     C: DistinguishedCollection<Item = T> + Eq,
     T: NewForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
+    #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut C,
         mut buf: Capped<impl Buf + ?Sized>,

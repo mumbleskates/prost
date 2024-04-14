@@ -68,10 +68,10 @@ macro_rules! empty_state_via_default {
                 *self == Self::default()
             }
 
-    #[inline]
-    fn clear(&mut self) {
-        *self = Self::empty();
-    }
+            #[inline]
+            fn clear(&mut self) {
+                *self = Self::empty();
+            }
         }
     };
 }
@@ -200,6 +200,7 @@ impl EmptyState for bytestring::ByteString {
 }
 
 impl<T> EmptyState for Option<T> {
+    #[inline]
     fn empty() -> Self
     where
         Self: Sized,
@@ -207,10 +208,12 @@ impl<T> EmptyState for Option<T> {
         None
     }
 
+    #[inline]
     fn is_empty(&self) -> bool {
         self.is_none()
     }
 
+    #[inline]
     fn clear(&mut self) {
         *self = None;
     }
@@ -220,14 +223,17 @@ impl<T> EmptyState for Box<T>
 where
     T: EmptyState,
 {
+    #[inline]
     fn empty() -> Self {
         Self::new(T::empty())
     }
 
+    #[inline]
     fn is_empty(&self) -> bool {
         self.as_ref().is_empty()
     }
 
+    #[inline]
     fn clear(&mut self) {
         self.as_mut().clear()
     }
@@ -361,7 +367,6 @@ macro_rules! trivially_distinguished_collection {
             T: Eq,
             $($($where_clause)*)?
         {
-            #[inline]
             fn insert_distinguished(
                 &mut self,
                 item: <Self as Collection>::Item
@@ -759,7 +764,7 @@ trivially_distinguished_collection!(
 );
 
 #[cfg(feature = "tinyvec")]
-impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::TinyVec<A> {
+impl<A: tinyvec::Array> EmptyState for tinyvec::TinyVec<A> {
     #[inline]
     fn empty() -> Self {
         Self::new()
