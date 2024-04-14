@@ -195,7 +195,7 @@ where
 
 impl<T, const N: usize, E> ValueEncoder<Packed<E>> for [T; N]
 where
-    T: NewForOverwrite + ValueEncoder<E>,
+    T: ValueEncoder<E>,
 {
     fn encode_value<B: BufMut + ?Sized>(value: &[T; N], buf: &mut B) {
         encode_varint(
@@ -257,7 +257,7 @@ where
 
 impl<T, const N: usize, E> DistinguishedValueEncoder<Packed<E>> for [T; N]
 where
-    T: Eq + DistinguishedValueEncoder<E>,
+    T: Eq + EmptyState + DistinguishedValueEncoder<E>,
 {
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut [T; N],
@@ -296,7 +296,7 @@ where
             // Too many values or trailing data
             Err(DecodeError::new(InvalidValue))
         } else {
-            Ok(if !ALLOW_EMPTY && value.is_empty() {
+            Ok(if !ALLOW_EMPTY && EmptyState::is_empty(value) {
                 Canonicity::NotCanonical
             } else {
                 canon
