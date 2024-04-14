@@ -798,7 +798,8 @@ impl<T, const N: usize> Collection for arrayvec::ArrayVec<T, N> {
     }
 
     fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
-        self.try_push(item).map_err(|_| DecodeErrorKind::InvalidValue)
+        self.try_push(item)
+            .map_err(|_| DecodeErrorKind::InvalidValue)
     }
 }
 
