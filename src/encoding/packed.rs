@@ -231,15 +231,17 @@ where
             // We know the exact size of a valid value and this isn't it.
             return Err(DecodeError::new(InvalidValue));
         }
-        let mut i = 0;
-        while capped.has_remaining()? {
-            if i >= N {
+        for dest in value {
+            // If the value's size was already checked, we don't need to check again
+            if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
+                // Not enough values
                 return Err(DecodeError::new(InvalidValue));
             }
-            ValueEncoder::<E>::decode_value(&mut value[i], capped.lend(), ctx.clone())?;
-            i += 1;
+            ValueEncoder::<E>::decode_value(dest, capped.lend(), ctx.clone())?;
         }
-        if i < N {
+        // If the value's size was already checked, we don't need to check again
+        if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && capped.has_remaining()? {
+            // Too many values or trailing data
             Err(DecodeError::new(InvalidValue))
         } else {
             Ok(())
