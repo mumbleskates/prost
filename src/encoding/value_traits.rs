@@ -497,10 +497,12 @@ where
             Self::Item: 'a,
             Self: 'a;
 
+    #[inline]
     fn len(&self) -> usize {
         <[T]>::len(self)
     }
 
+    #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         <[T]>::iter(self)
     }
@@ -510,6 +512,7 @@ where
         <[T]>::iter(self).rev()
     }
 
+    #[inline]
     fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
         self.to_mut().push(item);
         Ok(())
@@ -520,6 +523,7 @@ trivially_distinguished_collection!(Cow<'_, [T]>, with where clause (T: Clone));
 
 #[cfg(feature = "arrayvec")]
 impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
+    #[inline]
     fn empty() -> Self
     where
         Self: Sized,
@@ -527,10 +531,12 @@ impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
         Self::new()
     }
 
+    #[inline]
     fn is_empty(&self) -> bool {
         arrayvec::ArrayVec::is_empty(self)
     }
 
+    #[inline]
     fn clear(&mut self) {
         arrayvec::ArrayVec::clear(self)
     }
@@ -548,18 +554,22 @@ impl<T, const N: usize> Collection for arrayvec::ArrayVec<T, N> {
             Self::Item: 'a,
             Self: 'a;
 
+    #[inline]
     fn len(&self) -> usize {
         arrayvec::ArrayVec::len(self)
     }
 
+    #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         self.as_slice().iter()
     }
 
+    #[inline]
     fn reversed(&self) -> Self::ReverseIter<'_> {
         self.as_slice().iter().rev()
     }
 
+    #[inline]
     fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
         self.try_push(item)
             .map_err(|_| DecodeErrorKind::InvalidValue)
@@ -687,6 +697,7 @@ trivially_distinguished_collection!(thin_vec::ThinVec<T>);
 
 #[cfg(feature = "tinyvec")]
 impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::ArrayVec<A> {
+    #[inline]
     fn empty() -> Self
     where
         Self: Sized,
@@ -694,10 +705,12 @@ impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::ArrayVec<A> {
         Self::new()
     }
 
+    #[inline]
     fn is_empty(&self) -> bool {
         tinyvec::ArrayVec::is_empty(self)
     }
 
+    #[inline]
     fn clear(&mut self) {
         tinyvec::ArrayVec::clear(self)
     }
@@ -715,18 +728,22 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::ArrayVec<A> {
             Self::Item: 'a,
             Self: 'a;
 
+    #[inline]
     fn len(&self) -> usize {
         tinyvec::ArrayVec::len(self)
     }
 
+    #[inline]
     fn iter(&self) -> Self::RefIter<'_> {
         self.as_slice().iter()
     }
 
+    #[inline]
     fn reversed(&self) -> Self::ReverseIter<'_> {
         self.as_slice().iter().rev()
     }
 
+    #[inline]
     fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
         match self.try_push(item) {
             None => Ok(()),
