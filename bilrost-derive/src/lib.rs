@@ -420,7 +420,7 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
     );
 
     // If there can never be a tag delta larger than 31, field keys will never be more than 1 byte.
-    let can_use_trivial_tag_measurer = tag_range.map_or(false, |range| *range.end() < 32);
+    let can_use_trivial_tag_measurer = matches!(tag_range, Some(range) if *range.end() < 32);
 
     let tag_measurer_ty = if can_use_trivial_tag_measurer {
         quote!(::bilrost::encoding::TrivialTagMeasurer)

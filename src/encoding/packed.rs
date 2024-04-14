@@ -49,12 +49,12 @@ where
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
         let mut capped = buf.take_length_delimited()?;
-        if <T as Wiretyped<E>>::WIRE_TYPE
-            .fixed_size()
-            .map_or(false, |fixed_size| {
-                capped.remaining_before_cap() % fixed_size != 0
-            })
-        {
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
+            Some(fixed_size) if capped.remaining_before_cap() % fixed_size != 0
+        ) {
+            // No number of fixed-sized values can pack evenly into this size.
             return Err(DecodeError::new(Truncated));
         }
         while capped.has_remaining()? {
@@ -80,12 +80,12 @@ where
         if !ALLOW_EMPTY && capped.remaining_before_cap() == 0 {
             return Ok(Canonicity::NotCanonical);
         }
-        if <T as Wiretyped<E>>::WIRE_TYPE
-            .fixed_size()
-            .map_or(false, |fixed_size| {
-                capped.remaining_before_cap() % fixed_size != 0
-            })
-        {
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
+            Some(fixed_size) if capped.remaining_before_cap() % fixed_size != 0
+        ) {
+            // No number of fixed-sized values can pack evenly into this size.
             return Err(DecodeError::new(Truncated));
         }
         let mut canon = Canonicity::Canonical;
@@ -223,13 +223,13 @@ where
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
         let mut capped = buf.take_length_delimited()?;
-        if <T as Wiretyped<E>>::WIRE_TYPE
-            .fixed_size()
-            .map_or(false, |fixed_size| {
-                capped.remaining_before_cap() % fixed_size != 0
-            })
-        {
-            return Err(DecodeError::new(Truncated));
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
+            Some(fixed_size) if capped.remaining_before_cap() != fixed_size * N
+        ) {
+            // We know the exact size of a valid value and this isn't it.
+            return Err(DecodeError::new(InvalidValue));
         }
         let mut i = 0;
         while capped.has_remaining()? {
