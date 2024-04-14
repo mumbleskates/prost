@@ -20,6 +20,7 @@ mod map;
 pub mod opaque;
 mod packed;
 mod plain_bytes;
+mod tuple;
 mod unpacked;
 mod value_traits;
 mod varint;
@@ -1878,12 +1879,15 @@ macro_rules! delegate_value_encoding {
             $($($where_clause)+ ,)?
         {
             #[inline]
-            fn encode_value<B: $crate::bytes::BufMut + ?Sized>(value: &$value_ty, buf: &mut B) {
+            fn encode_value<__B: $crate::bytes::BufMut + ?Sized>(value: &$value_ty, buf: &mut __B) {
                 $crate::encoding::ValueEncoder::<$to_ty>::encode_value(value, buf)
             }
 
             #[inline]
-            fn prepend_value<B: $crate::buf::ReverseBuf + ?Sized>(value: &$value_ty, buf: &mut B) {
+            fn prepend_value<__B: $crate::buf::ReverseBuf + ?Sized>(
+                value: &$value_ty,
+                buf: &mut __B,
+            ) {
                 $crate::encoding::ValueEncoder::<$to_ty>::prepend_value(value, buf)
             }
 
@@ -1893,18 +1897,18 @@ macro_rules! delegate_value_encoding {
             }
 
             #[inline]
-            fn many_values_encoded_len<I>(values: I) -> usize
+            fn many_values_encoded_len<__I>(values: __I) -> usize
             where
-                I: ExactSizeIterator,
-                I::Item: core::ops::Deref<Target = $value_ty>,
+                __I: ExactSizeIterator,
+                __I::Item: core::ops::Deref<Target = $value_ty>,
             {
                 $crate::encoding::ValueEncoder::<$to_ty>::many_values_encoded_len(values)
             }
 
             #[inline]
-            fn decode_value<B: $crate::bytes::Buf + ?Sized>(
+            fn decode_value<__B: $crate::bytes::Buf + ?Sized>(
                 value: &mut $value_ty,
-                buf: $crate::encoding::Capped<B>,
+                buf: $crate::encoding::Capped<__B>,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<(), $crate::DecodeError> {
                 $crate::encoding::ValueEncoder::<$to_ty>::decode_value(value, buf, ctx)
@@ -2057,37 +2061,6 @@ macro_rules! encoder_where_value_encoder {
     };
 }
 pub(crate) use encoder_where_value_encoder;
-
-/// Implements `EmptyState` in terms of `Default`.
-macro_rules! empty_state_via_default {
-    (
-        $ty:ty
-        $(, with generics ($($generics:tt)*))?
-        $(, with where clause ($($where_clause:tt)*))?
-    ) => {
-        impl<$($($generics)*)?> $crate::encoding::EmptyState for $ty
-        where
-            Self: Default + PartialEq,
-            $($($where_clause)*)?
-        {
-            #[inline]
-            fn empty() -> Self {
-                Self::default()
-            }
-
-            #[inline]
-            fn is_empty(&self) -> bool {
-                *self == Self::default()
-            }
-
-    #[inline]
-    fn clear(&mut self) {
-        *self = Self::empty();
-    }
-        }
-    };
-}
-pub(crate) use empty_state_via_default;
 
 #[cfg(test)]
 mod test {
@@ -2451,6 +2424,54 @@ mod test {
         present_empty_not_canon::<
             Vec<BTreeMap<Vec<u8>, Vec<u8>>>,
             Packed<Map<PlainBytes, PlainBytes>>,
+        >();
+
+        present_empty_not_canon::<(bool,), General>();
+        present_empty_not_canon::<(bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool, bool, bool, bool, bool), General>(
+        );
+        present_empty_not_canon::<(u16, u16, u16, u16, u16, u16, u16, u16, u16, u16), General>();
+        present_empty_not_canon::<(u16, u16, u16, u16, u16, u16, u16, u16, u16, u16, u16), General>(
+        );
+        present_empty_not_canon::<
+            (u16, u16, u16, u16, u16, u16, u16, u16, u16, u16, u16, u16),
+            General,
+        >();
+        present_empty_not_canon::<(bool,), General>();
+        present_empty_not_canon::<(bool, u32), General>();
+        present_empty_not_canon::<(bool, bool, String), General>();
+        present_empty_not_canon::<(bool, i64, Blob, bool), General>();
+        present_empty_not_canon::<(bool, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, (), bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, bytes::Bytes, bool, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, bool, u16, bool, i16, bool, bool, bool), General>();
+        present_empty_not_canon::<(bool, String, bool, bool, bool, bool, bool, bool, bool), General>(
+        );
+        present_empty_not_canon::<(String, u16, u16, u16, u16, u16, i64, u16, u16, u16), General>();
+        present_empty_not_canon::<(u16, u16, u16, bool, u16, u16, u16, u16, bool, u16, u16), General>(
+        );
+        present_empty_not_canon::<
+            (
+                u16,
+                u16,
+                u16,
+                u16,
+                u16,
+                bool,
+                u16,
+                String,
+                u64,
+                u16,
+                u16,
+                u16,
+            ),
+            General,
         >();
     }
 

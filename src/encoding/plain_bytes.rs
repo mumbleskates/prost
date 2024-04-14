@@ -149,23 +149,6 @@ mod cow_bytes {
     );
 }
 
-impl<const N: usize> EmptyState for [u8; N] {
-    #[inline]
-    fn empty() -> Self {
-        [0; N]
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.iter().all(|&byte| byte == 0)
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        *self = Self::empty();
-    }
-}
-
 impl<const N: usize> Wiretyped<PlainBytes> for [u8; N] {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }
@@ -217,7 +200,7 @@ impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
         buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx)?;
+        ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
         Ok(if !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
@@ -226,7 +209,7 @@ impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
     }
 }
 
-// TODO(widders): ArrayVec
+// TODO(widders): ArrayVec (from arrayvec and tinyvec crates)
 
 #[cfg(test)]
 mod u8_array {

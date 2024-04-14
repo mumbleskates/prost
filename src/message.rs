@@ -531,23 +531,6 @@ pub trait RawDistinguishedMessage: RawMessage + Eq {
         Self: Sized;
 }
 
-impl<T> EmptyState for Box<T>
-where
-    T: EmptyState,
-{
-    fn empty() -> Self {
-        Self::new(T::empty())
-    }
-
-    fn is_empty(&self) -> bool {
-        self.as_ref().is_empty()
-    }
-
-    fn clear(&mut self) {
-        self.as_mut().clear()
-    }
-}
-
 impl<T> RawMessage for Box<T>
 where
     T: RawMessage,

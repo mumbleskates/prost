@@ -10,6 +10,15 @@
 
 * Hash maps and hash sets can now have any kind of hasher, as long as the
   `BuildHasher` implements `Default`.
+* Plain tuples can now be encoded as message fields! Tuples encode exactly the
+  same as messages with field tags 0 through N-1, but the encoding of each field
+  in the tuple can be specified. See the readme for more information.
+* Fixed-size arrays (`[T; N]`) can now also be encoded as message fields! Arrays
+  encode exactly the same as a collection like `Vec` would, except if each value
+  in the array is empty the whole array is considered empty. When decoding an
+  array, if a nonzero number of items is present and it is not the same number
+  of items as the size of the array, the value and message being decoded are
+  considered to be invalid.
 
 ### Fixes
 
@@ -19,6 +28,9 @@
   than failing to compile, it will now simply not implement `Message`.
 
 ### Cleanups
+
+* Consolidated (almost) all the standard impls of the `EmptyState` trait into
+  the same module.
 
 ## v0.1005.1
 

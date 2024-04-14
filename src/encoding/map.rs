@@ -83,13 +83,15 @@ where
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
         let mut capped = buf.take_length_delimited()?;
-        if combined_fixed_size(
-            <M::Key as Wiretyped<KE>>::WIRE_TYPE,
-            <M::Value as Wiretyped<VE>>::WIRE_TYPE,
-        )
-        .map_or(false, |fixed_size| {
-            capped.remaining_before_cap() % fixed_size != 0
-        }) {
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            combined_fixed_size(
+                <M::Key as Wiretyped<KE>>::WIRE_TYPE,
+                <M::Value as Wiretyped<VE>>::WIRE_TYPE,
+            ),
+            Some(fixed_size) if capped.remaining_before_cap() % fixed_size != 0
+        ) {
+            // No number of fixed-sized key+value pairs can pack evenly into this size.
             return Err(DecodeError::new(Truncated));
         }
         while capped.has_remaining()? {
@@ -118,13 +120,15 @@ where
         if !ALLOW_EMPTY && capped.remaining_before_cap() == 0 {
             return Ok(Canonicity::NotCanonical);
         }
-        if combined_fixed_size(
-            <M::Key as Wiretyped<KE>>::WIRE_TYPE,
-            <M::Value as Wiretyped<VE>>::WIRE_TYPE,
-        )
-        .map_or(false, |fixed_size| {
-            capped.remaining_before_cap() % fixed_size != 0
-        }) {
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            combined_fixed_size(
+                <M::Key as Wiretyped<KE>>::WIRE_TYPE,
+                <M::Value as Wiretyped<VE>>::WIRE_TYPE,
+            ),
+            Some(fixed_size) if capped.remaining_before_cap() % fixed_size != 0
+        ) {
+            // No number of fixed-sized key+value pairs can pack evenly into this size.
             return Err(DecodeError::new(Truncated));
         }
         let mut canon = Canonicity::Canonical;
