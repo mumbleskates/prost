@@ -30,6 +30,10 @@ delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (Cow<'a, [T]>) including distinguished
     with where clause (T: Clone)
     with generics ('a, T));
+#[cfg(feature = "arrayvec")]
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (arrayvec::ArrayVec<T, N>) including distinguished
+    with generics (T, const N: usize));
 #[cfg(feature = "smallvec")]
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (smallvec::SmallVec<A>) including distinguished
@@ -38,6 +42,11 @@ delegate_encoding!(delegate from (General) to (Unpacked<General>)
 #[cfg(feature = "thin-vec")]
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (thin_vec::ThinVec<T>) including distinguished with generics (T));
+#[cfg(feature = "tinyvec")]
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (tinyvec::ArrayVec<A>) including distinguished
+    with where clause (A: tinyvec::Array<Item = T>)
+    with generics (T, A));
 #[cfg(feature = "tinyvec")]
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (tinyvec::TinyVec<A>) including distinguished
