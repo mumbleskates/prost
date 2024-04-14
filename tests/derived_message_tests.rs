@@ -738,12 +738,25 @@ fn field_clearing() {
         cow_bytes_owned: Cow<'a, [u8]>,
         cow_str_borrowed: Cow<'a, str>,
         cow_str_owned: Cow<'a, str>,
+        #[cfg(feature = "arrayvec")]
+        arrayvec: arrayvec::ArrayVec<u32, 2>,
         #[cfg(feature = "smallvec")]
         smallvec: SmallVec<[u32; 1]>,
+        #[cfg(feature = "smallvec")]
+        #[bilrost(encoding(plainbytes))]
+        smallvec_bytes: SmallVec<[u8; 1]>,
         #[cfg(feature = "thin-vec")]
         thin_vec: ThinVec<u32>,
+        #[cfg(feature = "thin-vec")]
+        #[bilrost(encoding(plainbytes))]
+        thin_vec_bytes: ThinVec<u8>,
+        #[cfg(feature = "tinyvec")]
+        tinyarrayvec: tinyvec::ArrayVec<[u32; 2]>,
         #[cfg(feature = "tinyvec")]
         tinyvec: TinyVec<[u32; 1]>,
+        #[cfg(feature = "tinyvec")]
+        #[bilrost(encoding(plainbytes))]
+        tinyvec_bytes: TinyVec<[u8; 1]>,
         #[cfg(feature = "hashbrown")]
         hbmap: hashbrown::HashMap<u32, u32>,
         #[cfg(feature = "hashbrown")]
@@ -786,12 +799,22 @@ fn field_clearing() {
                 cow_bytes_owned: Vec::with_capacity(64).into(),
                 cow_str_borrowed: Cow::Borrowed("foo"),
                 cow_str_owned: String::with_capacity(64).into(),
+                #[cfg(feature = "arrayvec")]
+                arrayvec: arrayvec::ArrayVec::from([1, 2]),
                 #[cfg(feature = "smallvec")]
                 smallvec: SmallVec::with_capacity(64),
+                #[cfg(feature = "smallvec")]
+                smallvec_bytes: SmallVec::with_capacity(64),
                 #[cfg(feature = "thin-vec")]
                 thin_vec: ThinVec::with_capacity(64),
+                #[cfg(feature = "thin-vec")]
+                thin_vec_bytes: ThinVec::with_capacity(64),
+                #[cfg(feature = "tinyvec")]
+                tinyarrayvec: tinyvec::ArrayVec::from([1, 2]),
                 #[cfg(feature = "tinyvec")]
                 tinyvec: TinyVec::with_capacity(64),
+                #[cfg(feature = "tinyvec")]
+                tinyvec_bytes: TinyVec::with_capacity(64),
                 #[cfg(feature = "hashbrown")]
                 hbmap: hashbrown::HashMap::with_capacity(64),
                 #[cfg(feature = "hashbrown")]
@@ -808,10 +831,16 @@ fn field_clearing() {
             result.cow_str_owned.to_mut().push_str("foo");
             #[cfg(feature = "smallvec")]
             result.smallvec.push(1);
+            #[cfg(feature = "smallvec")]
+            result.smallvec_bytes.extend(b"abc".iter().cloned());
             #[cfg(feature = "thin-vec")]
             result.thin_vec.push(1);
+            #[cfg(feature = "thin-vec")]
+            result.thin_vec_bytes.extend(b"abc".iter().cloned());
             #[cfg(feature = "tinyvec")]
             result.tinyvec.push(1);
+            #[cfg(feature = "tinyvec")]
+            result.tinyvec_bytes.extend(b"abc".iter().cloned());
             #[cfg(feature = "hashbrown")]
             result.hbmap.insert(1, 1);
             #[cfg(feature = "hashbrown")]
@@ -836,10 +865,16 @@ fn field_clearing() {
     assert!(clearable.cow_str_owned.to_mut().capacity() >= 64);
     #[cfg(feature = "smallvec")]
     assert!(clearable.smallvec.capacity() >= 64);
+    #[cfg(feature = "smallvec")]
+    assert!(clearable.smallvec_bytes.capacity() >= 64);
     #[cfg(feature = "thin-vec")]
     assert!(clearable.thin_vec.capacity() >= 64);
+    #[cfg(feature = "thin-vec")]
+    assert!(clearable.thin_vec_bytes.capacity() >= 64);
     #[cfg(feature = "tinyvec")]
     assert!(clearable.tinyvec.capacity() >= 64);
+    #[cfg(feature = "tinyvec")]
+    assert!(clearable.tinyvec_bytes.capacity() >= 64);
     #[cfg(feature = "hashbrown")]
     assert!(clearable.hbmap.capacity() >= 64);
     #[cfg(feature = "hashbrown")]
@@ -1720,10 +1755,14 @@ fn decoding_vecs() {
                 );
             };
         }
+        #[cfg(feature = "arrayvec")]
+        test_vec!(arrayvec::ArrayVec<String, 4>);
         #[cfg(feature = "smallvec")]
         test_vec!(smallvec::SmallVec<[String; 2]>);
         #[cfg(feature = "thin-vec")]
         test_vec!(thin_vec::ThinVec<String>);
+        #[cfg(feature = "tinyvec")]
+        test_vec!(tinyvec::ArrayVec<[String; 4]>);
         #[cfg(feature = "tinyvec")]
         test_vec!(tinyvec::TinyVec<[String; 2]>);
     }
@@ -1800,10 +1839,14 @@ fn decoding_vecs_with_swapped_packedness() {
                 );
             };
         }
+        #[cfg(feature = "arrayvec")]
+        test_vec!(arrayvec::ArrayVec<u32, 6>);
         #[cfg(feature = "smallvec")]
         test_vec!(smallvec::SmallVec<[u32; 2]>);
         #[cfg(feature = "thin-vec")]
         test_vec!(thin_vec::ThinVec<u32>);
+        #[cfg(feature = "tinyvec")]
+        test_vec!(tinyvec::ArrayVec<[u32; 6]>);
         #[cfg(feature = "tinyvec")]
         test_vec!(tinyvec::TinyVec<[u32; 2]>);
     }
@@ -2219,6 +2262,12 @@ fn truncated_packed_collection() {
         truncated_packed_string::<Cow<[String]>>();
         truncated_packed_int::<Cow<[u64]>>();
     }
+    #[cfg(feature = "arrayvec")]
+    {
+        use arrayvec::ArrayVec;
+        truncated_packed_string::<ArrayVec<String, 2>>();
+        truncated_packed_int::<ArrayVec<u64, 2>>();
+    }
     #[cfg(feature = "smallvec")]
     {
         use smallvec::SmallVec;
@@ -2230,6 +2279,12 @@ fn truncated_packed_collection() {
         use thin_vec::ThinVec;
         truncated_packed_string::<ThinVec<String>>();
         truncated_packed_int::<ThinVec<u64>>();
+    }
+    #[cfg(feature = "tinyvec")]
+    {
+        use tinyvec::ArrayVec;
+        truncated_packed_string::<ArrayVec<[String; 2]>>();
+        truncated_packed_int::<ArrayVec<[u64; 2]>>();
     }
     #[cfg(feature = "tinyvec")]
     {
