@@ -16,7 +16,8 @@ pub enum DecodeErrorKind {
     WrongWireType,
     /// Value was out of domain for its type.
     OutOfDomainValue,
-    /// Value was invalid, such as non-UTF-8 data in a `String` field.
+    /// Value was invalid, such as non-UTF-8 data in a `String` field or an unsupported number of
+    /// items in a container.
     InvalidValue,
     /// Conflicting mutually exclusive fields.
     ConflictingFields,

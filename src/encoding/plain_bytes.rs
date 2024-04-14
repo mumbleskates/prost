@@ -209,12 +209,10 @@ impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
     }
 }
 
-// TODO(widders): ArrayVec (from arrayvec and tinyvec crates)
-
 #[cfg(test)]
 mod u8_array {
     mod length_0 {
-        use super::super::PlainBytes;
+        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
         check_type_test!(PlainBytes, expedient, [u8; 0], WireType::LengthDelimited);
         check_type_test!(
@@ -226,7 +224,7 @@ mod u8_array {
     }
 
     mod length_1 {
-        use super::super::PlainBytes;
+        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
         check_type_test!(PlainBytes, expedient, [u8; 1], WireType::LengthDelimited);
         check_type_test!(
@@ -238,7 +236,7 @@ mod u8_array {
     }
 
     mod length_8 {
-        use super::super::PlainBytes;
+        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
         check_type_test!(PlainBytes, expedient, [u8; 8], WireType::LengthDelimited);
         check_type_test!(
@@ -250,7 +248,7 @@ mod u8_array {
     }
 
     mod length_13 {
-        use super::super::PlainBytes;
+        use crate::encoding::PlainBytes;
         use crate::encoding::test::check_type_test;
         check_type_test!(PlainBytes, expedient, [u8; 13], WireType::LengthDelimited);
         check_type_test!(
@@ -261,3 +259,113 @@ mod u8_array {
         );
     }
 }
+
+#[allow(unused_macros)]
+macro_rules! plain_bytes_vec_impl {
+    (
+        $ty:ty,
+        $value:ident, $buf:ident, $chunk:ident,
+        $do_reserve:expr,
+        $do_extend:expr
+        $(, with generics ($($generics:tt)*))?
+    ) => {
+        impl$(<$($generics)*>)? Wiretyped<PlainBytes> for $ty {
+            const WIRE_TYPE: WireType = WireType::LengthDelimited;
+        }
+
+        impl$(<$($generics)*>)? ValueEncoder<PlainBytes> for $ty {
+            fn encode_value<B: BufMut + ?Sized>(value: &$ty, buf: &mut B) {
+                encode_varint(value.len() as u64, buf);
+                buf.put_slice(value.as_slice());
+            }
+
+            fn prepend_value<B: ReverseBuf + ?Sized>(value: &$ty, buf: &mut B) {
+                buf.prepend_slice(value);
+                prepend_varint(value.len() as u64, buf);
+            }
+
+            fn value_encoded_len(value: &$ty) -> usize {
+                encoded_len_varint(value.len() as u64) + value.len()
+            }
+
+            fn decode_value<B: Buf + ?Sized>(
+                $value: &mut $ty,
+                mut buf: Capped<B>,
+                _ctx: DecodeContext,
+            ) -> Result<(), DecodeError> {
+                let mut $buf = buf.take_length_delimited()?.take_all();
+                $value.clear();
+                $do_reserve;
+                while $buf.has_remaining() {
+                    let $chunk = $buf.chunk();
+                    $do_extend;
+                    $buf.advance($chunk.len());
+                }
+                Ok(())
+            }
+        }
+
+        impl$(<$($generics)*>)? DistinguishedValueEncoder<PlainBytes> for $ty {
+            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
+                value: &mut $ty,
+                buf: Capped<impl Buf + ?Sized>,
+                ctx: DecodeContext,
+            ) -> Result<Canonicity, DecodeError> {
+                ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
+                Ok(if !ALLOW_EMPTY && value.is_empty() {
+                    Canonicity::NotCanonical
+                } else {
+                    Canonicity::Canonical
+                })
+            }
+        }
+    }
+}
+
+#[cfg(feature = "arrayvec")]
+plain_bytes_vec_impl!(
+    arrayvec::ArrayVec<u8, N>,
+    value, buf, chunk,
+    if buf.remaining() > N {
+        return Err(DecodeError::new(InvalidValue));
+    },
+    value.extend(chunk.iter().cloned()),
+    with generics (const N: usize)
+);
+
+#[cfg(feature = "smallvec")]
+plain_bytes_vec_impl!(
+    smallvec::SmallVec<A>,
+    value, buf, chunk,
+    value.reserve(buf.remaining()),
+    value.extend_from_slice(chunk),
+    with generics (A: smallvec::Array<Item = u8>)
+);
+
+#[cfg(feature = "thin-vec")]
+plain_bytes_vec_impl!(
+    thin_vec::ThinVec<u8>,
+    value, buf, chunk,
+    value.reserve(buf.remaining()),
+    value.extend_from_slice(chunk)
+);
+
+#[cfg(feature = "tinyvec")]
+plain_bytes_vec_impl!(
+    tinyvec::ArrayVec<A>,
+    value, buf, chunk,
+    if buf.remaining() > A::CAPACITY {
+        return Err(DecodeError::new(InvalidValue));
+    },
+    value.extend_from_slice(chunk),
+    with generics (A: tinyvec::Array<Item = u8>)
+);
+
+#[cfg(feature = "tinyvec")]
+plain_bytes_vec_impl!(
+    tinyvec::TinyVec<A>,
+    value, buf, chunk,
+    value.reserve(buf.remaining()),
+    value.extend_from_slice(chunk),
+    with generics (A: tinyvec::Array<Item = u8>)
+);

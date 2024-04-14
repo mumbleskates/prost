@@ -1104,18 +1104,22 @@ encoding for maximum ease of use. If nothing but `Vec<u8>` will do,
 the `plainbytes` encoding will still encode a plain `Vec<u8>` as its bytes
 value.
 
-| Container type | Alternative                                     | Distinguished | Feature to enable |
-|----------------|-------------------------------------------------|---------------|-------------------|
-| `Vec<T>`       | [`Cow<[T]>`][cow]                               | when `T` is   | (none)            |
-| `Vec<T>`       | [`smallvec::SmallVec<[T]>`][smallvec]           | when `T` is   | "smallvec"        |
-| `Vec<T>`       | [`thin_vec::ThinVec<[T]>`][thinvec]             | when `T` is   | "thin_vec"        |
-| `Vec<T>`       | [`tinyvec::TinyVec<[T]>`][tinyvec]              | when `T` is   | "tinyvec"         |
-| `BTreeMap<T>`  | [`HashMap<T>`][hashmap][^hashnoncanon]          | no            | "std" (default)   |
-| `BTreeSet<T>`  | [`HashSet<T>`][hashset][^hashnoncanon]          | no            | "std" (default)   |
-| `BTreeMap<T>`  | [`hashbrown::HashMap<T>`][hbmap][^hashnoncanon] | no            | "hashbrown"       |
-| `BTreeSet<T>`  | [`hashbrown::HashSet<T>`][hbset][^hashnoncanon] | no            | "hashbrown"       |
+| Container type | Alternative                                           | Distinguished | Feature to enable |
+|----------------|-------------------------------------------------------|---------------|-------------------|
+| `Vec<T>`       | [`Cow<[T]>`][cow]                                     | when `T` is   | (none)            |
+| `Vec<T>`       | [`arrayvec::ArrayVec<[T; N]>`][arrayvec][^bounded]    | when `T` is   | "arrayvec"        |
+| `Vec<T>`       | [`smallvec::SmallVec<[T]>`][smallvec]                 | when `T` is   | "smallvec"        |
+| `Vec<T>`       | [`thin_vec::ThinVec<[T]>`][thinvec]                   | when `T` is   | "thin-vec"        |
+| `Vec<T>`       | [`tinyvec::ArrayVec<[T; N]>`][tinyarrayvec][^bounded] | when `T` is   | "tinyvec"         |
+| `Vec<T>`       | [`tinyvec::TinyVec<[T]>`][tinyvec]                    | when `T` is   | "tinyvec"         |
+| `BTreeMap<T>`  | [`HashMap<T>`][hashmap][^hashnoncanon]                | no            | "std" (default)   |
+| `BTreeSet<T>`  | [`HashSet<T>`][hashset][^hashnoncanon]                | no            | "std" (default)   |
+| `BTreeMap<T>`  | [`hashbrown::HashMap<T>`][hbmap][^hashnoncanon]       | no            | "hashbrown"       |
+| `BTreeSet<T>`  | [`hashbrown::HashSet<T>`][hbset][^hashnoncanon]       | no            | "hashbrown"       |
 
 [array]: https://doc.rust-lang.org/std/primitive.array.html
+
+[arrayvec]: https://docs.rs/arrayvec/latest/arrayvec/struct.ArrayVec.html
 
 [box]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 
@@ -1149,9 +1153,15 @@ value.
 
 [tinyvec]: https://docs.rs/tinyvec/latest/tinyvec/enum.TinyVec.html
 
+[tinyarrayvec]: https://docs.rs/tinyvec/latest/tinyvec/struct.ArrayVec.html
+
 [tuple]: https://doc.rust-lang.org/std/primitive.tuple.html
 
 [vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+
+[^bounded]: Some containers, notably `ArrayVec` flavors, have a built-in maximum
+capacity. When more bytes or items than will fit in these containers are
+encountered while decoding, decoding will fail with an "invalid value" error. 
 
 [^hashnoncanon]: Hash-table-based maps and sets are implemented, but are not
 compatible with distinguished encoding or decoding. If distinguished decoding is
