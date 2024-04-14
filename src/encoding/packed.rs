@@ -5,9 +5,9 @@ use crate::encoding::value_traits::{
     Collection, DistinguishedCollection, EmptyState, NewForOverwrite,
 };
 use crate::encoding::{
-    check_wire_type, encode_varint, encoded_len_varint, prepend_varint, unpacked, Canonicity,
-    Capped, DecodeContext, DecodeError, DistinguishedEncoder, DistinguishedValueEncoder, Encoder,
-    FieldEncoder, General, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped,
+    encode_varint, encoded_len_varint, prepend_varint, unpacked, Canonicity, Capped, DecodeContext,
+    DecodeError, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General,
+    TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeErrorKind::{InvalidValue, Truncated, UnexpectedlyRepeated};
 
@@ -311,7 +311,7 @@ where
 {
     #[inline]
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &[T; N], buf: &mut B, tw: &mut TagWriter) {
-        if !value.is_empty() {
+        if !EmptyState::is_empty(value) {
             <[T; N]>::encode_field(tag, value, buf, tw);
         }
     }
@@ -323,14 +323,14 @@ where
         buf: &mut B,
         tw: &mut TagRevWriter,
     ) {
-        if !value.is_empty() {
+        if !EmptyState::is_empty(value) {
             <[T; N]>::prepend_field(tag, value, buf, tw);
         }
     }
 
     #[inline]
     fn encoded_len(tag: u32, value: &[T; N], tm: &mut impl TagMeasurer) -> usize {
-        if !value.is_empty() {
+        if !EmptyState::is_empty(value) {
             <[T; N]>::field_encoded_len(tag, value, tm)
         } else {
             0
@@ -348,16 +348,41 @@ where
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
         }
-        check_wire_type(WireType::LengthDelimited, wire_type);
-        // TODO(widders): cross-wire with corresponding unpacked
-        // if wire_type == WireType::LengthDelimited {
-        //     // We've encountered the expected length-delimited type: decode it in packed format.
-        Self::decode_value(value, buf, ctx)
-        // } else {
-        //     // Otherwise, try decoding it in the unpacked representation
-        //     unpacked::decode::<<[T; N]>, E>(wire_type, value, buf, ctx)
-        // }
+        if wire_type == WireType::LengthDelimited {
+            // We've encountered the expected length-delimited type: decode it in packed format.
+            Self::decode_value(value, buf, ctx)
+        } else {
+            // Otherwise, try decoding it in the unpacked representation
+            unpacked::decode_array::<T, N, E>(wire_type, value, buf, ctx)
+        }
     }
 }
 
-// TODO(widders): distinguished encode
+impl<T, const N: usize, E> DistinguishedEncoder<Packed<E>> for [T; N]
+where
+    T: Eq + EmptyState + DistinguishedValueEncoder<E> + ValueEncoder<E>,
+{
+    #[inline]
+    fn decode_distinguished<B: Buf + ?Sized>(
+        wire_type: WireType,
+        duplicated: bool,
+        value: &mut [T; N],
+        buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<Canonicity, DecodeError> {
+        if duplicated {
+            return Err(DecodeError::new(UnexpectedlyRepeated));
+        }
+        if wire_type == WireType::LengthDelimited {
+            // We've encountered the expected length-delimited type: decode it in packed format.
+            // Set ALLOW_EMPTY to false: empty collections are not canonical
+            DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
+                value, buf, ctx,
+            )
+        } else {
+            // Otherwise, try decoding it in the unpacked representation
+            unpacked::decode_array::<T, N, E>(wire_type, value, buf, ctx)?;
+            Ok(Canonicity::NotCanonical)
+        }
+    }
+}

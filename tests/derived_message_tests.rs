@@ -1809,6 +1809,190 @@ fn decoding_vecs_with_swapped_packedness() {
     }
 }
 
+// Fixed-size array tests
+
+fn decoding_arrays_of_size<const N: usize>() {
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Foo<T>(
+        #[bilrost(encoding(packed))] T,
+        #[bilrost(encoding(unpacked))] T,
+    );
+
+    let with_values = ["foo"; N].map(String::from); // with_values all have non-empty values
+    let empty = [""; N].map(String::from); // empty are all empty
+    let mut almost_empty = [""; N].map(String::from); // almost_empty has 1 non-empty value, last
+    almost_empty[N - 1] = "foo".to_string();
+    let almost_empty = almost_empty;
+    assert::decodes_distinguished(
+        [(1, OV::packed(vec![OV::str("foo"); N]))],
+        Foo(with_values.clone(), empty.clone()),
+    );
+    assert::decodes_distinguished(
+        vec![(2, OV::str("foo")); N].as_slice(),
+        Foo(empty.clone(), with_values.clone()),
+    );
+    assert::decodes_distinguished(
+        [(1, OV::packed(almost_empty.iter().map(|s| OV::str(s))))],
+        Foo(almost_empty.clone(), empty.clone()),
+    );
+    assert::decodes_distinguished(
+        almost_empty.iter().map(|s| (2, OV::str(s))),
+        Foo(empty.clone(), almost_empty.clone()),
+    );
+}
+
+fn decoding_arrays_with_swapped_packedness_of_size<const N: usize>() {
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Oof<T>(
+        #[bilrost(encoding(unpacked))] T,
+        #[bilrost(encoding(packed))] T,
+    );
+
+    let with_values = [5; N]; // with_values all have non-empty values
+    let empty = [0; N]; // empty are all empty
+    let mut almost_empty = [0; N]; // almost_empty has 1 non-empty value, last
+    almost_empty[N - 1] = 5;
+    let almost_empty = almost_empty;
+
+    // In expedient mode, packed arrays will decode unpacked values and vice versa, but this is
+    // only detectable when the values are not length-delimited.
+    assert::decodes_non_canonically(
+        [(1, OV::packed(vec![OV::i32(5); N]))],
+        Oof(with_values, empty),
+        NotCanonical,
+    );
+    assert::decodes_non_canonically(
+        with_values.iter().map(|&i| (2, OV::i32(i))),
+        Oof(empty, with_values),
+        NotCanonical,
+    );
+    assert::decodes_non_canonically(
+        [(1, OV::packed(almost_empty.iter().map(|&i| OV::i32(i))))],
+        Oof(almost_empty, empty),
+        NotCanonical,
+    );
+    assert::decodes_non_canonically(
+        almost_empty.iter().map(|&i| (2, OV::i32(i))),
+        Oof(empty, almost_empty),
+        NotCanonical,
+    );
+}
+
+#[test]
+fn decoding_arrays() {
+    decoding_arrays_of_size::<1>();
+    decoding_arrays_of_size::<2>();
+    decoding_arrays_of_size::<3>();
+    decoding_arrays_of_size::<5>();
+    decoding_arrays_of_size::<8>();
+    decoding_arrays_with_swapped_packedness_of_size::<1>();
+    decoding_arrays_with_swapped_packedness_of_size::<2>();
+    decoding_arrays_with_swapped_packedness_of_size::<3>();
+    decoding_arrays_with_swapped_packedness_of_size::<5>();
+    decoding_arrays_with_swapped_packedness_of_size::<8>();
+
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct FooGeneral<T>(
+        #[bilrost(encoding(packed))] T,
+        #[bilrost(encoding(unpacked))] T,
+    );
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct FooFixed<T>(
+        #[bilrost(encoding(packed<fixed>))] T,
+        #[bilrost(encoding(unpacked<fixed>))] T,
+    );
+
+    // Packed with wrong numbers of values:
+    // Too few values
+    assert::never_decodes::<FooGeneral<[String; 2]>>(
+        [(1, OV::packed([OV::str("foo")]))],
+        InvalidValue,
+    );
+    assert::never_decodes::<FooGeneral<[i32; 2]>>([(1, OV::packed([OV::i32(1)]))], InvalidValue);
+    assert::never_decodes::<FooFixed<[u64; 2]>>(
+        [(1, OV::packed([OV::fixed_u64(1)]))],
+        InvalidValue,
+    );
+    // Too many values
+    assert::never_decodes::<FooGeneral<[String; 2]>>(
+        [(
+            1,
+            OV::packed([OV::str("foo"), OV::str("bar"), OV::str("baz")]),
+        )],
+        InvalidValue,
+    );
+    assert::never_decodes::<FooGeneral<[i32; 2]>>(
+        [(1, OV::packed([OV::i32(3), OV::i32(4), OV::i32(5)]))],
+        InvalidValue,
+    );
+    assert::never_decodes::<FooFixed<[u64; 2]>>(
+        [(
+            1,
+            OV::packed([OV::fixed_u64(3), OV::fixed_u64(4), OV::fixed_u64(5)]),
+        )],
+        InvalidValue,
+    );
+    // Just right
+    assert::decodes_distinguished(
+        [(1, OV::packed([OV::str("foo"), OV::str("bar")]))],
+        FooGeneral(
+            ["foo".to_string(), "bar".to_string()],
+            ["".to_string(), "".to_string()],
+        ),
+    );
+    assert::decodes_distinguished(
+        [(1, OV::packed([OV::i32(3), OV::i32(4)]))],
+        FooGeneral([3i32, 4], [0, 0]),
+    );
+    assert::decodes_distinguished(
+        [(1, OV::packed([OV::fixed_u64(3), OV::fixed_u64(4)]))],
+        FooFixed([3u64, 4], [0, 0]),
+    );
+
+    // Unpacked with wrong numbers of values:
+    // Too few values
+    assert::never_decodes::<FooGeneral<[String; 2]>>([(2, OV::str("foo"))], InvalidValue);
+    assert::never_decodes::<FooGeneral<[i32; 2]>>([(1, OV::packed([OV::i32(1)]))], InvalidValue);
+    assert::never_decodes::<FooFixed<[u64; 2]>>([(1, OV::fixed_u64(1))], InvalidValue);
+    // Too many values
+    assert::never_decodes::<FooGeneral<[String; 2]>>(
+        [
+            (2, OV::str("foo")),
+            (2, OV::str("bar")),
+            (2, OV::str("baz")),
+        ],
+        InvalidValue,
+    );
+    assert::never_decodes::<FooGeneral<[i32; 2]>>(
+        [(2, OV::i32(3)), (2, OV::i32(4)), (2, OV::i32(5))],
+        InvalidValue,
+    );
+    assert::never_decodes::<FooFixed<[u64; 2]>>(
+        [
+            (2, OV::fixed_u64(3)),
+            (2, OV::fixed_u64(4)),
+            (2, OV::fixed_u64(5)),
+        ],
+        InvalidValue,
+    );
+    // Just right
+    assert::decodes_distinguished(
+        [(2, OV::str("foo")), (2, OV::str("bar"))],
+        FooGeneral(
+            ["".to_string(), "".to_string()],
+            ["foo".to_string(), "bar".to_string()],
+        ),
+    );
+    assert::decodes_distinguished(
+        [(2, OV::i32(3)), (2, OV::i32(4))],
+        FooGeneral([0i32, 0], [3, 4]),
+    );
+    assert::decodes_distinguished(
+        [(2, OV::fixed_u64(3)), (2, OV::fixed_u64(4))],
+        FooFixed([0u64, 0], [3, 4]),
+    );
+}
+
 // Set tests
 
 #[test]
@@ -2648,5 +2832,3 @@ fn unknown_fields_distinguished() {
         NotCanonical,
     );
 }
-
-// TODO(widders): tuple encoding and tuple equivalency to message types
