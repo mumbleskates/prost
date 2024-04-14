@@ -274,6 +274,7 @@ impl<T, const N: usize, E> Encoder<Unpacked<E>> for [T; N]
 where
     T: EmptyState + ValueEncoder<E>,
 {
+    #[inline]
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &[T; N], buf: &mut B, tw: &mut TagWriter) {
         if !EmptyState::is_empty(value) {
             for val in value.iter() {
@@ -282,6 +283,7 @@ where
         }
     }
 
+    #[inline]
     fn prepend_encode<B: ReverseBuf + ?Sized>(
         tag: u32,
         value: &Self,
@@ -295,6 +297,7 @@ where
         }
     }
 
+    #[inline]
     fn encoded_len(tag: u32, value: &[T; N], tm: &mut impl TagMeasurer) -> usize {
         if !EmptyState::is_empty(value) {
             // Each *additional* field encoded after the first needs only 1 byte for the field key.
@@ -304,6 +307,7 @@ where
         }
     }
 
+    #[inline]
     fn decode<B: Buf + ?Sized>(
         wire_type: WireType,
         duplicated: bool,
@@ -332,6 +336,7 @@ impl<T, const N: usize, E> DistinguishedEncoder<Unpacked<E>> for [T; N]
 where
     T: Eq + EmptyState + DistinguishedValueEncoder<E> + ValueEncoder<E>,
 {
+    #[inline]
     fn decode_distinguished<B: Buf + ?Sized>(
         wire_type: WireType,
         duplicated: bool,
