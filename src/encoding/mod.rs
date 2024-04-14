@@ -792,8 +792,6 @@ pub trait Encoder<E> {
         tw: &mut TagRevWriter,
     );
 
-    // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
-    //  emit-reversed
     /// Returns the encoded length of the field, including the key.
     fn encoded_len(tag: u32, value: &Self, tm: &mut impl TagMeasurer) -> usize;
 
@@ -1353,8 +1351,6 @@ pub trait ValueEncoder<E>: Wiretyped<E> {
     /// Prepends the given value unconditionally. This is guaranteed to emit data to the buffer.
     fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B);
 
-    // TODO(widders): change to (or augment with) build-in-reverse-then-emit-forward and
-    //  emit-reversed
     /// Returns the number of bytes the given value would be encoded as.
     fn value_encoded_len(value: &Self) -> usize;
 
