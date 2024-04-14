@@ -1333,7 +1333,8 @@ and byte strings with lengths of exactly 4 or exactly 8.
 
 This opaque format should remain entirely stable, and is (for what it is worth)
 self-describing. The *meaning* of the tags and their values is likely to vary
-widely depending on the schema in use (which is *not* self-describing), 
+widely depending on the schema in use (which is *not* self-describing), but
+outside of the opaque data's interpretation the format will not vary.
 
 #### Messages
 
