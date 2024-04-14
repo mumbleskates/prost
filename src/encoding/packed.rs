@@ -4,7 +4,11 @@ use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{
     Collection, DistinguishedCollection, EmptyState, NewForOverwrite,
 };
-use crate::encoding::{encode_varint, encoded_len_varint, prepend_varint, unpacked, Canonicity, Capped, DecodeContext, DecodeError, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped, check_wire_type};
+use crate::encoding::{
+    check_wire_type, encode_varint, encoded_len_varint, prepend_varint, unpacked, Canonicity,
+    Capped, DecodeContext, DecodeError, DistinguishedEncoder, DistinguishedValueEncoder, Encoder,
+    FieldEncoder, General, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped,
+};
 use crate::DecodeErrorKind::{InvalidValue, Truncated, UnexpectedlyRepeated};
 
 pub struct Packed<E = General>(E);
@@ -231,6 +235,7 @@ where
             // We know the exact size of a valid value and this isn't it.
             return Err(DecodeError::new(InvalidValue));
         }
+
         for dest in value {
             // If the value's size was already checked, we don't need to check again
             if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
@@ -239,6 +244,7 @@ where
             }
             ValueEncoder::<E>::decode_value(dest, capped.lend(), ctx.clone())?;
         }
+
         // If the value's size was already checked, we don't need to check again
         if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && capped.has_remaining()? {
             // Too many values or trailing data
@@ -249,7 +255,55 @@ where
     }
 }
 
-// TODO(widders): distinguished value
+impl<T, const N: usize, E> DistinguishedValueEncoder<Packed<E>> for [T; N]
+where
+    T: Eq + DistinguishedValueEncoder<E>,
+{
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
+        value: &mut [T; N],
+        mut buf: Capped<impl Buf + ?Sized>,
+        ctx: DecodeContext,
+    ) -> Result<Canonicity, DecodeError> {
+        let mut capped = buf.take_length_delimited()?;
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
+            Some(fixed_size) if capped.remaining_before_cap() != fixed_size * N
+        ) {
+            // We know the exact size of a valid value and this isn't it.
+            return Err(DecodeError::new(InvalidValue));
+        }
+
+        let mut canon = Canonicity::Canonical;
+        for dest in value.iter_mut() {
+            // If the value's size was already checked, we don't need to check again
+            if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
+                // Not enough values
+                return Err(DecodeError::new(InvalidValue));
+            }
+            canon.update(
+                // Empty values are allowed because they are nested
+                DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
+                    dest,
+                    capped.lend(),
+                    ctx.clone(),
+                )?,
+            );
+        }
+
+        // If the value's size was already checked, we don't need to check again
+        if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && capped.has_remaining()? {
+            // Too many values or trailing data
+            Err(DecodeError::new(InvalidValue))
+        } else {
+            Ok(if !ALLOW_EMPTY && value.is_empty() {
+                Canonicity::NotCanonical
+            } else {
+                canon
+            })
+        }
+    }
+}
 
 impl<T, const N: usize, E> Encoder<Packed<E>> for [T; N]
 where
@@ -298,7 +352,7 @@ where
         // TODO(widders): cross-wire with corresponding unpacked
         // if wire_type == WireType::LengthDelimited {
         //     // We've encountered the expected length-delimited type: decode it in packed format.
-            Self::decode_value(value, buf, ctx)
+        Self::decode_value(value, buf, ctx)
         // } else {
         //     // Otherwise, try decoding it in the unpacked representation
         //     unpacked::decode::<<[T; N]>, E>(wire_type, value, buf, ctx)
