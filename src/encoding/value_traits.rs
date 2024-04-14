@@ -356,25 +356,15 @@ pub trait DistinguishedCollection: Collection + Eq {
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind>;
 }
 
-macro_rules! trivially_distinguished_collection {
-    (
-        $ty:ty
-        $(, with generics ($($generics:tt)*))?
-        $(, with where clause ($($where_clause:tt)*))?
-    ) => {
-        impl<T, $($($generics)*)?> DistinguishedCollection for $ty
-        where
-            T: Eq,
-            $($($where_clause)*)?
-        {
-            fn insert_distinguished(
-                &mut self,
-                item: <Self as Collection>::Item
-            ) -> Result<Canonicity, DecodeErrorKind> {
-                <Self as Collection>::insert(self, item)?;
-                Ok(Canonicity::Canonical)
-            }
-        }
+trait TriviallyDistinguishedCollection {}
+
+impl<T> DistinguishedCollection for T
+where
+    T: Eq + Collection + TriviallyDistinguishedCollection,
+{
+    #[inline]
+    fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind> {
+        self.insert(item).map(|()| Canonicity::Canonical)
     }
 }
 
@@ -459,7 +449,7 @@ impl<T> Collection for Vec<T> {
     }
 }
 
-trivially_distinguished_collection!(Vec<T>);
+impl<T> TriviallyDistinguishedCollection for Vec<T> {}
 
 impl<T> EmptyState for Cow<'_, [T]>
 where
@@ -524,7 +514,7 @@ where
     }
 }
 
-trivially_distinguished_collection!(Cow<'_, [T]>, with where clause (T: Clone));
+impl<T> TriviallyDistinguishedCollection for Cow<'_, [T]> where T: Clone {}
 
 #[cfg(feature = "arrayvec")]
 impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
@@ -582,10 +572,7 @@ impl<T, const N: usize> Collection for arrayvec::ArrayVec<T, N> {
 }
 
 #[cfg(feature = "arrayvec")]
-trivially_distinguished_collection!(
-    arrayvec::ArrayVec<T, N>,
-    with generics (const N: usize)
-);
+impl<T, const N: usize> TriviallyDistinguishedCollection for arrayvec::ArrayVec<T, N> {}
 
 #[cfg(feature = "smallvec")]
 impl<T, A: smallvec::Array<Item = T>> EmptyState for smallvec::SmallVec<A> {
@@ -640,10 +627,7 @@ impl<T, A: smallvec::Array<Item = T>> Collection for smallvec::SmallVec<A> {
 }
 
 #[cfg(feature = "smallvec")]
-trivially_distinguished_collection!(
-    smallvec::SmallVec<A>,
-    with generics (A: smallvec::Array<Item = T>)
-);
+impl<A: smallvec::Array> TriviallyDistinguishedCollection for smallvec::SmallVec<A> {}
 
 #[cfg(feature = "thin-vec")]
 impl<T> EmptyState for thin_vec::ThinVec<T> {
@@ -698,7 +682,7 @@ impl<T> Collection for thin_vec::ThinVec<T> {
 }
 
 #[cfg(feature = "thin-vec")]
-trivially_distinguished_collection!(thin_vec::ThinVec<T>);
+impl<T> TriviallyDistinguishedCollection for thin_vec::ThinVec<T> {}
 
 #[cfg(feature = "tinyvec")]
 impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::ArrayVec<A> {
@@ -758,10 +742,7 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::ArrayVec<A> {
 }
 
 #[cfg(feature = "tinyvec")]
-trivially_distinguished_collection!(
-    tinyvec::ArrayVec<A>,
-    with generics (A: tinyvec::Array<Item = T>)
-);
+impl<A: tinyvec::Array> TriviallyDistinguishedCollection for tinyvec::ArrayVec<A> {}
 
 #[cfg(feature = "tinyvec")]
 impl<A: tinyvec::Array> EmptyState for tinyvec::TinyVec<A> {
@@ -816,10 +797,7 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::TinyVec<A> {
 }
 
 #[cfg(feature = "tinyvec")]
-trivially_distinguished_collection!(
-    tinyvec::TinyVec<A>,
-    with generics (A: tinyvec::Array<Item = T>)
-);
+impl<A: tinyvec::Array> TriviallyDistinguishedCollection for tinyvec::TinyVec<A> {}
 
 impl<T> EmptyState for BTreeSet<T> {
     #[inline]
