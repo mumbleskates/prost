@@ -1683,8 +1683,11 @@ For supported non-message types, the following orderings are standardized:
 | boolean                              | false, then true                                                                      |
 | integer                              | ascending numeric value                                                               |
 | text string, byte string, byte array | [lexicographically][lex] ascending, by bytes or UTF-8 bytes[^u8bytes]                 |
-| collection (vec, set, etc.)          | lexicographically ascending, by nested values                                         |
-| mapping                              | lexicographically ascending, by alternating key-then-value                            |
+| tuple                                | lexicographically ascending, by nested values                                         |
+| array                                | lexicographically ascending, by nested values                                         |
+| collection (vec)                     | lexicographically ascending, by nested values                                         |
+| unordered collection (set)           | lexicographically ascending, by ascending nested values                               |
+| mapping                              | lexicographically ascending, by ascending keys alternating key-then-value             |
 | floating point number                | [(not specified, nor recommended)](#floating-point-values-and-distinguished-decoding) |
 | `Enumeration` types                  | [(not specified)](#canonical-order-and-distinguished-representation)                  |
 | `Message` types                      | [(not specified)](#canonical-order-and-distinguished-representation)                  |
