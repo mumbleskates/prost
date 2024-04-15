@@ -2,7 +2,7 @@
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/mumbleskates/bilrost/bilrost/logo/bilrost256.jpg"
 )]
-#![doc(html_root_url = "https://docs.rs/bilrost/0.1006.0")]
+#![doc(html_root_url = "https://docs.rs/bilrost/0.1007.0-dev")]
 #![no_std]
 
 extern crate alloc;
