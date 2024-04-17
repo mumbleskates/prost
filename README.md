@@ -1034,6 +1034,7 @@ assert_eq!(registry, decoded);
 | `general` & `fixed`           | [`u64`][prim], [`i64`][prim]                  | fixed-size 64 bits     | yes              |
 | `general` & `varint`          | [`u64`][prim], [`u32`][prim], [`u16`][prim]   | varint                 | yes              |
 | `general` & `varint`          | [`i64`][prim], [`i32`][prim], [`i16`][prim]   | varint                 | yes              |
+| `general` & `varint`          | [`usize`][prim], [`isize`][prim]              | varint                 | yes              |
 | `general` & `varint`          | [`bool`][prim]                                | varint                 | yes              |
 | `general`                     | derived [`Enumeration`](#enumerations)[^enum] | varint                 | yes              |
 | `general`                     | [`String`][str]*                              | length-delimited       | yes              |

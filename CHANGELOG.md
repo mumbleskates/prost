@@ -4,6 +4,10 @@
 
 ### New features
 
+* Added support for encoding `usize` and `isize` pointer-sized integers. They
+  will still have different supported maximums on platforms with different sized
+  values, but this still has completely reasonable failure modes.
+
 ### Fixes
 
 ### Cleanups
