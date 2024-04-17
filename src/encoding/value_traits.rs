@@ -80,10 +80,12 @@ empty_state_via_default!(u8);
 empty_state_via_default!(u16);
 empty_state_via_default!(u32);
 empty_state_via_default!(u64);
+empty_state_via_default!(usize);
 empty_state_via_default!(i8);
 empty_state_via_default!(i16);
 empty_state_via_default!(i32);
 empty_state_via_default!(i64);
+empty_state_via_default!(isize);
 
 macro_rules! empty_state_for_float {
     ($ty:ty) => {

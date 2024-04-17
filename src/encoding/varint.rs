@@ -162,6 +162,14 @@ from_uint64(value) {
     value
 });
 
+varint!(varint_usize, usize,
+to_uint64(value) {
+    *value as u64
+},
+from_uint64(value) {
+    usize::try_from(value).map_err(|_| DecodeError::new(OutOfDomainValue))?
+});
+
 varint!(varint_i8, i8,
 to_uint64(value) {
     i8_to_unsigned(*value) as u64
@@ -198,4 +206,13 @@ to_uint64(value) {
 },
 from_uint64(value) {
     u64_to_signed(value)
+});
+
+varint!(varint_isize, isize,
+to_uint64(value) {
+    i64_to_unsigned(*value as i64)
+},
+from_uint64(value) {
+    isize::try_from(u64_to_signed(value))
+        .map_err(|_| DecodeError::new(OutOfDomainValue))?
 });

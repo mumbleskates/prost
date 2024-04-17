@@ -95,6 +95,10 @@ delegate_value_encoding!(delegate from (General) to (Varint)
     for type (u64) including distinguished);
 delegate_value_encoding!(delegate from (General) to (Varint)
     for type (i64) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (usize) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (isize) including distinguished);
 
 // General also encodes floating point values.
 delegate_value_encoding!(delegate from (General) to (Fixed) for type (f32));

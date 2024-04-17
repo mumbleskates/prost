@@ -920,12 +920,14 @@ fn parsing_varints() {
         i32,
         u64,
         i64,
+        usize,
+        isize,
     );
 
     assert::decodes_distinguished([], Foo::empty());
     assert::decodes_distinguished(
-        (1..=9).map(|tag| (tag, OV::Varint(1))),
-        Foo(true, 1, -1, 1, -1, 1, -1, 1, -1),
+        (1..=11).map(|tag| (tag, OV::Varint(1))),
+        Foo(true, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1),
     );
     for field in (1..=9).cartesian_product([
         // Currently it is not supported to parse fixed-width values into varint fields.
@@ -944,6 +946,10 @@ fn parsing_varints() {
         (5, 65536),
         (6, 1 << 32),
         (7, 1 << 32),
+        #[cfg(nottarget_pointer_width = "64")]
+        (10, (usize::MAX as u64) + 1),
+        #[cfg(nottarget_pointer_width = "64")]
+        (11, (usize::MAX as u64) + 1),
     ] {
         assert::never_decodes::<Foo>([(tag, OV::u64(out_of_range))], OutOfDomainValue);
         let should_fit = [(tag, OV::u64(out_of_range - 1))];
@@ -968,17 +974,23 @@ fn bools() {
 #[test]
 fn truncated_varint() {
     #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-    struct Foo<T>(T);
+    struct Foo<T>(#[bilrost(encoding(varint))] T);
 
-    let buf = [(1, OV::Varint(1_000_000))]
+    let buf = [(1, OV::Varint(200))]
         .into_opaque_message()
         .encode_to_vec();
     assert::is_invalid::<OpaqueMessage>(&buf[..buf.len() - 1], Truncated);
+    assert::is_invalid::<Foo<bool>>(&buf[..buf.len() - 1], Truncated);
+    assert::is_invalid::<Foo<u8>>(&buf[..buf.len() - 1], Truncated);
+    assert::is_invalid::<Foo<u16>>(&buf[..buf.len() - 1], Truncated);
     assert::is_invalid::<Foo<u32>>(&buf[..buf.len() - 1], Truncated);
     assert::is_invalid::<Foo<u64>>(&buf[..buf.len() - 1], Truncated);
+    assert::is_invalid::<Foo<usize>>(&buf[..buf.len() - 1], Truncated);
+    assert::is_invalid::<Foo<i8>>(&buf[..buf.len() - 1], Truncated);
+    assert::is_invalid::<Foo<i16>>(&buf[..buf.len() - 1], Truncated);
     assert::is_invalid::<Foo<i32>>(&buf[..buf.len() - 1], Truncated);
     assert::is_invalid::<Foo<i64>>(&buf[..buf.len() - 1], Truncated);
-    assert::is_invalid::<Foo<bool>>(&buf[..buf.len() - 1], Truncated);
+    assert::is_invalid::<Foo<isize>>(&buf[..buf.len() - 1], Truncated);
 }
 
 #[test]
