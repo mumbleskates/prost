@@ -976,9 +976,7 @@ fn truncated_varint() {
     #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
     struct Foo<T>(#[bilrost(encoding(varint))] T);
 
-    let buf = [(1, OV::Varint(200))]
-        .into_opaque_message()
-        .encode_to_vec();
+    let buf = [(1, OV::Varint(200))].into_opaque_message().encode_to_vec();
     assert::is_invalid::<OpaqueMessage>(&buf[..buf.len() - 1], Truncated);
     assert::is_invalid::<Foo<bool>>(&buf[..buf.len() - 1], Truncated);
     assert::is_invalid::<Foo<u8>>(&buf[..buf.len() - 1], Truncated);
