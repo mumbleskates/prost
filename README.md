@@ -448,11 +448,12 @@ The `bilrost` crate has several optional features:
 * "extended-diagnostics": with a small added dependency, attempts to provide
   better compile-time diagnostics when derives and derived implementations don't
   work. Somewhat experimental.
+* "arrayvec": provides first-party support for `arrayvec::ArrayVec`
 * "bytestring": provides first-party support for `bytestring::Bytestring`
 * "hashbrown": provides first-party support for `hashbrown::{HashMap, HashSet}`
 * "smallvec": provides first-party support for `smallvec::SmallVec`
 * "thin-vec": provides first-party support for `thin-vec::ThinVec`
-* "tinyvec": provides first-party support for `tinyvec::TinyVec`
+* "tinyvec": provides first-party support for `tinyvec::{ArrayVec, TinyVec}`
 
 #### `no_std` support
 
@@ -592,6 +593,8 @@ because it can't have access to the definitions of the field's type, but the
 list of tags declared in this attribute and the list of tags that the oneof
 actually has are statically checked for equality at compile time.
 
+<details><summary>Example of a oneof with non-matching tags</summary>
+
 ```rust,compile_fail
 use bilrost::{Message, Oneof};
 
@@ -615,6 +618,8 @@ struct TagsDontMatch {
 // actually used somewhere.
 let _ = TagsDontMatch::default().encoded_len();
 ```
+
+</details>
 
 [^tagranges]: The way the full list of tags is specified within the `oneof`
 attribute and the `reserved_tags` attribute is the same: the whole list is comma
@@ -828,7 +833,7 @@ of a normal Bilrost varint.)
   function.
 * `encode_to_vec`, `encode_to_bytes`, and `..length_delimited..` variants:
   encodes the message into a new vec or bytes and returns that container. This
-  is not quite as efficient as `encode_fast`, but always produces an encoding
+  is not always as efficient as `encode_fast`, but always produces an encoding
   that is contiguous in memory.
 * `encode`, `encode_length_delimited`: encodes the message into a
   `&mut bytes::BufMut`, appending it after any data that is already there.
@@ -880,9 +885,10 @@ The `Message` and `DistinguishedMessage` traits are object-safe and can be used
 via [trait objects][traitobj]. All of their functionality (except the `decode`
 methods for creating a message value from data *ex nihilo*) is available via
 object-safe alternatives. Messages can be cleared (reset to empty values);
-measured for their encoded byte length; encoded to [`Vec<u8>`][vec],
-[`Bytes`][bytes], or into a [`&mut dyn Buf`][bytes]; or decoded (replacing the
-value) from [`&[u8]` slice][slice] or a [`&mut dyn BufMut`][bufmut].
+measured for their encoded byte length; encoded to [`ReverseBuffer`](
+#reversebuffer), [`Vec<u8>`][vec], [`Bytes`][bytes], or into a
+[`&mut dyn BufMut`][bufmut]; or decoded (replacing the value) from
+[`&[u8]` slice][slice] or a [`&mut dyn Buf`][buf].
 
 [buf]: https://docs.rs/bytes/latest/bytes/buf/trait.Buf.html
 
@@ -901,13 +907,53 @@ methods.
 
 ### Supporting types and traits
 
+Because nested values in Bilrost must have a known encoded length before they
+are written (just like protobuf), if a message has many levels of nesting the
+size of that innermost message must be known to encode each and every message
+that contains it. If the encoded data is being written from beginning to end,
+this means one of the following:
+
+1. Checking the encoded length of each message struct before it is encoded
+    * This is very simple and quite fast in the usual case where there is no
+      nesting.
+    * If a message with 100 levels of nesting is encoded, this means measuring
+      the encoded length of each nested message about 5,000 extra times.
+    * This is the choice made by `prost`, the original upstream of this library.
+2. Caching the length of each message permanently within its struct and taking
+   care to invalidate that cache every time it is updated
+    * Most protobuf libraries choose this option, but it involves adding extra
+      fields to each message struct and forces extra logic whenever the struct's
+      fields are modified. This becomes very intrusive and is one of the major
+      reasons that protobuf structs often fit in so poorly with the rest of the
+      program.
+3. Caching the length of each part of the message in a single pass before any
+   writing begins
+    * [At one point][protobuf-rs-comparison] `rust-protobuf` did this. It avoids
+      both the quadratic cost of option 1 and the intrusive nature of option 2,
+      at the cost of some speed.
+
+[protobuf-rs-comparison]: https://github.com/stepancheg/rust-protobuf/tree/16c9dc509267a6673f29563f9a01cc3026cc2144/protobuf-examples/vs-prost
+
+`bilrost` goes for a fourth option: Rather than encoding in the forwards
+direction and doing tricks to determine the length of values that will be
+written in the future, the encoding can be constructed backwards. Any nested
+data that needs to be prefixed with its length will already be encoded by the
+time its length needs to be known, and the whole nested message can be encoded
+in a single pass.
+
+Performance varies between forwards encoding (`encode`) and backwards encoding
+(`prepend`), depending on the nature of the messages being encoded. In some
+cases backwards encoding will be slightly slower, and in some cases it will be
+dramatically faster; both options are made available.
+
 #### `ReverseBuf`
 
 `bilrost::buf::ReverseBuf` is a trait corresponding to `bytes::BufMut` which
 works in almost all the same ways, except chunks of bytes that are written to it
 are added *before* the data already in the buffer, rather than after it. This
 can make writing length-delimited encodings such as Bilrost significantly more
-efficient to write, especially as they contain more values and deeper nesting.
+efficient to write, especially as messages contain more fields and nest more
+deeply.
 
 `ReverseBuf` declares `bytes::Buf` as a supertrait, so any value of this type
 can be consumed as a buffer.
@@ -921,9 +967,9 @@ which returns a read-only view of the buffer that also implements `bytes::Buf`
 but does not cause the buffer to be consumed when it is read through that trait.
 
 `ReverseBuffer` allocates lazily, grows exponentially, and stores its data in
-multiple allocations of increasing size. It is typically the most efficient type
-to encode a `bilrost` message into, and it offers many of the same amenities as
-the other options (`Vec` and `Bytes`).
+multiple allocations of increasing size. It is often the most efficient type
+to encode a `bilrost` message into, and it can be efficiently read and copied
+out as a `bytes::Buf` the same as the other options (`Vec` and `Bytes`).
 
 ### Encoding and decoding example
 
@@ -1162,7 +1208,7 @@ value.
 
 [^bounded]: Some containers, notably `ArrayVec` flavors, have a built-in maximum
 capacity. When more bytes or items than will fit in these containers are
-encountered while decoding, decoding will fail with an "invalid value" error. 
+encountered while decoding, decoding will fail with an "invalid value" error.
 
 [^hashnoncanon]: Hash-table-based maps and sets are implemented, but are not
 compatible with distinguished encoding or decoding. If distinguished decoding is
