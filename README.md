@@ -1358,9 +1358,9 @@ Strengths of Bilrost's encoding include those of protocol buffers:
   designed from a protocol level to make invalid values unrepresentable where
   possible
 * Bilrost is more compact than protobuf without incurring significant overhead.
-  nuances of representation in protobuf that Bilrost cannot represent or has no
-  analog for are either permanently deprecated, or all conforming decoders are
-  required to discard the difference anyway.
+  Any nuanced representations that are possible in protobuf that Bilrost cannot
+  represent or has no analog for are either permanently deprecated, or all
+  conforming protobuf decoders are required to discard the difference anyway.
 * `bilrost` aims to be as ergonomic as is practical in plain rust, with basic
   annotations and derive macros. It's possible for such a library to be quite
   nice to use!
