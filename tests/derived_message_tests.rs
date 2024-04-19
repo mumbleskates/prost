@@ -2462,6 +2462,32 @@ fn enumeration_decoding() {
     assert::decodes_non_canonically([(2, OV::u32(0))], Foo(None, Zero), NotCanonical);
     assert::decodes_distinguished([(2, OV::u32(1_000))], Foo(None, Big));
     assert::decodes_distinguished([(2, OV::u32(1_000_000))], Foo(None, Bigger));
+
+    #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Bar<T>(
+        #[bilrost(encoding(packed))] [T; 5],
+        #[bilrost(encoding(unpacked))] [T; 5],
+    );
+
+    static_assertions::assert_impl_all!(Bar<HasZero>: Message, DistinguishedMessage);
+    // Fixed-size arrays of enumeration types that don't impl EmptyState aren't supported, because
+    // the array type has no empty state either.
+    static_assertions::assert_not_impl_any!(Bar<DefaultButNoZero>: Message, DistinguishedMessage);
+
+    #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Baz<T>(
+        #[bilrost(encoding(packed))] Option<[T; 5]>,
+        #[bilrost(encoding(unpacked))] Option<[T; 5]>,
+    );
+
+    static_assertions::assert_impl_all!(Bar<HasZero>: Message, DistinguishedMessage);
+    // Currently, even optional fixed-size arrays of non-EmptyState enumerations are unsupported.
+    // Supporting this would require a NewForOverwrite impl for arrays of non-EmptyState
+    // enumerations, but there is seemingly no good way to make a general implementation of this
+    // (since EmptyState has a covering impl of fixed size arrays of impl EmptyState, and
+    // NewForOverwrite is implemented for all impl EmptyState) and the derive macro can't implement
+    // NewForOverwrite for [T; N] either because arrays are not marked as a fundamental type.
+    static_assertions::assert_not_impl_any!(Bar<DefaultButNoZero>: Message, DistinguishedMessage);
 }
 
 #[test]
