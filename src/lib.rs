@@ -4,6 +4,7 @@
 )]
 #![doc(html_root_url = "https://docs.rs/bilrost/0.1007.0-dev")]
 #![no_std]
+#![forbid(unsafe_op_in_unsafe_fn)]
 
 extern crate alloc;
 #[cfg(feature = "std")]
