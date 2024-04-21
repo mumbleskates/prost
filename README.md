@@ -452,7 +452,7 @@ The `bilrost` crate has several optional features:
 * "bytestring": provides first-party support for `bytestring::Bytestring`
 * "hashbrown": provides first-party support for `hashbrown::{HashMap, HashSet}`
 * "smallvec": provides first-party support for `smallvec::SmallVec`
-* "thin-vec": provides first-party support for `thin-vec::ThinVec`
+* "thin-vec": provides first-party support for `thin_vec::ThinVec`
 * "tinyvec": provides first-party support for `tinyvec::{ArrayVec, TinyVec}`
 
 #### `no_std` support
