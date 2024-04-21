@@ -19,11 +19,6 @@ rust-version = "1.65"
 [lib]
 doctest = false
 
-[features]
-default = ["std"]
-serde_json = ["dep:serde_json"]
-std = ["bilrost/std"]
-
 [dependencies]
 bilrost = { version = "=0.1007.0-dev", path = "..", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "float_roundtrip"], optional = true }
@@ -32,3 +27,8 @@ serde_json = { version = "1", default-features = false, features = ["alloc", "fl
 bilrost = { version = "=0.1007.0-dev", path = "..", default-features = false, features = ["derive", "opaque"] }
 itertools = { version = ">=0.10, <0.13", default-features = false, features = ["use_alloc"] }
 proptest = "1"
+
+[features]
+default = ["std"]
+serde_json = ["dep:serde_json"]
+std = ["bilrost/std"]
