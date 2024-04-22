@@ -1709,7 +1709,7 @@ represented as encoded data on the wire.
 | any integer                                           | 0                                  |
 | any floating point number                             | exactly +0.0                       |
 | fixed-size byte array                                 | all zeros                          |
-| text string, byte string, collection, mapping, or set | containing zero bytes or items     |
+| text string, byte string, collection, mapping, or set | containing no bytes or items       |
 | tuples `(A, B, C, ...)`                               | each item is empty                 |
 | arrays `[T; N]`                                       | each item is empty                 |
 | `Enumeration` type                                    | the variant represented by 0       |
