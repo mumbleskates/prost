@@ -67,9 +67,6 @@ extended-diagnostics = ["dep:const_panic"]
 no-recursion-limit = []
 std = []
 
-# Deprecated: Does nothing. Opaque message types are always available.
-opaque = []
-
 third-party-type-support = [
     "arrayvec",
     "bytestring",
