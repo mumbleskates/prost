@@ -1481,9 +1481,12 @@ where
 
 /// Different value encoders may dispatch encoding their plain values slightly differently, but
 /// values wrapped in Option are always encoded the same.
-// TODO(widders): this would need to be broken up if a value type that may be encoded with different
-//  wire-types is implemented. Or, plausibly, field encoder should have a more nuanced understanding
-//  of wire-types.
+///
+/// This would perhaps, in theory, need to be broken up if a value type whose values may be encoded
+/// with different wire-types could be implemented. However, this can never happen: It is
+/// essentially forbidden for any type to value-encode with differing wire types, because *value*
+/// decoding does not get to know the wire type; when values are encoded packed end to end the wire
+/// type for each is not stored.
 impl<T, E> Encoder<E> for Option<T>
 where
     T: NewForOverwrite + ValueEncoder<E>,
