@@ -2143,7 +2143,6 @@ mod test {
     macro_rules! check_type {
         ($kind:ident, $encoder_trait:ident, $decode:ident $(, enforce with $require:ident)?) => {
             pub mod $kind {
-                use bytes::BytesMut;
                 use crate::buf::ReverseBuffer;
                 use super::*;
 
@@ -2161,40 +2160,48 @@ mod test {
                         &mut RuntimeTagMeasurer::new(),
                     );
 
-                    let mut forward_buf = BytesMut::with_capacity(expected_len);
-                    <T as Encoder<E>>::encode(tag, &value, &mut forward_buf, &mut TagWriter::new());
-
-                    let forward_encoded = &mut forward_buf.freeze();
+                    let mut forward_encoded = Vec::with_capacity(expected_len);
+                    <T as Encoder<E>>::encode(
+                        tag,
+                        &value,
+                        &mut forward_encoded,
+                        &mut TagWriter::new(),
+                    );
                     prop_assert_eq!(
                         expected_len,
-                        forward_encoded.remaining(),
-                        "encoded_len wrong; expected: {}, actual: {}",
-                        expected_len,
-                        forward_encoded.remaining()
+                        forward_encoded.len(),
+                        "forward encoded length was wrong"
                     );
 
                     let mut prepend_buf = ReverseBuffer::new();
                     let mut trw = TagRevWriter::new();
                     <T as Encoder<E>>::prepend_encode(tag, &value, &mut prepend_buf, &mut trw);
                     trw.finalize(&mut prepend_buf);
+                    prop_assert_eq!(
+                        expected_len,
+                        prepend_buf.len(),
+                        "prepend encoded length was wrong"
+                    );
+
                     let mut prepended = Vec::new();
                     prepended.put(prepend_buf.reader());
 
                     if check_type_prepend_must_match_forward::$kind::VALUE {
                         prop_assert_eq!(
-                            forward_encoded.as_ref(),
-                            prepended.as_slice(),
+                            &forward_encoded,
+                            &prepended,
                             "prepend did not match append",
                         );
                     }
 
-                    if forward_encoded.remaining() == 0 {
+                    if forward_encoded.len() == 0 {
                         // Short circuit for omitted fields, which do not get decoded.
                         return Ok(());
                     }
 
-                    for mut encoded in [forward_encoded.as_ref(), prepended.as_slice()] {
-                        let mut buf = Capped::new(&mut encoded);
+                    for encoded in [forward_encoded, prepended] {
+                        let mut slice = encoded.as_slice();
+                        let mut buf = Capped::new(&mut slice);
                         let mut tr = TagReader::new();
 
                         let (decoded_tag, decoded_wire_type) = tr
@@ -2255,24 +2262,52 @@ mod test {
                         &mut RuntimeTagMeasurer::new(),
                     );
 
-                    let mut buf = BytesMut::with_capacity(expected_len);
-                    <T as Encoder<E>>::encode(tag, value.borrow(), &mut buf, &mut TagWriter::new());
-
-                    let mut tr = TagReader::new();
-                    let buf = &mut buf.freeze();
-                    let mut buf = Capped::new(buf);
+                    let mut forward_encoded = Vec::with_capacity(expected_len);
+                    <T as Encoder<E>>::encode(
+                        tag,
+                        value.borrow(),
+                        &mut forward_encoded,
+                        &mut TagWriter::new(),
+                    );
 
                     prop_assert_eq!(
                         expected_len,
-                        buf.remaining(),
-                        "encoded_len wrong; expected: {}, actual: {}",
-                        expected_len,
-                        buf.remaining()
+                        forward_encoded.len(),
+                        "forward encoded length was wrong",
                     );
 
-                    let mut roundtrip_value = T::new_for_overwrite();
-                    let mut not_first = false;
-                    while buf.remaining() > 0 {
+                    let mut prepend_buf = ReverseBuffer::new();
+                    let mut trw = TagRevWriter::new();
+                    <T as Encoder<E>>::prepend_encode(tag, &value, &mut prepend_buf, &mut trw);
+                    trw.finalize(&mut prepend_buf);
+                    prop_assert_eq!(
+                        expected_len,
+                        prepend_buf.len(),
+                        "prepend encoded length was wrong",
+                    );
+
+                    let mut prepended = Vec::new();
+                    prepended.put(prepend_buf.reader());
+
+                    if check_type_prepend_must_match_forward::$kind::VALUE {
+                        prop_assert_eq!(
+                            &forward_encoded,
+                            &prepended,
+                            "prepend did not match append",
+                        );
+                    }
+
+                    if forward_encoded.len() == 0 {
+                        // Short circuit for omitted fields, which do not get decoded.
+                        return Ok(());
+                    }
+
+                    for encoded in [forward_encoded, prepended] {
+                        let mut slice = encoded.as_slice();
+                        let mut buf = Capped::new(&mut slice);
+                        let mut tr = TagReader::new();
+
+                        let mut roundtrip_value = T::new_for_overwrite();
                         let (decoded_tag, decoded_wire_type) = tr
                             .decode_key(buf.lend())
                             .map_err(|error| TestCaseError::fail(error.to_string()))?;
@@ -2295,17 +2330,21 @@ mod test {
 
                         <T as $encoder_trait<E>>::$decode(
                             wire_type,
-                            not_first,
+                            false,
                             &mut roundtrip_value,
                             buf.lend(),
                             DecodeContext::default(),
                         )
                         $(.$require())?
                         .map_err(|error| TestCaseError::fail(error.to_string()))?;
-                        not_first = true;
-                    }
 
-                    prop_assert_eq!(value, roundtrip_value);
+                        prop_assert!(
+                            !buf.remaining() > 0,
+                            "expected buffer to be empty, remaining: {}",
+                            buf.remaining()
+                        );
+                        prop_assert_eq!(&value, &roundtrip_value);
+                    }
 
                     Ok(())
                 }
