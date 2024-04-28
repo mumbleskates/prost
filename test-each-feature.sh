@@ -14,6 +14,6 @@ for feature in std \
                self-copy-optimization \
                unroll-varint-encoding \
                ; do
-  cargo clippy --workspace --all-targets --no-default-features --features $feature
+  cargo clippy --workspace --all-targets --no-default-features --features $feature -- -D warnings
   cargo test --workspace --all-targets --no-default-features --features $feature
 done
