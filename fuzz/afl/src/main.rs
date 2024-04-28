@@ -1,5 +1,5 @@
 use afl::fuzz;
-use fuzz::test_input;
+use common::test_input;
 
 fn main() {
     fuzz!(|data: &[u8]| {

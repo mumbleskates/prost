@@ -1,6 +1,6 @@
 #![no_main]
 
-use fuzz::test_input;
+use common::test_input;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

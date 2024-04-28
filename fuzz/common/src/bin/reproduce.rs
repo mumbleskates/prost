@@ -1,6 +1,6 @@
 use bilrost::encoding::opaque::OpaqueMessage;
 use bilrost::{DistinguishedMessage, Message};
-use fuzz::test_messages::{TestAllTypes, TestDistinguished};
+use common::test_messages::{TestAllTypes, TestDistinguished};
 
 fn main() {
     let mut args = std::env::args();
@@ -18,7 +18,7 @@ fn main() {
             "TestDistinguished: {:#?}",
             TestDistinguished::decode_distinguished(data.as_slice())
         );
-        fuzz::test_input(&data);
+        common::test_input(&data);
     }
     if !ran {
         println!("Usage: {program_name} <path-to-input> [...]");

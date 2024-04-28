@@ -1,5 +1,5 @@
 [package]
-name = "fuzz"
+name = "fuzz-libfuzzer"
 version = "0.0.0"
 authors = [
     "Dan Burkert <dan@danburkert.com>",
@@ -10,20 +10,19 @@ publish = false
 edition = "2021"
 default-run = "bilrost_fuzz"
 
+[workspace]
+members = [
+    "afl",
+    "common",
+]
+
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
-anyhow = "1"
-bilrost = { path = "..", features = ["derive", "tinyvec"] }
-bilrost-types = { path = "../bilrost-types" }
-bytes = "1"
+common = { path = "common" }
 libfuzzer-sys = "0.4"
-tinyvec = "1"
 
 [[bin]]
 name = "bilrost_fuzz"
 path = "fuzzers/bilrost_fuzz.rs"
-
-[[bin]]
-name = "reproduce"

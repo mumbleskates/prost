@@ -1,8 +1,5 @@
 target/
 Cargo.lock
 
-/fuzz/corpus/
-/fuzz/coverage/
-
 .DS_Store
 /.idea/

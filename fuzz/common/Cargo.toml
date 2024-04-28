@@ -1,0 +1,24 @@
+[package]
+name = "common"
+version = "0.0.0"
+authors = [
+    "Kent Ross <k@mad.cash>",
+    "Dan Burkert <dan@danburkert.com>",
+    "Tokio Contributors <team@tokio.rs>",
+]
+publish = false
+edition = "2021"
+default-run = "reproduce"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+anyhow = "1"
+bilrost = { path = "../..", features = ["tinyvec"] }
+bilrost-types = { path = "../../bilrost-types" }
+bytes = "1"
+tinyvec = "1"
+
+[[bin]]
+name = "reproduce"
