@@ -220,9 +220,9 @@ pub struct TestAllTypes {
     /// Oneofs
     pub oneof_as_submessage: test_message::OneofField,
     #[bilrost(oneof(1001-1009))]
-    pub oneof_field: Option<test_message::NonEmptyOneofField>,
+    pub nonempty_oneof_field: Option<test_message::NonEmptyOneofField>,
     #[bilrost(oneof(2001-2009))]
-    pub nonempty_oneof_field: test_message::OneofField,
+    pub oneof_field: test_message::OneofField,
 }
 
 /// Nested message and enum types in `TestAllTypes`.
@@ -402,12 +402,12 @@ pub struct TestDistinguished {
     /// Oneofs
     pub oneof_as_submessage: test_distinguished::OneofField,
     #[bilrost(oneof(101-106))]
-    pub oneof_field: Option<test_distinguished::NonEmptyOneofField>,
+    pub nonempty_oneof_field: Option<test_distinguished::NonEmptyOneofField>,
     #[bilrost(oneof(201-206))]
-    pub nonempty_oneof_field: test_distinguished::OneofField,
+    pub oneof_field: test_distinguished::OneofField,
 }
 
-mod test_distinguished {
+pub mod test_distinguished {
     use super::*;
 
     #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
