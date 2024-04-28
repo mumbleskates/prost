@@ -2,14 +2,15 @@ use core::cmp::{min, Eq, Ordering, PartialEq};
 use core::default::Default;
 use core::fmt::Debug;
 use core::ops::{Deref, DerefMut};
+use std::num::TryFromIntError;
 
 use bytes::buf::Take;
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
 use crate::DecodeErrorKind::{
-    InvalidVarint, NotCanonical, TagOverflowed, Truncated, UnexpectedlyRepeated, UnknownField,
-    WrongWireType,
+    InvalidVarint, NotCanonical, Oversize, TagOverflowed, Truncated, UnexpectedlyRepeated,
+    UnknownField, WrongWireType,
 };
 use crate::{decode_length_delimiter, DecodeError, DecodeErrorKind};
 
@@ -790,14 +791,15 @@ pub fn skip_field<B: Buf + ?Sized>(
             WireType::Varint => buf.decode_varint().map(|_| 0)?,
             WireType::ThirtyTwoBit => 4,
             WireType::SixtyFourBit => 8,
-            WireType::LengthDelimited => buf.decode_varint()?,
+            WireType::LengthDelimited => {
+                usize::try_from(buf.decode_varint()?).map_err(|_| DecodeError::new(Oversize))?
+            }
         };
 
-        if len > buf.remaining() as u64 {
+        if len > buf.remaining() {
             return Err(DecodeError::new(Truncated));
         }
-
-        buf.advance(len as usize);
+        buf.advance(len);
 
         match peek_repeated_field(&mut buf) {
             None => break,

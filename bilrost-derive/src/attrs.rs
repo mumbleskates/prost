@@ -44,7 +44,11 @@ impl TagList {
                 bail!("invalid tag range {}-{}", range.start(), range.end());
             }
             if let Some(limit) = range_size_limit {
-                if (range.end() - range.start()) as usize + 1 >= limit {
+                if usize::try_from(range.end() - range.start())?
+                    .checked_add(1)
+                    .unwrap()
+                    >= limit
+                {
                     bail!(
                         "too-large tag range {}-{}; use smaller ranges",
                         range.start(),
