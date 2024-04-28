@@ -116,8 +116,6 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
 
     let variant_data = match &input.data {
         Data::Struct(variant_data) => variant_data,
-        // TODO(widders): ...make it possible to derive Message for an enum. this would be exactly
-        //  equivalent to a message with one field which is a oneof with the same fields.
         Data::Enum(..) => panic!("should be unreachable, Message for enums depends on oneof"),
         Data::Union(..) => bail!("Message can not be derived for a union"),
     };
