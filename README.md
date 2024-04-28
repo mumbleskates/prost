@@ -1042,9 +1042,10 @@ can be consumed as a buffer.
 
 `bilrost::buf::ReverseBuffer` is the main provided implementation of the
 `ReverseBuf` trait. It has amenities for reserving capacity, fetching the whole
-buffer as a slice if it's contiguous in memory, and has the method `reader()`
-which returns a read-only view of the buffer that also implements `bytes::Buf`
-but does not cause the buffer to be consumed when it is read through that trait.
+buffer as a slice if it's contiguous in memory, and has the method
+`buf_reader()` which returns a read-only view of the buffer that also implements
+`bytes::Buf` but does not cause the buffer to be consumed when it is read
+through that trait.
 
 `ReverseBuffer` allocates lazily, grows exponentially, and stores its data in
 multiple allocations of increasing size. It is often the most efficient type
