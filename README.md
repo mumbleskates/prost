@@ -510,6 +510,8 @@ When defining message types for interoperation, or when fields are likely to
 be added, removed, or shuffled, it may be good practice to explicitly specify
 the tags of all fields in a struct instead, but this is not mandatory.
 
+<details><summary>Example of a struct with a derived `Message` impl</summary>
+
 ```rust,
 use bilrost::{Enumeration, Message};
 
@@ -550,6 +552,8 @@ pub enum Gender {
     Nonbinary = 3,
 }
 ```
+
+</details>
 
 #### Oneof fields
 
@@ -671,6 +675,76 @@ struct Widget {
 When a oneof enum type has the empty variant, it can only be included in a
 message directly; when it has none, it can only be included nested within an
 `Option`.
+
+#### Deriving `Message` for enums
+
+`Message` and `DistinguishedMessage` can also be derived for enums that have a
+corresponding oneof implementation derived. They encode and decode as messages
+that only have up to one field, as if the type was a message that only contains
+the enum with an appropriate `#[bilrost(oneof(..))]` attribute.
+
+<details><summary>Example of `Message` derived for a `Oneof` enum</summary>
+
+```rust
+use bilrost::{Message, Oneof};
+
+#[derive(Oneof, Message)]
+enum Maybe {
+    Nope,
+    #[bilrost(1)]
+    Yes(String),
+    #[bilrost(2)]
+    Very(String),
+}
+
+/// This struct encodes exactly the same as Maybe does with its own `Message`
+/// impl; deriving `Message` on the enum just saves some work.
+#[derive(Message)]
+struct WrappedMaybe {
+  #[bilrost(oneof(1, 2))]
+  maybe: Maybe,
+}
+```
+
+</details>
+
+`Message` and `DistinguishedMessage` can only be implemented for oneof types
+that have "empty" variants.
+
+<details><summary>Examples for using non-empty oneof enums as messages</summary>
+
+```rust,compile_fail
+use bilrost::{Message, Oneof};
+
+#[derive(Oneof, Message)]
+//              ^^^^^^^ Error: Message can only be derived for Oneof enums
+//                             that have an empty variant.
+enum AB {
+    #[bilrost(1)]
+    A(bool),
+    #[bilrost(2)]
+    B(bool),
+}
+```
+
+It is still possible to use such an enum as a message type by wrapping it.
+
+```rust
+use bilrost::{Message, Oneof};
+
+#[derive(Oneof)]
+enum AB {
+    #[bilrost(1)]
+    A(bool),
+    #[bilrost(2)]
+    B(bool),
+}
+
+#[derive(Message)]
+struct WrappedAB(#[bilrost(oneof(1, 2))] Option<AB>);
+```
+
+</details>
 
 #### Encodings
 
