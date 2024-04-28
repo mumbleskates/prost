@@ -1,4 +1,6 @@
 use anyhow::anyhow;
+use bytes::BufMut;
+
 use bilrost::Message;
 
 pub mod test_messages;
@@ -37,7 +39,7 @@ impl RoundtripResult {
 
 pub fn roundtrip<M>(data: &[u8]) -> RoundtripResult
 where
-    M: Message + Default,
+    M: Message,
 {
     // Try to decode a message from the data. If decoding fails, continue.
     let message = match M::decode(data) {
@@ -59,16 +61,33 @@ where
         ));
     }
 
-    let roundtrip = match M::decode(&*buf1) {
+    let prepend_buf = message.encode_fast();
+
+    if encoded_len != prepend_buf.len() {
+        return RoundtripResult::Error(anyhow!(
+            "expected encoded len ({}) did not match actual prepended len ({})",
+            encoded_len,
+            prepend_buf.len()
+        ))
+    }
+
+    let mut prepended = Vec::new();
+    prepended.put(prepend_buf);
+    if prepended != buf1 {
+        return RoundtripResult::Error(anyhow!(
+            "encoded and prepended messages were different",
+        ))
+    }
+
+    let roundtrip = match M::decode(buf1.as_slice()) {
         Ok(roundtrip) => roundtrip,
         Err(error) => return RoundtripResult::Error(anyhow::Error::new(error)),
     };
 
-    let mut buf2 = Vec::new();
-    if let Err(error) = roundtrip.encode(&mut buf2) {
-        return RoundtripResult::Error(error.into());
-    }
-    let buf3 = roundtrip.encode_to_vec();
+    let buf2 = roundtrip.encode_to_vec();
+    let buf3_rev = roundtrip.encode_fast();
+    let mut buf3 = Vec::new();
+    buf3.put(buf3_rev);
 
     /*
     // Useful for debugging:

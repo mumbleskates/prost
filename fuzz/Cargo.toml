@@ -17,6 +17,7 @@ cargo-fuzz = true
 anyhow = "1"
 bilrost = { path = "..", features = ["derive"] }
 bilrost-types = { path = "../bilrost-types" }
+bytes = "1"
 libfuzzer-sys = "0.4"
 
 [[bin]]
