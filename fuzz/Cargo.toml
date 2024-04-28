@@ -15,10 +15,11 @@ cargo-fuzz = true
 
 [dependencies]
 anyhow = "1"
-bilrost = { path = "..", features = ["derive"] }
+bilrost = { path = "..", features = ["derive", "tinyvec"] }
 bilrost-types = { path = "../bilrost-types" }
 bytes = "1"
 libfuzzer-sys = "0.4"
+tinyvec = "1"
 
 [[bin]]
 name = "bilrost_fuzz"

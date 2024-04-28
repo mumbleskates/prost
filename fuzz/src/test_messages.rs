@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use tinyvec::ArrayVec;
+
 use bilrost::{Blob, Enumeration, Message, Oneof};
 
 /// This proto includes every type of field in both singular and repeated
@@ -28,6 +30,8 @@ pub struct TestAllTypes {
     pub float64: f64,
     pub bool: bool,
     pub string: String,
+    #[bilrost(encoding((general, general, fixed)))]
+    pub tuple: (u64, String, u32),
     #[bilrost(encoding(plainbytes))]
     pub bytes: Vec<u8>,
     pub blob: Blob,
@@ -65,6 +69,8 @@ pub struct TestAllTypes {
     pub optional_float64: Option<f64>,
     pub optional_bool: Option<bool>,
     pub optional_string: Option<String>,
+    #[bilrost(encoding((general, general, fixed)))]
+    pub optional_tuple: Option<(u64, String, u32)>,
     #[bilrost(encoding(plainbytes))]
     pub optional_bytes: Option<Vec<u8>>,
     pub optional_blob: Option<Blob>,
@@ -96,10 +102,20 @@ pub struct TestAllTypes {
     pub unpacked_float64: Vec<f64>,
     pub unpacked_bool: Vec<bool>,
     pub unpacked_string: Vec<String>,
+    #[bilrost(encoding(unpacked<(general, general, fixed)>))]
+    pub unpacked_tuple: Vec<(u64, String, u32)>,
     #[bilrost(encoding(unpacked<plainbytes>))]
     pub unpacked_bytes: Vec<Vec<u8>>,
     pub unpacked_blob: Vec<Blob>,
     pub unpacked_nested_message: Vec<test_message::NestedMessage>,
+    #[bilrost(encoding(unpacked))]
+    pub unpacked_varint_arr: [u64; 3],
+    #[bilrost(encoding(unpacked<fixed>))]
+    pub unpacked_fixed_arr: [u32; 3],
+    #[bilrost(encoding(unpacked))]
+    pub unpacked_varint_arrayvec: ArrayVec<[u64; 3]>,
+    #[bilrost(encoding(unpacked<fixed>))]
+    pub unpacked_fixed_arrayvec: ArrayVec<[u32; 3]>,
     /// Packed
     #[bilrost(encoding(packed))]
     pub packed_uint32: Vec<u32>,
@@ -112,7 +128,19 @@ pub struct TestAllTypes {
     #[bilrost(encoding(packed))]
     pub packed_bool: Vec<bool>,
     #[bilrost(encoding(packed))]
+    pub packed_string: Vec<String>,
+    #[bilrost(encoding(packed<(general, general, fixed)>))]
+    pub packed_tuple: Vec<(u64, String, u32)>,
+    #[bilrost(encoding(packed))]
     pub packed_nested_enum: Vec<test_message::NestedEnum>,
+    #[bilrost(encoding(packed))]
+    pub packed_varint_arr: [u64; 3],
+    #[bilrost(encoding(packed<fixed>))]
+    pub packed_fixed_arr: [u32; 3],
+    #[bilrost(encoding(packed))]
+    pub packed_varint_arrayvec: ArrayVec<[u64; 3]>,
+    #[bilrost(encoding(packed<fixed>))]
+    pub packed_fixed_arrayvec: ArrayVec<[u32; 3]>,
     /// Set, unpacked
     pub unpacked_set_uint32: BTreeSet<u32>,
     pub unpacked_set_uint64: BTreeSet<u64>,
@@ -190,6 +218,7 @@ pub struct TestAllTypes {
     #[bilrost(encoding(packed))]
     pub packed_list_value: Vec<bilrost_types::ListValue>,
     /// Oneofs
+    pub oneof_as_submessage: test_message::OneofField,
     #[bilrost(oneof(1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009))]
     pub oneof_field: Option<test_message::NonEmptyOneofField>,
     #[bilrost(oneof(2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009))]
@@ -237,7 +266,7 @@ pub mod test_message {
         OneofEnum(NestedEnum),
     }
 
-    #[derive(Clone, PartialEq, Oneof)]
+    #[derive(Clone, PartialEq, Oneof, Message)]
     pub enum OneofField {
         Empty,
         #[bilrost(tag = 2001)]
