@@ -30,7 +30,7 @@ exclude = [
     # so exclude it from normal builds.
     "fuzz",
     # Same counts for the afl fuzz targets
-    "afl",
+    "fuzz/afl",
 ]
 
 [lib]
