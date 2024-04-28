@@ -11,7 +11,7 @@ use bilrost::{Blob, Enumeration, Message, Oneof, DistinguishedMessage, Distingui
 /// submessages of this message.  So for example, a fuzz test of TestAllTypes
 /// could trigger bugs that occur in any message type in this file.  We verify
 /// this stays true in a unit test.
-#[derive(Clone, PartialEq, Message)]
+#[derive(Clone, Debug, PartialEq, Message)]
 pub struct TestAllTypes {
     /// Singular
     pub sint32: i32,
@@ -229,13 +229,13 @@ pub struct TestAllTypes {
 pub mod test_message {
     use super::*;
 
-    #[derive(Clone, PartialEq, Message)]
+    #[derive(Clone, Debug, PartialEq, Message)]
     pub struct NestedMessage {
         pub a: i32,
         #[bilrost(recurses)]
         pub corecursive: Option<Box<TestAllTypes>>,
     }
-    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Enumeration)]
+    #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Enumeration)]
     #[repr(u32)]
     pub enum NestedEnum {
         #[default]
@@ -244,7 +244,7 @@ pub mod test_message {
         Baz = 2,
         Max = u32::MAX,
     }
-    #[derive(Clone, PartialEq, Oneof)]
+    #[derive(Clone, Debug, PartialEq, Oneof)]
     pub enum NonEmptyOneofField {
         #[bilrost(tag = 1001)]
         OneofUint32(u32),
@@ -266,7 +266,7 @@ pub mod test_message {
         OneofEnum(NestedEnum),
     }
 
-    #[derive(Clone, PartialEq, Oneof, Message)]
+    #[derive(Clone, Debug, PartialEq, Oneof, Message)]
     pub enum OneofField {
         Empty,
         #[bilrost(tag = 2001)]
@@ -290,7 +290,7 @@ pub mod test_message {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Message, DistinguishedMessage)]
+#[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
 pub struct TestDistinguished {
     /// Singular
     #[bilrost(encoding(varint))]
@@ -410,7 +410,7 @@ pub struct TestDistinguished {
 mod test_distinguished {
     use super::*;
 
-    #[derive(Clone, PartialEq, Eq, Message, DistinguishedMessage)]
+    #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
     pub struct NestedMessage {
         pub a: u64,
         #[bilrost(recurses)]
@@ -421,7 +421,7 @@ mod test_distinguished {
 
     pub use test_message::NestedEnum;
 
-    #[derive(Clone, PartialEq, Eq, Oneof, DistinguishedOneof)]
+    #[derive(Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
     pub enum NonEmptyOneofField {
         #[bilrost(tag = 101)]
         OneofUint32(u32),
@@ -437,7 +437,7 @@ mod test_distinguished {
         OneofEnum(NestedEnum),
     }
 
-    #[derive(Clone, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
+    #[derive(Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
     pub enum OneofField {
         Empty,
         #[bilrost(tag = 201)]
