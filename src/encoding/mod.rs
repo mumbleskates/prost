@@ -759,23 +759,53 @@ impl<'a, B: Buf + ?Sized> DerefMut for Capped<'a, B> {
         self.buf
     }
 }
+/// Returns `Some` if there are more bytes in the buffer and the next data in the buffer begins
+/// with a "repeated" field key (a key with a tag delta of zero). If the repeated field key is found
+/// it is consumed; if it does not exist, the buffer is unchanged.
+#[inline(always)]
+fn peek_repeated_field<B: Buf + ?Sized>(buf: &mut Capped<B>) -> Option<WireType> {
+    if buf.remaining_before_cap() == 0 {
+        return None;
+    }
+    // Peek the first byte of the next field's key.
+    let peek_key = buf.chunk()[0];
+    if peek_key >= 4 {
+        return None; // The next field has a different tag than this one.
+    }
+    // The next field's key has a repeated tag (its delta is zero). Consume the peeked key and
+    // return its wire type
+    buf.advance(1);
+    Some(WireType::from(peek_key))
+}
 
+/// Consumes and discards the value of a field that has the given key, as well as the keys and
+/// values of every following field with the same tag. The key of the field should be consumed
+/// before this function is called.
 pub fn skip_field<B: Buf + ?Sized>(
-    wire_type: WireType,
+    mut wire_type: WireType,
     mut buf: Capped<B>,
 ) -> Result<(), DecodeError> {
-    let len = match wire_type {
-        WireType::Varint => buf.decode_varint().map(|_| 0)?,
-        WireType::ThirtyTwoBit => 4,
-        WireType::SixtyFourBit => 8,
-        WireType::LengthDelimited => buf.decode_varint()?,
-    };
+    loop {
+        let len = match wire_type {
+            WireType::Varint => buf.decode_varint().map(|_| 0)?,
+            WireType::ThirtyTwoBit => 4,
+            WireType::SixtyFourBit => 8,
+            WireType::LengthDelimited => buf.decode_varint()?,
+        };
 
-    if len > buf.remaining() as u64 {
-        return Err(DecodeError::new(Truncated));
+        if len > buf.remaining() as u64 {
+            return Err(DecodeError::new(Truncated));
+        }
+
+        buf.advance(len as usize);
+
+        match peek_repeated_field(&mut buf) {
+            None => break,
+            Some(next_wire_type) => {
+                wire_type = next_wire_type;
+            }
+        }
     }
-
-    buf.advance(len as usize);
     Ok(())
 }
 

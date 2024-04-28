@@ -5,33 +5,14 @@ use crate::encoding::value_traits::{
     Collection, DistinguishedCollection, EmptyState, NewForOverwrite,
 };
 use crate::encoding::{
-    check_wire_type, Capped, DecodeContext, DistinguishedEncoder, DistinguishedValueEncoder,
-    Encoder, FieldEncoder, General, Packed, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder,
-    WireType, Wiretyped,
+    check_wire_type, peek_repeated_field, Capped, DecodeContext, DistinguishedEncoder,
+    DistinguishedValueEncoder, Encoder, FieldEncoder, General, Packed, TagMeasurer, TagRevWriter,
+    TagWriter, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeErrorKind::{InvalidValue, UnexpectedlyRepeated};
 use crate::{Canonicity, DecodeError};
 
 pub struct Unpacked<E = General>(E);
-
-/// Returns `Some` if there are more bytes in the buffer and the next data in the buffer begins
-/// with a "repeated" field key (a key with a tag delta of zero). If the repeated field key is found
-/// it is consumed; if it does not exist, the buffer is unchanged.
-#[inline(always)]
-fn peek_repeated_field<B: Buf + ?Sized>(buf: &mut Capped<B>) -> Option<WireType> {
-    if buf.remaining_before_cap() == 0 {
-        return None;
-    }
-    // Peek the first byte of the next field's key.
-    let peek_key = buf.chunk()[0];
-    if peek_key >= 4 {
-        return None; // The next field has a different tag than this one.
-    }
-    // The next field's key has a repeated tag (its delta is zero). Consume the peeked key and
-    // return its wire type
-    buf.advance(1);
-    Some(WireType::from(peek_key))
-}
 
 /// Decodes a collection value from the unpacked representation. This greedily consumes consecutive
 /// fields as long as they have the same tag.
