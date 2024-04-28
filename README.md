@@ -746,6 +746,12 @@ struct WrappedAB(#[bilrost(oneof(1, 2))] Option<AB>);
 
 </details>
 
+Note: Do exercise caution with this! While this is very convenient for encoding
+types that are fully represented as an enum with one field per variant this way,
+deriving both `Oneof` and `Message` makes it easy to accidentally include the
+oneof as a sub-message field rather than as an "embedded" oneof that represents
+a set of fields in the message that shouldn't coexist.
+
 #### Encodings
 
 `bilrost` message fields and oneof variants can be annotated with an "encoding"
