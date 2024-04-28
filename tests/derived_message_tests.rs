@@ -2343,6 +2343,10 @@ fn oneof_field_decoding() {
         [(1, OV::bool(false)), (2, OV::bool(true))],
         ConflictingFields,
     );
+    assert::never_decodes::<Foo>(
+        [(1, OV::bool(true)), (1, OV::bool(false))],
+        UnexpectedlyRepeated,
+    );
 }
 
 #[test]
