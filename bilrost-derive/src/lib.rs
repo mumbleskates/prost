@@ -953,7 +953,7 @@ fn distinguished_message_via_oneof(input: DeriveInput) -> Result<TokenStream, Er
 
     let where_clause = impl_append_wheres(
         where_clause,
-        Some(quote!(Self: ::bilrost::encoding::DistinguishedOneof)),
+        Some(quote!(Self: ::bilrost::encoding::DistinguishedOneof + ::core::cmp::Eq)),
         iter::empty(),
     );
 

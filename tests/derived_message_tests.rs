@@ -2462,6 +2462,44 @@ fn oneof_as_message() {
         [(1, OV::bool(true)), (1, OV::bool(false))],
         UnexpectedlyRepeated,
     );
+
+    // These tags are very different lengths and may use the RuntimeTagMeasurer instead of the
+    // TrivialTagMeasurer, so we should test that path.
+    #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
+    enum EarlyLate {
+        Nothing,
+        #[bilrost(0)]
+        Early(bool),
+        #[bilrost(999999999)]
+        Late(bool),
+    }
+
+    assert::decodes_distinguished([], EarlyLate::Nothing);
+    assert::decodes_distinguished([(0, OV::bool(false))], EarlyLate::Early(false));
+    assert::decodes_distinguished([(999999999, OV::bool(true))], EarlyLate::Late(true));
+}
+
+#[test]
+fn oneof_as_message_unqualified() {
+    #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
+    enum Maybe<T> {
+        Nothing,
+        #[bilrost(1)]
+        Something(T),
+    }
+
+    static_assertions::assert_impl_all!(
+        Maybe<i32>: Oneof, DistinguishedOneof, Message, DistinguishedMessage
+    );
+
+    static_assertions::assert_impl_all!(Maybe<f64>: Oneof, Message);
+    static_assertions::assert_not_impl_any!(Maybe<f64>: DistinguishedOneof, DistinguishedMessage);
+
+    #[allow(dead_code)]
+    struct NotEncodable;
+    static_assertions::assert_not_impl_any!(
+        Maybe<NotEncodable>: Oneof, DistinguishedOneof, Message, DistinguishedMessage
+    );
 }
 
 // Enumeration tests
