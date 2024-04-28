@@ -763,7 +763,7 @@ mod test {
         buf.prepend(buf2.buf_reader()); // 5
         buf2.prepend(buf.buf_reader()); // 8
         buf.prepend(buf2.buf_reader()); // 13
-                                    // Only one additional chunk was allocated
+                                        // Only one additional chunk was allocated
         assert_eq!(buf.chunks.len(), 2);
         // No extra capacity exists in the buffer at this point
         assert_eq!(buf.capacity() - buf.len(), 0);
