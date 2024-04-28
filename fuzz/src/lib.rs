@@ -1,7 +1,8 @@
 use anyhow::anyhow;
 use bytes::BufMut;
 
-use bilrost::Message;
+use bilrost::Canonicity::Canonical;
+use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
 
 pub mod test_messages;
 
@@ -10,7 +11,7 @@ pub enum RoundtripResult {
     Ok(Vec<u8>),
     /// The data could not be decoded. This could indicate a bug in prost,
     /// or it could indicate that the input was bogus.
-    DecodeError(bilrost::DecodeError),
+    DecodeError(DecodeError),
     /// Re-encoding or validating the data failed.  This indicates a bug in `prost`.
     Error(anyhow::Error),
 }
@@ -49,10 +50,7 @@ where
 
     let encoded_len = message.encoded_len();
 
-    let mut buf1 = Vec::new();
-    if let Err(error) = message.encode(&mut buf1) {
-        return RoundtripResult::Error(error.into());
-    }
+    let buf1 = message.encode_to_vec();
     if encoded_len != buf1.len() {
         return RoundtripResult::Error(anyhow!(
             "expected encoded len ({}) did not match actual encoded len ({})",
@@ -68,15 +66,13 @@ where
             "expected encoded len ({}) did not match actual prepended len ({})",
             encoded_len,
             prepend_buf.len()
-        ))
+        ));
     }
 
     let mut prepended = Vec::new();
     prepended.put(prepend_buf);
     if prepended != buf1 {
-        return RoundtripResult::Error(anyhow!(
-            "encoded and prepended messages were different",
-        ))
+        return RoundtripResult::Error(anyhow!("encoded and prepended messages were different",));
     }
 
     let roundtrip = match M::decode(buf1.as_slice()) {
@@ -102,7 +98,95 @@ where
 
     if buf1 != buf3 {
         return RoundtripResult::Error(anyhow!(
-            "roundtripped encoded buffers do not match with `encode_to_vec`"
+            "roundtripped encoded buffers do not match with prepend-encoding"
+        ));
+    }
+
+    RoundtripResult::Ok(buf1)
+}
+
+pub fn roundtrip_distinguished<M>(data: &[u8]) -> RoundtripResult
+where
+    M: DistinguishedMessage + Eq,
+{
+    // Try to decode a message from the data. If decoding fails, continue.
+    let (message, canon) = match M::decode_distinguished(data) {
+        Ok(decoded) => decoded,
+        Err(error) => return RoundtripResult::DecodeError(error),
+    };
+
+    let encoded_len = message.encoded_len();
+
+    let buf1 = message.encode_to_vec();
+    if encoded_len != buf1.len() {
+        return RoundtripResult::Error(anyhow!(
+            "expected encoded len ({}) did not match actual encoded len ({})",
+            encoded_len,
+            buf1.len()
+        ));
+    }
+
+    match canon {
+        Canonical => {
+            if buf1.as_slice() != data {
+                return RoundtripResult::Error(anyhow!(
+                    "decoded canonically but did not round trip"
+                ));
+            }
+        }
+        _ => {
+            if buf1.as_slice() == data {
+                return RoundtripResult::Error(anyhow!(
+                    "decoded non-canonically but round tripped unchanged"
+                ));
+            }
+        }
+    }
+
+    let prepend_buf = message.encode_fast();
+
+    if encoded_len != prepend_buf.len() {
+        return RoundtripResult::Error(anyhow!(
+            "expected encoded len ({}) did not match actual prepended len ({})",
+            encoded_len,
+            prepend_buf.len()
+        ));
+    }
+
+    let mut prepended = Vec::new();
+    prepended.put(prepend_buf);
+    if prepended != buf1 {
+        return RoundtripResult::Error(anyhow!("encoded and prepended messages were different",));
+    }
+
+    let roundtrip = match M::decode_distinguished(buf1.as_slice()).canonical() {
+        Ok(roundtrip) => roundtrip,
+        Err(error) => return RoundtripResult::Error(anyhow::Error::new(DecodeError::new(error))),
+    };
+
+    if roundtrip != message {
+        return RoundtripResult::Error(anyhow!("roundtripped message structs are not equal"));
+    }
+
+    let buf2 = roundtrip.encode_to_vec();
+    let buf3_rev = roundtrip.encode_fast();
+    let mut buf3 = Vec::new();
+    buf3.put(buf3_rev);
+
+    /*
+    // Useful for debugging:
+    eprintln!(" data: {:?}", data.iter().map(|x| format!("0x{:x}", x)).collect::<Vec<_>>());
+    eprintln!(" buf1: {:?}", buf1.iter().map(|x| format!("0x{:x}", x)).collect::<Vec<_>>());
+    eprintln!("a: {:?}\nb: {:?}", all_types, roundtrip);
+    */
+
+    if buf1 != buf2 {
+        return RoundtripResult::Error(anyhow!("roundtripped encoded buffers do not match"));
+    }
+
+    if buf1 != buf3 {
+        return RoundtripResult::Error(anyhow!(
+            "roundtripped encoded buffers do not match with prepend-encoding"
         ));
     }
 

@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use tinyvec::ArrayVec;
 
-use bilrost::{Blob, Enumeration, Message, Oneof};
+use bilrost::{Blob, Enumeration, Message, Oneof, DistinguishedMessage, DistinguishedOneof};
 
 /// This proto includes every type of field in both singular and repeated
 /// forms.
@@ -219,9 +219,9 @@ pub struct TestAllTypes {
     pub packed_list_value: Vec<bilrost_types::ListValue>,
     /// Oneofs
     pub oneof_as_submessage: test_message::OneofField,
-    #[bilrost(oneof(1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009))]
+    #[bilrost(oneof(1001-1009))]
     pub oneof_field: Option<test_message::NonEmptyOneofField>,
-    #[bilrost(oneof(2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009))]
+    #[bilrost(oneof(2001-2009))]
     pub nonempty_oneof_field: test_message::OneofField,
 }
 
@@ -286,6 +286,171 @@ pub mod test_message {
         #[bilrost(tag = 2008)]
         OneofDouble(f64),
         #[bilrost(tag = 2009)]
+        OneofEnum(NestedEnum),
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Message, DistinguishedMessage)]
+pub struct TestDistinguished {
+    /// Singular
+    #[bilrost(encoding(varint))]
+    pub uint8: u8,
+    pub uint16: u16,
+    pub uint32: u32,
+    pub uint64: u64,
+    #[bilrost(encoding(fixed))]
+    pub ufixed32: u32,
+    #[bilrost(encoding(fixed))]
+    pub ufixed64: u64,
+    pub bool: bool,
+    pub string: String,
+    #[bilrost(encoding(plainbytes))]
+    pub bytes: Vec<u8>,
+    #[bilrost(encoding((general, general, fixed)))]
+    pub tuple: (u64, String, u32),
+    pub direct_message: test_distinguished::NestedMessage,
+    pub direct_enum: test_distinguished::NestedEnum,
+    pub map_varint_varint: BTreeMap<i32, i32>,
+    #[bilrost(encoding(map<fixed, fixed>))]
+    pub map_ufixed32_ufixed32: BTreeMap<i32, i32>,
+    pub map_bool_bool: BTreeMap<bool, bool>,
+    pub map_u32_nested_message: BTreeMap<u32, test_distinguished::NestedMessage>,
+    pub map_u32_nested_enum: BTreeMap<u32, test_distinguished::NestedEnum>,
+    /// Optional
+    pub optional_uint64: Option<u64>,
+    #[bilrost(encoding(fixed))]
+    pub optional_ufixed32: Option<u32>,
+    pub optional_bool: Option<bool>,
+    #[bilrost(encoding(plainbytes))]
+    pub optional_bytes: Option<Vec<u8>>,
+    #[bilrost(encoding((general, general, fixed)))]
+    pub optional_tuple: Option<(u64, String, u32)>,
+    pub optional_message: Option<test_distinguished::NestedMessage>,
+    pub optional_boxed_message: Option<Box<test_distinguished::NestedMessage>>,
+    pub optional_enum: Option<test_distinguished::NestedEnum>,
+    pub optional_map_bool_bool: Option<BTreeMap<bool, bool>>,
+    /// Unpacked
+    pub unpacked_varint: Vec<u16>,
+    #[bilrost(encoding(fixed))]
+    pub unpacked_fixed: Vec<u32>,
+    pub unpacked_bool: Vec<bool>,
+    #[bilrost(encoding(plainbytes))]
+    pub unpacked_string: Vec<Vec<u8>>,
+    pub unpacked_nested_message: Vec<test_distinguished::NestedMessage>,
+    #[bilrost(encoding(unpacked))]
+    pub unpacked_varint_arr: [u64; 3],
+    #[bilrost(encoding(unpacked<fixed>))]
+    pub unpacked_fixed_arr: [u32; 3],
+    #[bilrost(encoding(unpacked<plainbytes>))]
+    pub unpacked_bytes_arr: [Vec<u8>; 3],
+    #[bilrost(encoding(unpacked))]
+    pub unpacked_varint_arrayvec: ArrayVec<[u64; 3]>,
+    #[bilrost(encoding(unpacked<fixed>))]
+    pub unpacked_fixed_arrayvec: ArrayVec<[u32; 3]>,
+    #[bilrost(encoding(unpacked<plainbytes>))]
+    pub unpacked_bytes_arrayvec: ArrayVec<[Vec<u8>; 3]>,
+    /// Packed
+    #[bilrost(encoding(packed))]
+    pub packed_uint32: Vec<u32>,
+    #[bilrost(encoding(packed<fixed>))]
+    pub packed_ufixed32: Vec<u32>,
+    #[bilrost(encoding(packed))]
+    pub packed_bool: Vec<bool>,
+    #[bilrost(encoding(packed<plainbytes>))]
+    pub packed_bytes: Vec<Vec<u8>>,
+    #[bilrost(encoding(packed<(general, general, fixed)>))]
+    pub packed_tuple: Vec<(u64, String, u32)>,
+    #[bilrost(encoding(packed))]
+    pub packed_nested_enum: Vec<test_distinguished::NestedEnum>,
+    #[bilrost(encoding(packed))]
+    pub packed_varint_arr: [u64; 3],
+    #[bilrost(encoding(packed<fixed>))]
+    pub packed_fixed_arr: [u32; 3],
+    #[bilrost(encoding(packed))]
+    pub packed_varint_arrayvec: ArrayVec<[u64; 3]>,
+    #[bilrost(encoding(packed<fixed>))]
+    pub packed_fixed_arrayvec: ArrayVec<[u32; 3]>,
+    #[bilrost(encoding(packed<plainbytes>))]
+    pub packed_bytes_arrayvec: ArrayVec<[Vec<u8>; 3]>,
+    /// Set, unpacked
+    pub unpacked_set_uint32: BTreeSet<u32>,
+    #[bilrost(encoding(unpacked<fixed>))]
+    pub unpacked_set_ufixed32: BTreeSet<u32>,
+    pub unpacked_set_bool: BTreeSet<bool>,
+    #[bilrost(encoding(unpacked<plainbytes>))]
+    pub unpacked_set_bytes: BTreeSet<Vec<u8>>,
+    pub unpacked_set_enum: BTreeSet<test_distinguished::NestedEnum>,
+    pub unpacked_set_map: BTreeSet<BTreeMap<bool, bool>>,
+    /// Set, packed
+    #[bilrost(encoding(packed))]
+    pub packed_set_uint32: BTreeSet<u32>,
+    #[bilrost(encoding(packed<fixed>))]
+    pub packed_set_ufixed32: BTreeSet<u32>,
+    #[bilrost(encoding(packed))]
+    pub packed_set_bool: BTreeSet<bool>,
+    #[bilrost(encoding(packed<plainbytes>))]
+    pub packed_set_blob: BTreeSet<Vec<u8>>,
+    #[bilrost(encoding(packed))]
+    pub packed_set_enum: BTreeSet<test_distinguished::NestedEnum>,
+    #[bilrost(encoding(packed))]
+    pub packed_set_map: BTreeSet<BTreeMap<bool, bool>>,
+    /// Set, packed & optional
+    #[bilrost(encoding(packed))]
+    pub optional_packed_set_uint32: Option<BTreeSet<u32>>,
+    #[bilrost(encoding(packed))]
+    pub optional_packed_set_map: Option<BTreeSet<BTreeMap<bool, bool>>>,
+    /// Oneofs
+    pub oneof_as_submessage: test_distinguished::OneofField,
+    #[bilrost(oneof(101-106))]
+    pub oneof_field: Option<test_distinguished::NonEmptyOneofField>,
+    #[bilrost(oneof(201-206))]
+    pub nonempty_oneof_field: test_distinguished::OneofField,
+}
+
+mod test_distinguished {
+    use super::*;
+
+    #[derive(Clone, PartialEq, Eq, Message, DistinguishedMessage)]
+    pub struct NestedMessage {
+        pub a: u64,
+        #[bilrost(recurses)]
+        pub corecursive: Option<Box<TestDistinguished>>,
+        #[bilrost(oneof(201-206))]
+        pub oneof_field: OneofField,
+    }
+
+    pub use test_message::NestedEnum;
+
+    #[derive(Clone, PartialEq, Eq, Oneof, DistinguishedOneof)]
+    pub enum NonEmptyOneofField {
+        #[bilrost(tag = 101)]
+        OneofUint32(u32),
+        #[bilrost(tag = 102)]
+        OneofNestedMessage(Box<NestedMessage>),
+        #[bilrost(tag = 103, encoding(plainbytes))]
+        OneofBytes(Vec<u8>),
+        #[bilrost(tag = 104)]
+        OneofBool(bool),
+        #[bilrost(tag = 105)]
+        OneofUint64(u64),
+        #[bilrost(tag = 106)]
+        OneofEnum(NestedEnum),
+    }
+
+    #[derive(Clone, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
+    pub enum OneofField {
+        Empty,
+        #[bilrost(tag = 201)]
+        OneofUint32(u32),
+        #[bilrost(tag = 202, recurses)]
+        OneofNestedMessage(Box<NestedMessage>),
+        #[bilrost(tag = 203, encoding(plainbytes))]
+        OneofBytes(Vec<u8>),
+        #[bilrost(tag = 204)]
+        OneofBool(bool),
+        #[bilrost(tag = 205)]
+        OneofUint64(u64),
+        #[bilrost(tag = 206)]
         OneofEnum(NestedEnum),
     }
 }
