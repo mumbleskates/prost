@@ -2,7 +2,6 @@ use core::cmp::{min, Eq, Ordering, PartialEq};
 use core::default::Default;
 use core::fmt::Debug;
 use core::ops::{Deref, DerefMut};
-use std::num::TryFromIntError;
 
 use bytes::buf::Take;
 use bytes::{Buf, BufMut};
