@@ -22,6 +22,15 @@ rust-version = "1.65"
 members = [
     "bilrost-derive",
     "bilrost-types",
+    "fuzz",
+    "fuzz/afl",
+]
+exclude = [
+    # The fuzz crate can't be compiled or tested without the 'cargo fuzz' command,
+    # so exclude it from normal builds.
+    "fuzz",
+    # Same counts for the afl fuzz targets
+    "fuzz/afl",
 ]
 
 [lib]

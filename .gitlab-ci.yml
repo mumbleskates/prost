@@ -29,12 +29,12 @@ lint:
 test:
   stage: test
   script:
-    - cargo test --workspace --all-targets --features full-test-suite
-    - cargo test --workspace --doc         --features full-test-suite
-    - cargo test --workspace --all-targets --features full-test-suite --no-default-features
-    - cargo test --workspace --doc         --features full-test-suite --no-default-features
-    - cargo test --workspace --all-targets --no-default-features
-    - cargo test --workspace --doc         --no-default-features
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite
+    - cargo test --workspace --doc                        --features full-test-suite
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite --no-default-features
+    - cargo test --workspace --doc                        --features full-test-suite --no-default-features
+    - cargo test --workspace --all-targets --exclude fuzz --no-default-features
+    - cargo test --workspace --doc                        --no-default-features
 
 test-msrv:
   image: rust:1.65
@@ -42,9 +42,9 @@ test-msrv:
   before_script:
     - ./downgrade-for-msrv.sh
   script:
-    - cargo test --workspace --all-targets --features full-test-suite
-    - cargo test --workspace --doc         --features full-test-suite
-    - cargo test --workspace --all-targets --features full-test-suite --no-default-features
-    - cargo test --workspace --doc         --features full-test-suite --no-default-features
-    - cargo test --workspace --all-targets --no-default-features
-    - cargo test --workspace --doc         --no-default-features
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite
+    - cargo test --workspace --doc                        --features full-test-suite
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite --no-default-features
+    - cargo test --workspace --doc                        --features full-test-suite --no-default-features
+    - cargo test --workspace --all-targets --exclude fuzz --no-default-features
+    - cargo test --workspace --doc                        --no-default-features

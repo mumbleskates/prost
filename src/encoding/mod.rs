@@ -2215,7 +2215,7 @@ mod test {
                     );
 
                     let mut prepended = Vec::new();
-                    prepended.put(prepend_buf.reader());
+                    prepended.put(prepend_buf);
 
                     if check_type_prepend_must_match_forward::$kind::VALUE {
                         prop_assert_eq!(
@@ -2318,7 +2318,7 @@ mod test {
                     );
 
                     let mut prepended = Vec::new();
-                    prepended.put(prepend_buf.reader());
+                    prepended.put(prepend_buf);
 
                     if check_type_prepend_must_match_forward::$kind::VALUE {
                         prop_assert_eq!(

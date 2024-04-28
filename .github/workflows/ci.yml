@@ -36,11 +36,11 @@ jobs:
       - name: msrv pinning
         run: if [[ "stable" != "${{ matrix.toolchain }}" ]]; then ./downgrade-for-msrv.sh ; fi
       - name: test
-        run: cargo test --workspace --all-targets --features full-test-suite
+        run: cargo test --workspace --all-targets --exclude fuzz --features full-test-suite
       - name: test no-default-features
-        run: cargo test --workspace --all-targets --features full-test-suite --no-default-features
+        run: cargo test --workspace --all-targets --exclude fuzz --features full-test-suite --no-default-features
       - name: test minimal features
-        run: cargo test --workspace --all-targets --no-default-features
+        run: cargo test --workspace --all-targets --exclude fuzz --no-default-features
       - name: test doc
         run: cargo test --workspace --doc --features full-test-suite
       - name: test doc no-default-features

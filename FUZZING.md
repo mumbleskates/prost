@@ -2,24 +2,26 @@
 
 Bilrost ships a few fuzz tests, using both libfuzzer and aflfuzz.
 
-## afl
+To run the libfuzzer tests, first install cargo-fuzz:
+
+    cargo install cargo-fuzz
+
+Then the fuzzer can be run:
+
+    cargo fuzz run bilrost_fuzz -- <flags>
+
+See [the libfuzzer docs](https://llvm.org/docs/LibFuzzer.html) for options and
+further info.
 
 To run the afl fuzz tests, first install cargo-afl:
 
-    cargo install -f afl
+    cargo install cargo-afl
 
 Then build a fuzz target and run afl on it:
 
-    cd fuzz/afl/<target>/
-    cargo afl build --bin fuzz-target
-    cargo afl fuzz -i in -o out target/debug/fuzz-target
+    cargo afl build --package fuzz-afl --bin fuzz-target
+    cargo afl fuzz -i fuzz/afl/in -o fuzz/afl/out target/debug/fuzz-target
 
-To reproduce a crash:
+To reproduce a crash, use the `reproduce` binary in the "fuzz" directory:
 
-    cd fuzz/afl/<target>/
-    cargo build --bin reproduce
-    cargo run --bin reproduce -- out/crashes/<crashfile>
-
-## libfuzzer
-
-TODO
+    cargo run --package fuzz --bin reproduce -- <crashfile>

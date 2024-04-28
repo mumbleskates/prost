@@ -428,7 +428,7 @@ impl ReverseBuffer {
 
     /// Returns a reader that references this buf's contents, which implements `bytes::Buf` without
     /// draining bytes from the buffer.
-    pub fn reader(&self) -> ReverseBufferReader {
+    pub fn buf_reader(&self) -> ReverseBufferReader {
         ReverseBufferReader {
             chunks: self.chunks.as_slice(),
             front: self.front,
@@ -696,7 +696,7 @@ mod test {
     fn check_read(buf: ReverseBuffer, expected: &[u8]) {
         assert_eq!(buf.len(), expected.len());
         assert_eq!(buf.is_empty(), buf.len() == 0);
-        compare_buf(buf.reader(), expected);
+        compare_buf(buf.buf_reader(), expected);
         compare_buf(buf, expected);
     }
 
@@ -730,12 +730,12 @@ mod test {
         buf.prepend_slice(b"world");
         buf.prepend_slice(b"hello ");
         let mut buf2 = ReverseBuffer::new();
-        buf2.prepend(buf.reader()); // 1
-        buf.prepend(buf2.reader()); // 2
-        buf2.prepend(buf.reader()); // 3
-        buf.prepend(buf2.reader()); // 5
-        buf2.prepend(buf.reader()); // 8
-        buf.prepend(buf2.reader()); // 13
+        buf2.prepend(buf.buf_reader()); // 1
+        buf.prepend(buf2.buf_reader()); // 2
+        buf2.prepend(buf.buf_reader()); // 3
+        buf.prepend(buf2.buf_reader()); // 5
+        buf2.prepend(buf.buf_reader()); // 8
+        buf.prepend(buf2.buf_reader()); // 13
         assert_eq!(buf.chunks.len(), 3);
         check_read(
             buf.clone(),
@@ -757,12 +757,12 @@ mod test {
         buf.prepend_slice(b"hello ");
         buf.plan_reservation(b"hello world!".len() * 12);
         let mut buf2 = ReverseBuffer::new();
-        buf2.prepend(buf.reader()); // 1
-        buf.prepend(buf2.reader()); // 2
-        buf2.prepend(buf.reader()); // 3
-        buf.prepend(buf2.reader()); // 5
-        buf2.prepend(buf.reader()); // 8
-        buf.prepend(buf2.reader()); // 13
+        buf2.prepend(buf.buf_reader()); // 1
+        buf.prepend(buf2.buf_reader()); // 2
+        buf2.prepend(buf.buf_reader()); // 3
+        buf.prepend(buf2.buf_reader()); // 5
+        buf2.prepend(buf.buf_reader()); // 8
+        buf.prepend(buf2.buf_reader()); // 13
                                     // Only one additional chunk was allocated
         assert_eq!(buf.chunks.len(), 2);
         // No extra capacity exists in the buffer at this point
@@ -782,12 +782,12 @@ mod test {
         buf.prepend_slice(b"world");
         buf.prepend_slice(b"hello ");
         let mut buf2 = ReverseBuffer::new();
-        buf2.prepend(buf.reader()); // 1
-        buf.prepend(buf2.reader()); // 2
-        buf2.prepend(buf.reader()); // 3
-        buf.prepend(buf2.reader()); // 5
-        buf2.prepend(buf.reader()); // 8
-        buf.prepend(buf2.reader()); // 13
+        buf2.prepend(buf.buf_reader()); // 1
+        buf.prepend(buf2.buf_reader()); // 2
+        buf2.prepend(buf.buf_reader()); // 3
+        buf.prepend(buf2.buf_reader()); // 5
+        buf2.prepend(buf.buf_reader()); // 8
+        buf.prepend(buf2.buf_reader()); // 13
         assert_eq!(buf.chunks.len(), 1); // Only one chunk was allocated in total
         assert_eq!(buf.capacity() - buf.len(), 0); // No extra capacity exists in the buffer
         check_read(

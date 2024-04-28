@@ -1,0 +1,29 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+authors = [
+    "Dan Burkert <dan@danburkert.com>",
+    "Tokio Contributors <team@tokio.rs>",
+    "Kent Ross <k@mad.cash>",
+]
+publish = false
+edition = "2021"
+default-run = "bilrost_fuzz"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+anyhow = "1"
+bilrost = { path = "..", features = ["derive", "tinyvec"] }
+bilrost-types = { path = "../bilrost-types" }
+bytes = "1"
+libfuzzer-sys = "0.4"
+tinyvec = "1"
+
+[[bin]]
+name = "bilrost_fuzz"
+path = "fuzzers/bilrost_fuzz.rs"
+
+[[bin]]
+name = "reproduce"

@@ -2,6 +2,9 @@
 
 ### Breaking changes
 
+* Renamed the `.reader()` method on `ReverseBuffer` to `.buf_reader()` so it no
+  longer conflicts with the `bytes::Buf` method.
+
 ### New features
 
 * Added support for encoding `usize` and `isize` pointer-sized integers. They
