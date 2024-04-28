@@ -10,7 +10,7 @@ bilrost = { path = "../.." }
 common = { path = "../common" }
 
 [[bin]]
-name = "fuzz-target"
+name = "bilrost_afl"
 path = "src/main.rs"
 
 [[bin]]

@@ -20,8 +20,8 @@ To run the afl fuzz tests, first install cargo-afl:
 Then build a fuzz target and run afl on it:
 
     cd fuzz
-    cargo afl build --package fuzz-afl --bin fuzz-target
-    cargo afl fuzz -i afl/in -o afl/out target/debug/fuzz-target
+    cargo afl build --package fuzz-afl --bin bilrost_afl
+    cargo afl fuzz -i afl/in -o afl/out target/debug/bilrost_afl
 
 To reproduce a crash, use the `reproduce` binary in the "fuzz/common" directory:
 
