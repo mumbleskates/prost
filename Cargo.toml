@@ -24,6 +24,13 @@ members = [
     "bilrost-types",
     "fuzz",
 ]
+exclude = [
+    # The fuzz crate can't be compiled or tested without the 'cargo fuzz' command,
+    # so exclude it from normal builds.
+    "fuzz",
+    # Same counts for the afl fuzz targets
+    "afl",
+]
 
 [lib]
 # https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
