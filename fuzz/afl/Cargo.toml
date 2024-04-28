@@ -1,0 +1,18 @@
+[package]
+name = "fuzz-afl"
+version = "0.0.0"
+edition = "2021"
+resolver = "2"
+
+[[bin]]
+name = "fuzz-target"
+path = "src/main.rs"
+
+[[bin]]
+name = "create-testmessage"
+path = "src/create_testmessage.rs"
+
+[dependencies]
+afl = "0.15"
+bilrost = { path = "../.." }
+fuzz = { path = ".." }
