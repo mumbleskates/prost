@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use tinyvec::ArrayVec;
 
-use bilrost::{Blob, Enumeration, Message, Oneof, DistinguishedMessage, DistinguishedOneof};
+use bilrost::{Blob, DistinguishedMessage, DistinguishedOneof, Enumeration, Message, Oneof};
 
 /// This proto includes every type of field in both singular and repeated
 /// forms.
@@ -437,7 +437,9 @@ pub mod test_distinguished {
         OneofEnum(NestedEnum),
     }
 
-    #[derive(Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
+    #[derive(
+        Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage,
+    )]
     pub enum OneofField {
         Empty,
         #[bilrost(tag = 201)]

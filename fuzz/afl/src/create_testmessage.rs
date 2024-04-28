@@ -46,5 +46,9 @@ fn main() {
         ..EmptyState::empty()
     };
     std::fs::write("in/all_types.bilrost", msg.encode_to_vec()).unwrap();
-    std::fs::write("in/distinguished.bilrost", distinguished_msg.encode_to_vec()).unwrap();
+    std::fs::write(
+        "in/distinguished.bilrost",
+        distinguished_msg.encode_to_vec(),
+    )
+    .unwrap();
 }

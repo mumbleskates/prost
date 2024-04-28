@@ -1,5 +1,5 @@
-use bilrost::{DistinguishedMessage, Message};
 use bilrost::encoding::opaque::OpaqueMessage;
+use bilrost::{DistinguishedMessage, Message};
 use fuzz::test_messages::{TestAllTypes, TestDistinguished};
 
 fn main() {
