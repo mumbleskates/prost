@@ -392,7 +392,7 @@ mod third_party_vecs {
                 PlainBytes,
                 expedient,
                 from Vec<u8>,
-                into smallvec::SmallVec<[u8; 8]>,
+                into $ty,
                 converter(val) val.into_iter().collect(),
                 WireType::LengthDelimited
             );
@@ -400,7 +400,7 @@ mod third_party_vecs {
                 PlainBytes,
                 distinguished,
                 from Vec<u8>,
-                into smallvec::SmallVec<[u8; 8]>,
+                into $ty,
                 converter(val) val.into_iter().collect(),
                 WireType::LengthDelimited
             );
