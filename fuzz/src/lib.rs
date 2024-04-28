@@ -6,7 +6,12 @@ use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
 
 pub mod test_messages;
 
-pub enum RoundtripResult {
+pub fn test_input(data: &[u8]) {
+    let _ = roundtrip::<test_messages::TestAllTypes>(data).unwrap_error();
+    let _ = roundtrip_distinguished::<test_messages::TestDistinguished>(data).unwrap_error();
+}
+
+enum RoundtripResult {
     /// The roundtrip succeeded.
     Ok(Vec<u8>),
     /// The data could not be decoded. This could indicate a bug in prost,
@@ -18,6 +23,7 @@ pub enum RoundtripResult {
 
 impl RoundtripResult {
     /// Unwrap the roundtrip result.
+    #[allow(dead_code)]
     pub fn unwrap(self) -> Vec<u8> {
         match self {
             RoundtripResult::Ok(buf) => buf,
@@ -29,7 +35,7 @@ impl RoundtripResult {
     }
 
     /// Unwrap the roundtrip result. Panics if the result was a validation or re-encoding error.
-    pub fn unwrap_error(self) -> Result<Vec<u8>, bilrost::DecodeError> {
+    pub fn unwrap_error(self) -> Result<Vec<u8>, DecodeError> {
         match self {
             RoundtripResult::Ok(buf) => Ok(buf),
             RoundtripResult::DecodeError(error) => Err(error),
@@ -38,7 +44,7 @@ impl RoundtripResult {
     }
 }
 
-pub fn roundtrip<M>(data: &[u8]) -> RoundtripResult
+fn roundtrip<M>(data: &[u8]) -> RoundtripResult
 where
     M: Message,
 {
@@ -105,7 +111,7 @@ where
     RoundtripResult::Ok(buf1)
 }
 
-pub fn roundtrip_distinguished<M>(data: &[u8]) -> RoundtripResult
+fn roundtrip_distinguished<M>(data: &[u8]) -> RoundtripResult
 where
     M: DistinguishedMessage + Eq,
 {

@@ -1,7 +1,6 @@
 use bilrost::{DistinguishedMessage, Message};
 use bilrost::encoding::opaque::OpaqueMessage;
 use fuzz::test_messages::{TestAllTypes, TestDistinguished};
-use fuzz::{roundtrip, roundtrip_distinguished};
 
 fn main() {
     let mut args = std::env::args();
@@ -19,8 +18,7 @@ fn main() {
             "TestDistinguished: {:#?}",
             TestDistinguished::decode_distinguished(data.as_slice())
         );
-        let _ = roundtrip::<TestAllTypes>(&data).unwrap_error();
-        let _ = roundtrip_distinguished::<TestDistinguished>(&data).unwrap_error();
+        fuzz::test_input(&data);
     }
     if !ran {
         println!("Usage: {program_name} <path-to-input> [...]");
