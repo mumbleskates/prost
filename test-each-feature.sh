@@ -15,5 +15,5 @@ for feature in std \
                unroll-varint-encoding \
                ; do
   cargo clippy --workspace --all-targets --no-default-features --features $feature
-  cargo test --workspace --all-targets --exclude fuzz --no-default-features --features $feature
+  cargo test --workspace --all-targets --no-default-features --features $feature
 done
