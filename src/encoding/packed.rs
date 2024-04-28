@@ -46,7 +46,9 @@ where
     #[inline]
     fn value_encoded_len(value: &C) -> usize {
         let inner_len = ValueEncoder::<E>::many_values_encoded_len(value.iter());
-        encoded_len_varint(inner_len as u64).checked_add(inner_len).unwrap()
+        encoded_len_varint(inner_len as u64)
+            .checked_add(inner_len)
+            .unwrap()
     }
 
     #[inline]
@@ -224,7 +226,9 @@ where
     #[inline]
     fn value_encoded_len(value: &[T; N]) -> usize {
         let inner_len = ValueEncoder::<E>::many_values_encoded_len(value.iter());
-        encoded_len_varint(inner_len as u64).checked_add(inner_len).unwrap()
+        encoded_len_varint(inner_len as u64)
+            .checked_add(inner_len)
+            .unwrap()
     }
 
     #[inline]
