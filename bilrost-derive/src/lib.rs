@@ -817,7 +817,7 @@ fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
                         ::bilrost::encoding::skip_field(wire_type, buf)?;
                     }
                 }
-                Ok(canon)
+                ::core::result::Result::Ok(canon)
             }
         }
     };
@@ -936,7 +936,7 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
     let check_empty = if zero_variant_ident.is_some() {
         quote! {
             if !ALLOW_EMPTY && ::bilrost::encoding::EmptyState::is_empty(value) {
-                return Ok(::bilrost::Canonicity::NotCanonical);
+                return ::core::result::Result::Ok(::bilrost::Canonicity::NotCanonical);
             }
         }
     } else {
@@ -1017,7 +1017,7 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
                     .map_err(|_| ::bilrost::DecodeErrorKind::OutOfDomainValue)?;
                 *value = <Self as ::bilrost::Enumeration>::try_from_number(in_range)
                     .map_err(|_| ::bilrost::DecodeErrorKind::OutOfDomainValue)?;
-                Ok(())
+                ::core::result::Result::Ok(())
             }
         }
 
@@ -1036,7 +1036,7 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
                     ctx,
                 )?;
                 #check_empty
-                Ok(::bilrost::Canonicity::Canonical)
+                ::core::result::Result::Ok(::bilrost::Canonicity::Canonical)
             }
         }
     };
@@ -1235,7 +1235,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     #ident::#variant_ident #with_value => {
                         #decode
                     }
-                    _ => Err(::bilrost::DecodeError::new(
+                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
                         ::bilrost::DecodeErrorKind::ConflictingFields
                     )),
                 }
@@ -1343,12 +1343,12 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                         let value = &mut new_value;
                         #decode?;
                         *field = Some(#ident::#variant_ident #with_new_value);
-                        Ok(())
+                        ::core::result::Result::Ok(())
                     }
                     ::core::option::Option::Some(#ident::#variant_ident #with_value) => {
                         #decode
                     }
-                    _ => Err(::bilrost::DecodeError::new(
+                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
                         ::bilrost::DecodeErrorKind::ConflictingFields
                     )),
                 }
@@ -1465,7 +1465,7 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     #ident::#variant_ident #with_value => {
                         #decode
                     }
-                    _ => Err(::bilrost::DecodeError::new(
+                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
                         ::bilrost::DecodeErrorKind::ConflictingFields
                     )),
                 }
@@ -1508,12 +1508,12 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                         let value = &mut new_value;
                         let canon = #decode?;
                         *field = Some(#ident::#variant_ident #with_new_value);
-                        Ok(canon)
+                        ::core::result::Result::Ok(canon)
                     }
                     ::core::option::Option::Some(#ident::#variant_ident #with_value) => {
                         #decode
                     }
-                    _ => Err(::bilrost::DecodeError::new(
+                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
                         ::bilrost::DecodeErrorKind::ConflictingFields
                     )),
                 }
