@@ -118,7 +118,7 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
         Data::Struct(variant_data) => variant_data,
         // TODO(widders): ...make it possible to derive Message for an enum. this would be exactly
         //  equivalent to a message with one field which is a oneof with the same fields.
-        Data::Enum(..) => bail!("Message can not be derived for an enum"),
+        Data::Enum(..) => panic!("should be unreachable, Message for enums depends on oneof"),
         Data::Union(..) => bail!("Message can not be derived for a union"),
     };
 
@@ -396,6 +396,10 @@ fn append_distinguished_encoder_wheres<T>(
 
 fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
     let input: DeriveInput = parse2(input)?;
+
+    if let Data::Enum(..) = input.data {
+        return message_via_oneof(input);
+    }
 
     let PreprocessedMessage {
         ident,
@@ -741,6 +745,98 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
     Ok(expanded)
 }
 
+fn message_via_oneof(input: DeriveInput) -> Result<TokenStream, Error> {
+    let PreprocessedOneof {
+        ident,
+        impl_generics,
+        ty_generics,
+        where_clause,
+        fields,
+        empty_variant,
+    } = preprocess_oneof(&input)?;
+
+    let tag_measurer = if matches!(
+        fields.iter().map(|(_, field)| field.last_tag()).max(),
+        Some(last_tag) if last_tag >= 32
+    ) {
+        quote!(::bilrost::encoding::RuntimeTagMeasurer)
+    } else {
+        quote!(::bilrost::encoding::TrivialTagMeasurer)
+    };
+
+    if empty_variant.is_none() {
+        bail!("Message can only be derived for Oneof enums that have an empty variant.")
+    }
+
+    let where_clause = impl_append_wheres(
+        where_clause,
+        Some(quote!(Self: ::bilrost::encoding::Oneof)),
+        iter::empty(),
+    );
+
+    Ok(quote! {
+        impl #impl_generics ::bilrost::RawMessage for #ident #ty_generics #where_clause {
+            const __ASSERTIONS: () = ();
+
+            #[inline(always)]
+            fn raw_encode<__B>(&self, buf: &mut __B)
+            where
+                __B: ::bilrost::bytes::BufMut + ?Sized,
+            {
+                <Self as ::bilrost::encoding::Oneof>::oneof_encode(
+                    self,
+                    buf,
+                    &mut ::bilrost::encoding::TagWriter::new(),
+                );
+            }
+
+            #[inline(always)]
+            fn raw_prepend<__B>(&self, buf: &mut __B)
+            where
+                __B: ::bilrost::buf::ReverseBuf + ?Sized,
+            {
+                let tw = &mut ::bilrost::encoding::TagRevWriter::new();
+                <Self as ::bilrost::encoding::Oneof>::oneof_prepend(self, buf, tw);
+                tw.finalize(buf);
+            }
+
+            #[inline(always)]
+            fn raw_decode_field<__B>(
+                &mut self,
+                tag: u32,
+                wire_type: ::bilrost::encoding::WireType,
+                duplicated: bool,
+                buf: ::bilrost::encoding::Capped<__B>,
+                ctx: ::bilrost::encoding::DecodeContext,
+            ) -> ::core::result::Result<(), ::bilrost::DecodeError>
+            where
+                __B: ::bilrost::bytes::Buf + ?Sized,
+            {
+                if <Self as ::bilrost::encoding::Oneof>::FIELD_TAGS.contains(&tag) {
+                    <Self as ::bilrost::encoding::Oneof>::oneof_decode_field(
+                        self,
+                        tag,
+                        wire_type,
+                        duplicated,
+                        buf,
+                        ctx,
+                    )
+                } else {
+                    ::core::result::Result::Ok(())
+                }
+            }
+
+            #[inline(always)]
+            fn raw_encoded_len(&self) -> usize {
+                <Self as ::bilrost::encoding::Oneof>::oneof_encoded_len(
+                    self,
+                    &mut #tag_measurer::new(),
+                )
+            }
+        }
+    })
+}
+
 #[proc_macro_derive(Message, attributes(bilrost))]
 pub fn message(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     try_message(input.into()).unwrap().into()
@@ -748,6 +844,10 @@ pub fn message(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
     let input: DeriveInput = parse2(input)?;
+
+    if let Data::Enum(..) = input.data {
+        return distinguished_message_via_oneof(input);
+    }
 
     let PreprocessedMessage {
         ident,
@@ -832,6 +932,62 @@ fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
     };
 
     Ok(expanded)
+}
+
+fn distinguished_message_via_oneof(input: DeriveInput) -> Result<TokenStream, Error> {
+    let PreprocessedOneof {
+        ident,
+        impl_generics,
+        ty_generics,
+        where_clause,
+        fields: _,
+        empty_variant,
+    } = preprocess_oneof(&input)?;
+
+    if empty_variant.is_none() {
+        bail!(
+            "DistinguishedMessage can only be derived for DistinguishedOneof enums that have an \
+            empty variant."
+        )
+    }
+
+    let where_clause = impl_append_wheres(
+        where_clause,
+        Some(quote!(Self: ::bilrost::encoding::DistinguishedOneof)),
+        iter::empty(),
+    );
+
+    Ok(quote! {
+        impl #impl_generics ::bilrost::RawDistinguishedMessage for #ident #ty_generics
+        #where_clause
+        {
+            #[inline(always)]
+            fn raw_decode_field_distinguished<__B>(
+                &mut self,
+                tag: u32,
+                wire_type: ::bilrost::encoding::WireType,
+                duplicated: bool,
+                buf: ::bilrost::encoding::Capped<__B>,
+                ctx: ::bilrost::encoding::DecodeContext,
+            ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError>
+            where
+                __B: ::bilrost::bytes::Buf + ?Sized,
+            {
+                if <Self as ::bilrost::encoding::Oneof>::FIELD_TAGS.contains(&tag) {
+                    <Self as ::bilrost::encoding::DistinguishedOneof>::oneof_decode_field_distinguished(
+                        self,
+                        tag,
+                        wire_type,
+                        duplicated,
+                        buf,
+                        ctx,
+                    )
+                } else {
+                    ::core::result::Result::Ok(::bilrost::Canonicity::HasExtensions)
+                }
+            }
+        }
+    })
 }
 
 #[proc_macro_derive(DistinguishedMessage, attributes(bilrost))]

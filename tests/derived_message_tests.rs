@@ -2435,6 +2435,35 @@ fn oneof_plain_fields_encode_empty() {
     }
 }
 
+#[test]
+fn oneof_as_message() {
+    #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
+    enum AB {
+        Nothing,
+        #[bilrost(1)]
+        A(bool),
+        #[bilrost(2)]
+        B(bool),
+    }
+
+    assert::decodes_distinguished([], AB::Nothing);
+    assert::decodes_distinguished([(1, OV::bool(false))], AB::A(false));
+    assert::decodes_distinguished([(2, OV::bool(true))], AB::B(true));
+    assert::decodes_non_canonically(
+        [(1, OV::bool(true)), (4, OV::str("extension"))],
+        AB::A(true),
+        HasExtensions,
+    );
+    assert::never_decodes::<AB>(
+        [(1, OV::bool(false)), (2, OV::bool(true))],
+        ConflictingFields,
+    );
+    assert::never_decodes::<AB>(
+        [(1, OV::bool(true)), (1, OV::bool(false))],
+        UnexpectedlyRepeated,
+    );
+}
+
 // Enumeration tests
 
 #[test]
