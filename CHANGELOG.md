@@ -15,6 +15,10 @@
 
 ### Cleanups
 
+* Cleaned up and re-added fuzzers! Fuzzers are available via both `libfuzzer`
+  and `afl`; see [`FUZZING.md`](./FUZZING.md) for usage details. These fuzzers
+  would have caught the bug fixed in 0.1006.1 :)
+
 ## v0.1006.1
 
 ### Fixes
