@@ -1,3 +1,11 @@
+## v0.1006.1
+
+### Fixes
+
+* BUGFIX: Messages that have multiple occurrences of the *same* field that is
+  part of a oneof will now always error, rather than silently replacing the
+  value.
+
 ## v0.1006.0
 
 ### Breaking changes
