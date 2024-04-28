@@ -1,7 +1,8 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use bilrost::Message;
+
+use bilrost::{Message, Oneof};
 
 /// A Duration represents a signed, fixed-length span of time represented
 /// as a count of seconds and fractions of seconds at nanosecond
@@ -220,42 +221,29 @@ impl Timestamp {
 /// `Value` represents a dynamically typed value which can be either
 /// null, a number, a string, a boolean, a recursive struct value, or a
 /// list of values. A producer of value is expected to set one of these
-/// variants. Absence of any variant indicates an error.
+/// variants.
 ///
 /// The JSON representation for `Value` is JSON value.
-#[derive(Clone, Debug, PartialEq, Message)]
-pub struct Value {
-    /// The kind of value. None represents JSON `null`.
-    #[bilrost(oneof(1-7))]
-    pub kind: value::Kind,
-}
-
-/// Nested message and enum types in `Value`.
-pub mod value {
-    use super::String;
-
-    /// The kind of value.
-    #[derive(Clone, Debug, PartialEq, bilrost::Oneof)]
-    pub enum Kind {
-        /// Represents a JSON null value.
-        Null,
-        #[bilrost(1)]
-        Float(f64),
-        #[bilrost(2)]
-        Signed(i64),
-        #[bilrost(3)]
-        Unsigned(u64),
-        #[bilrost(4)]
-        String(String),
-        #[bilrost(5)]
-        Bool(bool),
-        /// Represents a structured value.
-        #[bilrost(6)]
-        Struct(super::StructValue),
-        /// Represents a repeated `Value`.
-        #[bilrost(7)]
-        List(super::ListValue),
-    }
+#[derive(Clone, Debug, PartialEq, Oneof, Message)]
+pub enum Value {
+    /// Represents a JSON null value.
+    Null,
+    #[bilrost(1)]
+    Float(f64),
+    #[bilrost(2)]
+    Signed(i64),
+    #[bilrost(3)]
+    Unsigned(u64),
+    #[bilrost(4)]
+    String(String),
+    #[bilrost(5)]
+    Bool(bool),
+    /// Represents a structured value.
+    #[bilrost(6)]
+    Struct(StructValue),
+    /// Represents a repeated `Value`.
+    #[bilrost(7)]
+    List(ListValue),
 }
 
 /// `Struct` represents a structured data value, consisting of fields
