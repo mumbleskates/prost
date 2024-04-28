@@ -1,11 +1,11 @@
 [package]
 name = "bilrost-derive"
-version = "0.12.3"
+version = "0.1007.0-dev"
 authors = [
+    "Kent Ross <k@mad.cash>",
     "Dan Burkert <dan@danburkert.com>",
     "Lucio Franco <luciofranco14@gmail.com>",
     "Tokio Contributors <team@tokio.rs>",
-    "Kent Ross <k@mad.cash>",
 ]
 license = "Apache-2.0"
 repository = "https://github.com/mumbleskates/bilrost"
@@ -13,6 +13,7 @@ documentation = "https://docs.rs/bilrost-derive"
 readme = "README.md"
 description = "A compact protobuf-like serializer and deserializer for the Rust Language."
 edition = "2021"
+resolver = "2"
 rust-version = "1.65"
 
 [lib]

@@ -1,24 +1,30 @@
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::borrow::{Borrow, BorrowMut};
-use core::convert::{AsMut, AsRef, From};
 use core::ops::{Deref, DerefMut};
 
 use bytes::{Buf, BufMut};
 
-use crate::encoding::{skip_field, Capped, DecodeContext, WireType};
+use crate::buf::ReverseBuf;
+use crate::encoding::{skip_field, Canonicity, Capped, DecodeContext, WireType};
 use crate::message::{RawDistinguishedMessage, RawMessage};
 use crate::DecodeError;
 
 /// Newtype wrapper to act as a simple "bytes data" type in Bilrost. It transparently wraps a
 /// `Vec<u8>` and is fully supported by the `General` encoder.
 ///
-/// To use `Vec<u8>` directly, use the `VecBlob` encoder.
+/// To use `Vec<u8>` directly, use the `PlainBytes` encoder.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug, Default)]
 #[repr(transparent)]
 pub struct Blob(Vec<u8>);
 
 impl Blob {
-    pub fn new(vec: Vec<u8>) -> Self {
+    pub fn new() -> Self {
+        Self::from_vec(Vec::new())
+    }
+
+    pub fn from_vec(vec: Vec<u8>) -> Self {
         Self(vec)
     }
 
@@ -67,7 +73,7 @@ impl BorrowMut<Vec<u8>> for Blob {
 
 impl From<Vec<u8>> for Blob {
     fn from(value: Vec<u8>) -> Self {
-        Blob::new(value)
+        Blob::from_vec(value)
     }
 }
 
@@ -77,13 +83,56 @@ impl From<Blob> for Vec<u8> {
     }
 }
 
+impl From<&[u8]> for Blob {
+    fn from(value: &[u8]) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&mut [u8]> for Blob {
+    fn from(value: &mut [u8]) -> Self {
+        Self(value.into())
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for Blob {
+    fn from(value: &[u8; N]) -> Self {
+        // MSRV: as_slice() needed
+        Self(value.as_slice().into())
+    }
+}
+
+impl<const N: usize> From<[u8; N]> for Blob {
+    fn from(value: [u8; N]) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<Cow<'_, [u8]>> for Blob {
+    fn from(value: Cow<[u8]>) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<Box<[u8]>> for Blob {
+    fn from(value: Box<[u8]>) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&str> for Blob {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
 #[cfg(test)]
 impl proptest::arbitrary::Arbitrary for Blob {
     type Parameters = <Vec<u8> as proptest::arbitrary::Arbitrary>::Parameters;
     fn arbitrary_with(top: Self::Parameters) -> Self::Strategy {
         proptest::strategy::Strategy::prop_map(
             proptest::arbitrary::any_with::<Vec<u8>>(top),
-            Blob::new,
+            Blob::from_vec,
         )
     }
     type Strategy = proptest::strategy::Map<
@@ -92,8 +141,16 @@ impl proptest::arbitrary::Arbitrary for Blob {
     >;
 }
 
+/// The empty tuple unit is the only native tuple type that implements Message because there are no
+/// choices to be made about how its fields will be encoded. All other native tuples are only
+/// implemented as field values. They encode exactly as if they were nested messages, but their
+/// encoding must be specified.
 impl RawMessage for () {
+    const __ASSERTIONS: () = ();
+
     fn raw_encode<B: BufMut + ?Sized>(&self, _buf: &mut B) {}
+
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, _buf: &mut B) {}
 
     fn raw_encoded_len(&self) -> usize {
         0
@@ -118,14 +175,15 @@ impl RawDistinguishedMessage for () {
     fn raw_decode_field_distinguished<B: Buf + ?Sized>(
         &mut self,
         _tag: u32,
-        _wire_type: WireType,
+        wire_type: WireType,
         _duplicated: bool,
-        _buf: Capped<B>,
+        buf: Capped<B>,
         _ctx: DecodeContext,
-    ) -> Result<(), DecodeError>
+    ) -> Result<Canonicity, DecodeError>
     where
         Self: Sized,
     {
-        Err(DecodeError::new("field exists for empty message type"))
+        skip_field(wire_type, buf)?;
+        Ok(Canonicity::HasExtensions)
     }
 }

@@ -1,13 +1,17 @@
-mod oneof;
-mod value;
-
-use std::fmt;
+use alloc::fmt::Debug;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 
 use anyhow::{bail, Error};
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::{parse2, Attribute, LitInt, Meta, Token, Type};
+
+mod oneof;
+mod value;
 
 #[derive(Clone)]
 pub enum Field {
@@ -22,16 +26,18 @@ impl Field {
     ///
     /// If the meta items are invalid, an error will be returned.
     /// If the field should be ignored, `None` is returned.
-    pub fn new(ty: Type, attrs: Vec<Attribute>, inferred_tag: u32) -> Result<Option<Field>, Error> {
+    pub fn new(
+        ty: Type,
+        attrs: Vec<Attribute>,
+        inferred_tag: Option<u32>,
+    ) -> Result<Option<Field>, Error> {
         let attrs = bilrost_attrs(attrs)?;
 
-        // TODO: check for ignore attribute.
-
-        Ok(Some(if let Some(field) = oneof::Field::new(&ty, &attrs)? {
-            Field::Oneof(field)
+        Ok(if let Some(field) = oneof::Field::new(&ty, &attrs)? {
+            Some(Field::Oneof(field))
         } else {
-            Field::Value(value::Field::new(&ty, &attrs, inferred_tag)?)
-        }))
+            value::Field::new(&ty, &attrs, inferred_tag)?.map(Field::Value)
+        })
     }
 
     pub fn new_in_oneof(
@@ -64,19 +70,19 @@ impl Field {
     }
 
     /// Returns the where clause condition asserting that this field's encoder encodes its type.
-    pub fn encoder_where(&self) -> Option<TokenStream> {
+    pub fn expedient_where_terms(&self) -> Vec<TokenStream> {
         match self {
-            Field::Value(field) => field.encoder_where(),
-            _ => None,
+            Field::Value(field) => field.expedient_where_terms(),
+            Field::Oneof(field) => field.expedient_where_terms(),
         }
     }
 
     /// Returns the where clause condition asserting that this field's encoder encodes its type in
     /// distinguished mode.
-    pub fn distinguished_encoder_where(&self) -> Option<TokenStream> {
+    pub fn distinguished_where_terms(&self) -> Vec<TokenStream> {
         match self {
-            Field::Value(field) => field.distinguished_encoder_where(),
-            _ => None,
+            Field::Value(field) => field.distinguished_where_terms(),
+            Field::Oneof(field) => field.distinguished_where_terms(),
         }
     }
 
@@ -93,7 +99,7 @@ impl Field {
                 let description = description.as_str();
                 // Static assertion pattern borrowed from static_assertions crate.
                 Some(quote!(
-                    const _: () = ::bilrost::assert_tags_are_equal(
+                    ::bilrost::assert_tags_are_equal(
                         #description,
                         <#oneof_ty as ::bilrost::encoding::Oneof>::FIELD_TAGS,
                         &[#(#tags),*],
@@ -125,11 +131,19 @@ impl Field {
         }
     }
 
-    /// Returns an expression which evaluates to the result of decoding a value into the field.
-    pub fn decode(&self, ident: TokenStream) -> TokenStream {
+    /// Returns a statement which prepends the field.
+    pub fn prepend(&self, ident: TokenStream) -> TokenStream {
         match self {
-            Field::Value(scalar) => scalar.decode(ident),
-            Field::Oneof(oneof) => oneof.decode(ident),
+            Field::Value(scalar) => scalar.prepend(ident),
+            Field::Oneof(oneof) => oneof.prepend(ident),
+        }
+    }
+
+    /// Returns an expression which evaluates to the result of decoding a value into the field.
+    pub fn decode_expedient(&self, ident: TokenStream) -> TokenStream {
+        match self {
+            Field::Value(scalar) => scalar.decode_expedient(ident),
+            Field::Oneof(oneof) => oneof.decode_expedient(ident),
         }
     }
 
@@ -191,7 +205,7 @@ pub(crate) fn bilrost_attrs(attrs: Vec<Attribute>) -> Result<Vec<Meta>, Error> {
 
 pub fn set_option<T>(option: &mut Option<T>, value: T, message: &str) -> Result<(), Error>
 where
-    T: fmt::Debug,
+    T: Debug,
 {
     if let Some(existing) = option {
         bail!("{}: {:?} and {:?}", message, existing, value);

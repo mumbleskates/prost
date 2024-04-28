@@ -1,238 +1,132 @@
+use alloc::borrow::Cow;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
-#[cfg(feature = "std")]
-use core::hash::Hash;
 use core::mem;
 use core::str;
-#[cfg(feature = "std")]
-use std::collections::{HashMap, HashSet};
 
 use bytes::{Buf, BufMut, Bytes};
 
+use crate::buf::ReverseBuf;
 use crate::encoding::{
-    delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint, Capped,
-    DecodeContext, DistinguishedEncoder, DistinguishedFieldEncoder, DistinguishedValueEncoder,
-    Encoder, FieldEncoder, Map, TagMeasurer, TagWriter, ValueEncoder, WireType, Wiretyped,
+    delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint,
+    encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
+    DistinguishedValueEncoder, Encoder, Fixed, Map, PlainBytes, Unpacked, ValueEncoder, Varint,
+    WireType, Wiretyped,
 };
 use crate::message::{merge, merge_distinguished, RawDistinguishedMessage, RawMessage};
-use crate::{Blob, DecodeError};
+use crate::Blob;
+use crate::DecodeErrorKind::InvalidValue;
 
 pub struct General;
 
+encoder_where_value_encoder!(General);
+
 // General implements unpacked encodings by default, but only for select collection types. Other
 // implementers of the `Collection` trait must use Unpacked or Packed.
-delegate_encoding!(delegate from (General) to (crate::encoding::Unpacked<General>)
-    for type (Vec<T>) including distinguished with generics <T>);
-delegate_encoding!(delegate from (General) to (crate::encoding::Unpacked<General>)
-    for type (BTreeSet<T>) including distinguished with generics <T>);
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (Vec<T>) including distinguished with generics (T));
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (Cow<'a, [T]>) including distinguished
+    with where clause (T: Clone)
+    with generics ('a, T));
+#[cfg(feature = "arrayvec")]
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (arrayvec::ArrayVec<T, N>) including distinguished
+    with generics (T, const N: usize));
+#[cfg(feature = "smallvec")]
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (smallvec::SmallVec<A>) including distinguished
+    with where clause (A: smallvec::Array<Item = T>)
+    with generics (T, A));
+#[cfg(feature = "thin-vec")]
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (thin_vec::ThinVec<T>) including distinguished with generics (T));
+#[cfg(feature = "tinyvec")]
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (tinyvec::ArrayVec<A>) including distinguished
+    with where clause (A: tinyvec::Array<Item = T>)
+    with generics (T, A));
+#[cfg(feature = "tinyvec")]
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (tinyvec::TinyVec<A>) including distinguished
+    with where clause (A: tinyvec::Array<Item = T>)
+    with generics (T, A));
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (BTreeSet<T>) including distinguished with generics (T));
 delegate_value_encoding!(delegate from (General) to (Map<General, General>)
     for type (BTreeMap<K, V>) including distinguished
     with where clause for expedient (K: Ord)
     with where clause for distinguished (V: Eq)
-    with generics <K, V>);
+    with generics (K, V));
 #[cfg(feature = "std")]
-delegate_encoding!(delegate from (General) to (crate::encoding::Unpacked<General>)
-    for type (HashSet<T>) with generics <T>);
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (std::collections::HashSet<T, S>)
+    with where clause (S: Default + core::hash::BuildHasher)
+    with generics (T, S));
 #[cfg(feature = "std")]
 delegate_value_encoding!(delegate from (General) to (Map<General, General>)
-    for type (HashMap<K, V>)
-    with where clause (K: Eq + Hash)
-    with generics <K, V>);
+    for type (std::collections::HashMap<K, V, S>)
+    with where clause (K: Eq + core::hash::Hash, S: Default + core::hash::BuildHasher)
+    with generics (K, V, S));
 #[cfg(feature = "hashbrown")]
-delegate_encoding!(delegate from (General) to (crate::encoding::Unpacked<General>)
-    for type (hashbrown::HashSet<T>) with generics <T>);
+delegate_encoding!(delegate from (General) to (Unpacked<General>)
+    for type (hashbrown::HashSet<T, S>)
+    with where clause (S: Default + core::hash::BuildHasher)
+    with generics (T, S));
 #[cfg(feature = "hashbrown")]
 delegate_value_encoding!(delegate from (General) to (Map<General, General>)
-    for type (hashbrown::HashMap<K, V>)
-    with where clause (K: Eq + Hash)
-    with generics <K, V>);
+    for type (hashbrown::HashMap<K, V, S>)
+    with where clause (K: Eq + core::hash::Hash, S: Default + core::hash::BuildHasher)
+    with generics (K, V, S));
 
-/// General encodes plain values only when they are non-default.
-impl<T> Encoder<T> for General
-where
-    General: ValueEncoder<T>,
-    T: Default + PartialEq,
-{
-    #[inline]
-    fn encode<B: BufMut + ?Sized>(tag: u32, value: &T, buf: &mut B, tw: &mut TagWriter) {
-        if *value != T::default() {
-            Self::encode_field(tag, value, buf, tw);
-        }
-    }
-
-    #[inline]
-    fn encoded_len(tag: u32, value: &T, tm: &mut TagMeasurer) -> usize {
-        if *value != T::default() {
-            Self::field_encoded_len(tag, value, tm)
-        } else {
-            0
-        }
-    }
-
-    #[inline]
-    fn decode<B: Buf + ?Sized>(
-        wire_type: WireType,
-        duplicated: bool,
-        value: &mut T,
-        buf: Capped<B>,
-        ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        if duplicated {
-            return Err(DecodeError::new(
-                "multiple occurrences of non-repeated field",
-            ));
-        }
-        Self::decode_field(wire_type, value, buf, ctx)
-    }
-}
-
-/// General's distinguished encoding for plain values forbids encoding defaulted values. This
-/// includes directly-nested message types, which are not emitted when all their fields are default.
-impl<T> DistinguishedEncoder<T> for General
-where
-    General: DistinguishedValueEncoder<T> + Encoder<T>,
-    T: Default + Eq,
-{
-    #[inline]
-    fn decode_distinguished<B: Buf + ?Sized>(
-        wire_type: WireType,
-        duplicated: bool,
-        value: &mut T,
-        buf: Capped<B>,
-        ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        if duplicated {
-            return Err(DecodeError::new(
-                "multiple occurrences of non-repeated field",
-            ));
-        }
-        Self::decode_field_distinguished(wire_type, value, buf, ctx)?;
-        if *value == T::default() {
-            return Err(DecodeError::new(
-                "plain field was encoded with its zero value",
-            ));
-        }
-        Ok(())
-    }
-}
-
-/// Macro which emits implementations for variable width numeric encoding.
-macro_rules! varint {
-    (
-        $name:ident,
-        $ty:ty,
-        to_uint64($to_uint64_value:ident) $to_uint64:expr,
-        from_uint64($from_uint64_value:ident) $from_uint64:expr
-    ) => {
-        impl Wiretyped<$ty> for General {
-            const WIRE_TYPE: WireType = WireType::Varint;
-        }
-
-        impl ValueEncoder<$ty> for General {
-            #[inline]
-            fn encode_value<B: BufMut + ?Sized>($to_uint64_value: &$ty, buf: &mut B) {
-                encode_varint($to_uint64, buf);
-            }
-
-            #[inline]
-            fn value_encoded_len($to_uint64_value: &$ty) -> usize {
-                encoded_len_varint($to_uint64)
-            }
-
-            #[inline]
-            fn decode_value<B: Buf + ?Sized>(
-                __value: &mut $ty,
-                mut buf: Capped<B>,
-                _ctx: DecodeContext,
-            ) -> Result<(), DecodeError> {
-                let $from_uint64_value = buf.decode_varint()?;
-                *__value = $from_uint64;
-                Ok(())
-            }
-        }
-
-        impl DistinguishedValueEncoder<$ty> for General {
-            #[inline]
-            fn decode_value_distinguished<B: Buf + ?Sized>(
-                value: &mut $ty,
-                buf: Capped<B>,
-                ctx: DecodeContext,
-            ) -> Result<(), DecodeError> {
-                Self::decode_value(value, buf, ctx)
-            }
-        }
-
-        #[cfg(test)]
-        mod $name {
-            crate::encoding::check_type_test!(General, expedient, $ty, WireType::Varint);
-            crate::encoding::check_type_test!(General, distinguished, $ty, WireType::Varint);
-        }
-    };
-}
-
-varint!(varint_bool, bool,
-to_uint64(value) {
-    u64::from(*value)
-},
-from_uint64(value) {
-    match value {
-        0 => false,
-        1 => true,
-        _ => return Err(DecodeError::new("invalid varint value for bool"))
-    }
-});
-varint!(varint_u32, u32,
-to_uint64(value) {
-    *value as u64
-},
-from_uint64(value) {
-    u32::try_from(value).map_err(|_| DecodeError::new("varint overflows range of u32"))?
-});
-varint!(varint_u64, u64,
-to_uint64(value) {
-    *value
-},
-from_uint64(value) {
-    value
-});
-varint!(varint_i32, i32,
-to_uint64(value) {
-    super::i32_to_unsigned(*value) as u64
-},
-from_uint64(value) {
-    let value = u32::try_from(value)
-        .map_err(|_| DecodeError::new("varint overflows range of i32"))?;
-    super::u32_to_signed(value)
-});
-varint!(varint_i64, i64,
-to_uint64(value) {
-    super::i64_to_unsigned(*value)
-},
-from_uint64(value) {
-    super::u64_to_signed(value)
-});
+// General encodes bool and integers as varints.
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (bool) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (u16) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (i16) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (u32) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (i32) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (u64) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (i64) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (usize) including distinguished);
+delegate_value_encoding!(delegate from (General) to (Varint)
+    for type (isize) including distinguished);
 
 // General also encodes floating point values.
-delegate_value_encoding!(delegate from (General) to (crate::encoding::Fixed) for type (f32));
-delegate_value_encoding!(delegate from (General) to (crate::encoding::Fixed) for type (f64));
+delegate_value_encoding!(delegate from (General) to (Fixed) for type (f32));
+delegate_value_encoding!(delegate from (General) to (Fixed) for type (f64));
 
-impl Wiretyped<String> for General {
+impl Wiretyped<General> for String {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }
 
-// TODO(widders): rope string? Cow string? cow string is probably pretty doable. does it matter?
-
-impl ValueEncoder<String> for General {
+impl ValueEncoder<General> for String {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &String, buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         buf.put_slice(value.as_bytes());
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &String, buf: &mut B) {
+        buf.prepend_slice(value.as_bytes());
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &String) -> usize {
         encoded_len_varint(value.len() as u64) + value.len()
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut String,
         mut buf: Capped<B>,
@@ -251,19 +145,19 @@ impl ValueEncoder<String> for General {
         // It's required when using `String::as_mut_vec` that invalid utf-8 data not be leaked into
         // the backing `String`. To enforce this, even in the event of a panic in the decoder or
         // in the buf implementation, a drop guard is used.
-        unsafe {
-            struct DropGuard<'a>(&'a mut Vec<u8>);
-            impl<'a> Drop for DropGuard<'a> {
-                #[inline]
-                fn drop(&mut self) {
-                    self.0.clear();
-                }
+        struct DropGuard<'a>(&'a mut Vec<u8>);
+        impl Drop for DropGuard<'_> {
+            #[inline]
+            fn drop(&mut self) {
+                self.0.clear();
             }
+        }
 
-            let source = buf.take_length_delimited()?.take_all();
-            // If we must copy, make sure to copy only once.
-            value.clear();
-            value.reserve(source.remaining());
+        let source = buf.take_length_delimited()?.take_all();
+        // If we must copy, make sure to copy only once.
+        value.clear();
+        value.reserve(source.remaining());
+        unsafe {
             let drop_guard = DropGuard(value.as_mut_vec());
             drop_guard.0.put(source);
             match str::from_utf8(drop_guard.0) {
@@ -272,55 +166,179 @@ impl ValueEncoder<String> for General {
                     mem::forget(drop_guard);
                     Ok(())
                 }
-                Err(_) => Err(DecodeError::new(
-                    "invalid string value: data is not UTF-8 encoded",
-                )),
+                Err(_) => Err(DecodeError::new(InvalidValue)),
             }
         }
     }
 }
 
-impl DistinguishedValueEncoder<String> for General {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+impl DistinguishedValueEncoder<General> for String {
+    #[inline]
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut String,
-        buf: Capped<B>,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        Self::decode_value(value, buf, ctx)
+    ) -> Result<Canonicity, DecodeError> {
+        Self::decode_value(value, buf, ctx)?;
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
+            Canonicity::NotCanonical
+        } else {
+            Canonicity::Canonical
+        })
     }
 }
 
 #[cfg(test)]
 mod string {
-    use crate::encoding::check_type_test;
-    check_type_test!(
-        General,
-        expedient,
-        alloc::string::String,
-        WireType::LengthDelimited
-    );
-    check_type_test!(
-        General,
-        distinguished,
-        alloc::string::String,
-        WireType::LengthDelimited
-    );
+    use super::{General, String};
+    use crate::encoding::test::check_type_test;
+    check_type_test!(General, expedient, String, WireType::LengthDelimited);
+    check_type_test!(General, distinguished, String, WireType::LengthDelimited);
 }
 
-impl Wiretyped<Bytes> for General {
+impl Wiretyped<General> for Cow<'_, str> {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }
 
-impl ValueEncoder<Bytes> for General {
+impl ValueEncoder<General> for Cow<'_, str> {
+    #[inline]
+    fn encode_value<B: BufMut + ?Sized>(value: &Cow<str>, buf: &mut B) {
+        encode_varint(value.len() as u64, buf);
+        buf.put_slice(value.as_bytes());
+    }
+
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Cow<str>, buf: &mut B) {
+        buf.prepend_slice(value.as_bytes());
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
+    fn value_encoded_len(value: &Cow<str>) -> usize {
+        encoded_len_varint(value.len() as u64) + value.len()
+    }
+
+    #[inline]
+    fn decode_value<B: Buf + ?Sized>(
+        value: &mut Cow<str>,
+        buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<(), DecodeError> {
+        ValueEncoder::<General>::decode_value(value.to_mut(), buf, ctx)
+    }
+}
+
+impl DistinguishedValueEncoder<General> for Cow<'_, str> {
+    #[inline]
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
+        value: &mut Cow<str>,
+        buf: Capped<impl Buf + ?Sized>,
+        ctx: DecodeContext,
+    ) -> Result<Canonicity, DecodeError> {
+        DistinguishedValueEncoder::<General>::decode_value_distinguished::<ALLOW_EMPTY>(
+            value.to_mut(),
+            buf,
+            ctx,
+        )
+    }
+}
+
+#[cfg(test)]
+mod cow_string {
+    use super::{Cow, General};
+    use crate::encoding::test::check_type_test;
+    check_type_test!(General, expedient, Cow<str>, WireType::LengthDelimited);
+    check_type_test!(General, distinguished, Cow<str>, WireType::LengthDelimited);
+}
+
+#[cfg(feature = "bytestring")]
+impl Wiretyped<General> for bytestring::ByteString {
+    const WIRE_TYPE: WireType = WireType::LengthDelimited;
+}
+
+#[cfg(feature = "bytestring")]
+impl ValueEncoder<General> for bytestring::ByteString {
+    #[inline]
+    fn encode_value<B: BufMut + ?Sized>(value: &bytestring::ByteString, buf: &mut B) {
+        encode_varint(value.len() as u64, buf);
+        buf.put_slice(value.as_bytes());
+    }
+
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &bytestring::ByteString, buf: &mut B) {
+        buf.prepend_slice(value.as_bytes());
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
+    fn value_encoded_len(value: &bytestring::ByteString) -> usize {
+        encoded_len_varint(value.len() as u64) + value.len()
+    }
+
+    #[inline]
+    fn decode_value<B: Buf + ?Sized>(
+        value: &mut bytestring::ByteString,
+        mut buf: Capped<B>,
+        _ctx: DecodeContext,
+    ) -> Result<(), DecodeError> {
+        let mut string_data = buf.take_length_delimited()?;
+        let string_len = string_data.remaining_before_cap();
+        *value = bytestring::ByteString::try_from(string_data.copy_to_bytes(string_len))
+            .map_err(|_| DecodeError::new(InvalidValue))?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "bytestring")]
+impl DistinguishedValueEncoder<General> for bytestring::ByteString {
+    #[inline]
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
+        value: &mut bytestring::ByteString,
+        buf: Capped<impl Buf + ?Sized>,
+        ctx: DecodeContext,
+    ) -> Result<Canonicity, DecodeError> {
+        Self::decode_value(value, buf, ctx)?;
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
+            Canonicity::NotCanonical
+        } else {
+            Canonicity::Canonical
+        })
+    }
+}
+
+#[cfg(feature = "bytestring")]
+#[cfg(test)]
+mod bytestring_string {
+    use super::{General, String};
+    use crate::encoding::test::check_type_test;
+    check_type_test!(General, expedient, from String, into bytestring::ByteString, WireType::LengthDelimited);
+    check_type_test!(General, distinguished, from String, into bytestring::ByteString,
+        WireType::LengthDelimited);
+}
+
+impl Wiretyped<General> for Bytes {
+    const WIRE_TYPE: WireType = WireType::LengthDelimited;
+}
+
+impl ValueEncoder<General> for Bytes {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &Bytes, mut buf: &mut B) {
         encode_varint(value.len() as u64, buf);
         (&mut buf).put(value.clone()); // `put` needs Self to be sized, so we use the ref type
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Bytes, buf: &mut B) {
+        buf.prepend_slice(value);
+        prepend_varint(value.len() as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &Bytes) -> usize {
         encoded_len_varint(value.len() as u64) + value.len()
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut Bytes,
         mut buf: Capped<B>,
@@ -333,48 +351,49 @@ impl ValueEncoder<Bytes> for General {
     }
 }
 
-impl DistinguishedValueEncoder<Bytes> for General {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+impl DistinguishedValueEncoder<General> for Bytes {
+    #[inline]
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Bytes,
-        buf: Capped<B>,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        Self::decode_value(value, buf, ctx)
+    ) -> Result<Canonicity, DecodeError> {
+        Self::decode_value(value, buf, ctx)?;
+        Ok(if !ALLOW_EMPTY && value.is_empty() {
+            Canonicity::NotCanonical
+        } else {
+            Canonicity::Canonical
+        })
     }
 }
 
 #[cfg(test)]
 mod bytes_blob {
-    use crate::encoding::check_type_test;
-    check_type_test!(
-        General,
-        expedient,
-        from Vec<u8>,
-        into bytes::Bytes,
-        WireType::LengthDelimited
-    );
-    check_type_test!(
-        General,
-        distinguished,
-        from Vec<u8>,
-        into bytes::Bytes,
-        WireType::LengthDelimited
-    );
+    use super::{Bytes, General, Vec};
+    use crate::encoding::test::check_type_test;
+    check_type_test!(General, expedient, from Vec<u8>, into Bytes, WireType::LengthDelimited);
+    check_type_test!(General, distinguished, from Vec<u8>, into Bytes, WireType::LengthDelimited);
 }
 
-impl Wiretyped<Blob> for General {
+impl Wiretyped<General> for Blob {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }
 
-impl ValueEncoder<Blob> for General {
+impl ValueEncoder<General> for Blob {
     #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &Blob, buf: &mut B) {
-        crate::encoding::VecBlob::encode_value(value, buf)
+        ValueEncoder::<PlainBytes>::encode_value(&**value, buf)
+    }
+
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Blob, buf: &mut B) {
+        buf.prepend_slice(value);
+        prepend_varint(value.len() as u64, buf);
     }
 
     #[inline]
     fn value_encoded_len(value: &Blob) -> usize {
-        crate::encoding::VecBlob::value_encoded_len(value)
+        ValueEncoder::<PlainBytes>::value_encoded_len(&**value)
     }
 
     #[inline]
@@ -383,54 +402,64 @@ impl ValueEncoder<Blob> for General {
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
-        crate::encoding::VecBlob::decode_value(value, buf, ctx)
+        ValueEncoder::<PlainBytes>::decode_value(&mut **value, buf, ctx)
     }
 }
 
-impl DistinguishedValueEncoder<Blob> for General {
+impl DistinguishedValueEncoder<General> for Blob {
     #[inline]
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Blob,
-        buf: Capped<B>,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        crate::encoding::VecBlob::decode_value_distinguished(value, buf, ctx)
+    ) -> Result<Canonicity, DecodeError> {
+        DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished::<ALLOW_EMPTY>(
+            &mut **value,
+            buf,
+            ctx,
+        )
     }
 }
 
 #[cfg(test)]
 mod blob {
-    use crate::encoding::check_type_test;
-    check_type_test!(General, expedient, crate::Blob, WireType::LengthDelimited);
-    check_type_test!(
-        General,
-        distinguished,
-        crate::Blob,
-        WireType::LengthDelimited
-    );
+    use super::{Blob, General};
+    use crate::encoding::test::check_type_test;
+    check_type_test!(General, expedient, Blob, WireType::LengthDelimited);
+    check_type_test!(General, distinguished, Blob, WireType::LengthDelimited);
 }
 
-impl<T> Wiretyped<T> for General
+impl<T> Wiretyped<General> for T
 where
     T: RawMessage,
 {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }
 
-impl<T> ValueEncoder<T> for General
+impl<T> ValueEncoder<General> for T
 where
     T: RawMessage,
 {
+    #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &T, buf: &mut B) {
         encode_varint(value.raw_encoded_len() as u64, buf);
         value.raw_encode(buf);
     }
 
+    #[inline]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &T, buf: &mut B) {
+        let end = buf.remaining();
+        value.raw_prepend(buf);
+        prepend_varint((buf.remaining() - end) as u64, buf);
+    }
+
+    #[inline]
     fn value_encoded_len(value: &T) -> usize {
         let inner_len = value.raw_encoded_len();
         encoded_len_varint(inner_len as u64) + inner_len
     }
 
+    #[inline]
     fn decode_value<B: Buf + ?Sized>(
         value: &mut T,
         mut buf: Capped<B>,
@@ -441,16 +470,24 @@ where
     }
 }
 
-impl<T> DistinguishedValueEncoder<T> for General
+impl<T> DistinguishedValueEncoder<General> for T
 where
     T: RawDistinguishedMessage + Eq,
 {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    #[inline]
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut T,
-        mut buf: Capped<B>,
+        mut buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
+    ) -> Result<Canonicity, DecodeError> {
         ctx.limit_reached()?;
-        merge_distinguished(value, buf.take_length_delimited()?, ctx.enter_recursion())
+        let buf = buf.take_length_delimited()?;
+        // Empty message types always encode and decode from zero bytes. It is far cheaper to check
+        // here than to check after the value has been decoded and checking the message's
+        // `is_empty()`.
+        if !ALLOW_EMPTY && buf.remaining_before_cap() == 0 {
+            return Ok(Canonicity::NotCanonical);
+        }
+        merge_distinguished(value, buf, ctx.enter_recursion())
     }
 }

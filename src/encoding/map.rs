@@ -1,16 +1,20 @@
+use bytes::{Buf, BufMut};
+
+use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{DistinguishedMapping, Mapping};
 use crate::encoding::{
-    check_wire_type, encode_varint, encoded_len_varint, Capped, DecodeContext,
-    DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, NewForOverwrite,
-    TagMeasurer, TagWriter, ValueEncoder, WireType, Wiretyped,
+    encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Canonicity,
+    Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, NewForOverwrite,
+    ValueEncoder, WireType, Wiretyped,
 };
-use crate::DecodeError;
-use bytes::{Buf, BufMut};
+use crate::DecodeErrorKind::Truncated;
 
 pub struct Map<KE, VE>(KE, VE);
 
+encoder_where_value_encoder!(Map<KE, VE>, with where clause (T: Mapping), with generics (KE, VE));
+
 /// Maps are always length delimited.
-impl<T, KE, VE> Wiretyped<T> for Map<KE, VE> {
+impl<T, KE, VE> Wiretyped<Map<KE, VE>> for T {
     const WIRE_TYPE: WireType = WireType::LengthDelimited;
 }
 
@@ -24,34 +28,48 @@ const fn combined_fixed_size(a: WireType, b: WireType) -> Option<usize> {
 fn map_encoded_length<M, KE, VE>(value: &M) -> usize
 where
     M: Mapping,
-    KE: ValueEncoder<M::Key>,
-    VE: ValueEncoder<M::Value>,
+    M::Key: ValueEncoder<KE>,
+    M::Value: ValueEncoder<VE>,
 {
-    combined_fixed_size(KE::WIRE_TYPE, VE::WIRE_TYPE).map_or_else(
+    combined_fixed_size(
+        <M::Key as Wiretyped<KE>>::WIRE_TYPE,
+        <M::Value as Wiretyped<VE>>::WIRE_TYPE,
+    )
+    .map_or_else(
         || {
             value
                 .iter()
-                .map(|(k, v)| KE::value_encoded_len(k) + VE::value_encoded_len(v))
+                .map(|(k, v)| {
+                    ValueEncoder::<KE>::value_encoded_len(k)
+                        + ValueEncoder::<VE>::value_encoded_len(v)
+                })
                 .sum()
         },
         |fixed_size| value.len() * fixed_size, // Both key and value are constant length; shortcut
     )
 }
 
-impl<M, K, V, KE, VE> ValueEncoder<M> for Map<KE, VE>
+impl<M, K, V, KE, VE> ValueEncoder<Map<KE, VE>> for M
 where
     M: Mapping<Key = K, Value = V>,
-    KE: ValueEncoder<K>,
-    VE: ValueEncoder<V>,
-    K: NewForOverwrite,
-    V: NewForOverwrite,
+    K: NewForOverwrite + ValueEncoder<KE>,
+    V: NewForOverwrite + ValueEncoder<VE>,
 {
     fn encode_value<B: BufMut + ?Sized>(value: &M, buf: &mut B) {
         encode_varint(map_encoded_length::<M, KE, VE>(value) as u64, buf);
         for (key, val) in value.iter() {
-            KE::encode_value(key, buf);
-            VE::encode_value(val, buf);
+            ValueEncoder::<KE>::encode_value(key, buf);
+            ValueEncoder::<VE>::encode_value(val, buf);
         }
+    }
+
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &M, buf: &mut B) {
+        let end = buf.remaining();
+        for (key, val) in value.reversed() {
+            ValueEncoder::<VE>::prepend_value(val, buf);
+            ValueEncoder::<KE>::prepend_value(key, buf);
+        }
+        prepend_varint((buf.remaining() - end) as u64, buf);
     }
 
     fn value_encoded_len(value: &M) -> usize {
@@ -64,148 +82,132 @@ where
         mut buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
-        let capped = buf.take_length_delimited()?;
-        if combined_fixed_size(KE::WIRE_TYPE, VE::WIRE_TYPE).map_or(false, |fixed_size| {
-            capped.remaining_before_cap() % fixed_size != 0
-        }) {
-            return Err(DecodeError::new("packed field is not a valid length"));
+        let mut capped = buf.take_length_delimited()?;
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            combined_fixed_size(
+                <M::Key as Wiretyped<KE>>::WIRE_TYPE,
+                <M::Value as Wiretyped<VE>>::WIRE_TYPE,
+            ),
+            Some(fixed_size) if capped.remaining_before_cap() % fixed_size != 0
+        ) {
+            // No number of fixed-sized key+value pairs can pack evenly into this size.
+            return Err(DecodeError::new(Truncated));
         }
-        for item in capped.consume(|buf| {
+        while capped.has_remaining()? {
             let mut new_key = K::new_for_overwrite();
             let mut new_val = V::new_for_overwrite();
-            KE::decode_value(&mut new_key, buf.lend(), ctx.clone())?;
-            VE::decode_value(&mut new_val, buf.lend(), ctx.clone())?;
-            Ok((new_key, new_val))
-        }) {
-            let (key, val) = item?;
-            value.insert(key, val).map_err(DecodeError::new)?;
+            ValueEncoder::<KE>::decode_value(&mut new_key, capped.lend(), ctx.clone())?;
+            ValueEncoder::<VE>::decode_value(&mut new_val, capped.lend(), ctx.clone())?;
+            value.insert(new_key, new_val)?;
         }
         Ok(())
     }
 }
 
-impl<M, K, V, KE, VE> DistinguishedValueEncoder<M> for Map<KE, VE>
+impl<M, K, V, KE, VE> DistinguishedValueEncoder<Map<KE, VE>> for M
 where
     M: DistinguishedMapping<Key = K, Value = V> + Eq,
-    KE: DistinguishedValueEncoder<K>,
-    VE: DistinguishedValueEncoder<V>,
-    K: NewForOverwrite + Eq,
-    V: NewForOverwrite + Eq,
+    K: NewForOverwrite + Eq + DistinguishedValueEncoder<KE>,
+    V: NewForOverwrite + Eq + DistinguishedValueEncoder<VE>,
 {
-    fn decode_value_distinguished<B: Buf + ?Sized>(
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut M,
-        mut buf: Capped<B>,
+        mut buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        let capped = buf.take_length_delimited()?;
-        if combined_fixed_size(KE::WIRE_TYPE, VE::WIRE_TYPE).map_or(false, |fixed_size| {
-            capped.remaining_before_cap() % fixed_size != 0
-        }) {
-            return Err(DecodeError::new("packed field is not a valid length"));
+    ) -> Result<Canonicity, DecodeError> {
+        let mut capped = buf.take_length_delimited()?;
+        if !ALLOW_EMPTY && capped.remaining_before_cap() == 0 {
+            return Ok(Canonicity::NotCanonical);
         }
-        for item in capped.consume(|buf| {
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            combined_fixed_size(
+                <M::Key as Wiretyped<KE>>::WIRE_TYPE,
+                <M::Value as Wiretyped<VE>>::WIRE_TYPE,
+            ),
+            Some(fixed_size) if capped.remaining_before_cap() % fixed_size != 0
+        ) {
+            // No number of fixed-sized key+value pairs can pack evenly into this size.
+            return Err(DecodeError::new(Truncated));
+        }
+        let mut canon = Canonicity::Canonical;
+        while capped.has_remaining()? {
             let mut new_key = K::new_for_overwrite();
             let mut new_val = V::new_for_overwrite();
-            KE::decode_value_distinguished(&mut new_key, buf.lend(), ctx.clone())?;
-            VE::decode_value_distinguished(&mut new_val, buf.lend(), ctx.clone())?;
-            Ok((new_key, new_val))
-        }) {
-            let (key, val) = item?;
-            value.insert(key, val).map_err(DecodeError::new)?;
+            canon.update(
+                DistinguishedValueEncoder::<KE>::decode_value_distinguished::<true>(
+                    &mut new_key,
+                    capped.lend(),
+                    ctx.clone(),
+                )?,
+            );
+            canon.update(
+                DistinguishedValueEncoder::<VE>::decode_value_distinguished::<true>(
+                    &mut new_val,
+                    capped.lend(),
+                    ctx.clone(),
+                )?,
+            );
+            canon.update(value.insert_distinguished(new_key, new_val)?);
         }
-        Ok(())
+        Ok(canon)
     }
 }
-
-impl<M, KE, VE> Encoder<M> for Map<KE, VE>
-where
-    M: Mapping,
-    Self: ValueEncoder<M>,
-{
-    fn encode<B: BufMut + ?Sized>(tag: u32, value: &M, buf: &mut B, tw: &mut TagWriter) {
-        if !value.is_empty() {
-            Self::encode_field(tag, value, buf, tw);
-        }
-    }
-
-    fn encoded_len(tag: u32, value: &M, tm: &mut TagMeasurer) -> usize {
-        if !value.is_empty() {
-            Self::field_encoded_len(tag, value, tm)
-        } else {
-            0
-        }
-    }
-
-    fn decode<B: Buf + ?Sized>(
-        wire_type: WireType,
-        duplicated: bool,
-        value: &mut M,
-        buf: Capped<B>,
-        ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        check_wire_type(WireType::LengthDelimited, wire_type)?;
-        if duplicated {
-            return Err(DecodeError::new("multiple occurrences of map field"));
-        }
-        Self::decode_value(value, buf, ctx)
-    }
-}
-
-impl<M, KE, VE> DistinguishedEncoder<M> for Map<KE, VE>
-where
-    M: DistinguishedMapping + Eq,
-    Self: DistinguishedValueEncoder<M> + Encoder<M>,
-{
-    fn decode_distinguished<B: Buf + ?Sized>(
-        wire_type: WireType,
-        duplicated: bool,
-        value: &mut M,
-        buf: Capped<B>,
-        ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        check_wire_type(WireType::LengthDelimited, wire_type)?;
-        if duplicated {
-            return Err(DecodeError::new("multiple occurrences of map field"));
-        }
-        Self::decode_value_distinguished(value, buf, ctx)?;
-        if value.is_empty() {
-            return Err(DecodeError::new("map field encoded with no items"));
-        }
-        Ok(())
-    }
-}
-
-// TODO(widders): test hashbrown support
 
 #[cfg(test)]
 mod test {
     mod btree {
-        use crate::encoding::check_type_test;
-        check_type_test!(
-            Map<General, General>,
-            expedient,
-            alloc::collections::BTreeMap<u64, f32>,
-            WireType::LengthDelimited
-        );
-        check_type_test!(
-            Map<General, General>,
-            distinguished,
-            alloc::collections::BTreeMap<u32, i32>,
-            WireType::LengthDelimited
-        );
+        mod general {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::{General, Map};
+            use alloc::collections::BTreeMap;
+            check_type_test!(
+                Map<General, General>,
+                expedient,
+                BTreeMap<u64, f32>,
+                WireType::LengthDelimited
+            );
+            check_type_test!(
+                Map<General, General>,
+                distinguished,
+                BTreeMap<u32, i32>,
+                WireType::LengthDelimited
+            );
+        }
+
+        mod fixed {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::{Fixed, Map};
+            use alloc::collections::BTreeMap;
+            check_type_test!(
+                Map<Fixed, Fixed>,
+                expedient,
+                BTreeMap<u64, f32>,
+                WireType::LengthDelimited
+            );
+            check_type_test!(
+                Map<Fixed, Fixed>,
+                distinguished,
+                BTreeMap<u32, i32>,
+                WireType::LengthDelimited
+            );
+        }
 
         mod delegated_from_general {
-            use crate::encoding::check_type_test;
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::General;
+            use alloc::collections::BTreeMap;
             check_type_test!(
                 General,
                 expedient,
-                alloc::collections::BTreeMap<bool, u32>,
+                BTreeMap<bool, f32>,
                 WireType::LengthDelimited
             );
             check_type_test!(
                 General,
                 distinguished,
-                alloc::collections::BTreeMap<bool, u32>,
+                BTreeMap<bool, u32>,
                 WireType::LengthDelimited
             );
         }
@@ -213,52 +215,94 @@ mod test {
 
     #[cfg(feature = "std")]
     mod hash {
-        use crate::encoding::check_type_test;
-        check_type_test!(
-            Map<General, General>,
-            expedient,
-            std::collections::HashMap<u64, f32>,
-            WireType::LengthDelimited
-        );
+        mod general {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::{General, Map};
+            use std::collections::HashMap;
+            check_type_test!(
+                Map<General, General>,
+                expedient,
+                HashMap<u64, f32>,
+                WireType::LengthDelimited
+            );
+        }
+
+        mod fixed {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::{Fixed, Map};
+            use std::collections::HashMap;
+            check_type_test!(
+                Map<Fixed, Fixed>,
+                expedient,
+                HashMap<u64, f32>,
+                WireType::LengthDelimited
+            );
+        }
 
         mod delegated_from_general {
-            use crate::encoding::check_type_test;
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::General;
+            use std::collections::HashMap;
             check_type_test!(
                 General,
                 expedient,
-                std::collections::HashMap<bool, u32>,
+                HashMap<bool, u32>,
                 WireType::LengthDelimited
             );
         }
     }
 
-    // TODO(widders): more tests
-    // map_tests!(keys: [
-    //     (u32, uint32),
-    //     (u64, uint64),
-    //     (i32, sint32),
-    //     (i64, sint64),
-    //     (u32, ufixed32),
-    //     (u64, ufixed64),
-    //     (i32, sfixed32),
-    //     (i64, sfixed64),
-    //     (bool, bool),
-    //     (String, string),
-    //     (Vec<u8>, bytes)
-    // ],
-    // vals: [
-    //     (f32, float32),
-    //     (f64, float64),
-    //     (u32, uint32),
-    //     (u64, uint64),
-    //     (i32, sint32),
-    //     (i64, sint64),
-    //     (u32, ufixed32),
-    //     (u64, ufixed64),
-    //     (i32, sfixed32),
-    //     (i64, sfixed64),
-    //     (bool, bool),
-    //     (String, string),
-    //     (Vec<u8>, bytes)
-    // ]);
+    #[cfg(feature = "hashbrown")]
+    mod hashbrown_hash {
+        mod general {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::{General, Map};
+            use alloc::collections::BTreeMap;
+            use hashbrown::HashMap;
+            check_type_test!(
+                Map<General, General>,
+                expedient,
+                from BTreeMap<u64, f32>,
+                into HashMap<u64, f32>,
+                converter(value) {
+                    <HashMap<u64, f32> as FromIterator<_>>::from_iter(value.into_iter())
+                },
+                WireType::LengthDelimited
+            );
+        }
+
+        mod fixed {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::{Fixed, Map};
+            use alloc::collections::BTreeMap;
+            use hashbrown::HashMap;
+            check_type_test!(
+                Map<Fixed, Fixed>,
+                expedient,
+                from BTreeMap<u64, f32>,
+                into HashMap<u64, f32>,
+                converter(value) {
+                    <HashMap<u64, f32> as FromIterator<_>>::from_iter(value.into_iter())
+                },
+                WireType::LengthDelimited
+            );
+        }
+
+        mod delegated_from_general {
+            use crate::encoding::test::check_type_test;
+            use crate::encoding::General;
+            use alloc::collections::BTreeMap;
+            use hashbrown::HashMap;
+            check_type_test!(
+                General,
+                expedient,
+                from BTreeMap<bool, u32>,
+                into HashMap<bool, u32>,
+                converter(value) {
+                    <HashMap<bool, u32> as FromIterator<_>>::from_iter(value.into_iter())
+                },
+                WireType::LengthDelimited
+            );
+        }
+    }
 }

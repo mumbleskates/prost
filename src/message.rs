@@ -3,8 +3,10 @@ use alloc::vec::Vec;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+use crate::buf::{ReverseBuf, ReverseBuffer};
 use crate::encoding::{
-    encode_varint, encoded_len_varint, Capped, DecodeContext, TagReader, WireType,
+    encode_varint, encoded_len_varint, prepend_varint, Canonicity, Capped, DecodeContext,
+    EmptyState, TagReader, WireType,
 };
 use crate::{DecodeError, EncodeError};
 
@@ -13,18 +15,18 @@ use crate::{DecodeError, EncodeError};
 #[inline]
 pub(crate) fn merge<T: RawMessage, B: Buf + ?Sized>(
     value: &mut T,
-    buf: Capped<B>,
+    mut buf: Capped<B>,
     ctx: DecodeContext,
 ) -> Result<(), DecodeError> {
     let tr = &mut TagReader::new();
     let mut last_tag = None::<u32>;
-    buf.consume(|buf| {
-        let (tag, wire_type) = tr.decode_key(buf.buf())?;
+    while buf.has_remaining()? {
+        let (tag, wire_type) = tr.decode_key(buf.lend())?;
         let duplicated = last_tag == Some(tag);
         last_tag = Some(tag);
-        value.raw_decode_field(tag, wire_type, duplicated, buf.lend(), ctx.clone())
-    })
-    .collect()
+        value.raw_decode_field(tag, wire_type, duplicated, buf.lend(), ctx.clone())?;
+    }
+    Ok(())
 }
 
 /// Merges fields from the given buffer, to its cap, into the given `DistinguishedTaggedDecodable`
@@ -32,34 +34,88 @@ pub(crate) fn merge<T: RawMessage, B: Buf + ?Sized>(
 #[inline]
 pub(crate) fn merge_distinguished<T: RawDistinguishedMessage, B: Buf + ?Sized>(
     value: &mut T,
-    buf: Capped<B>,
+    mut buf: Capped<B>,
     ctx: DecodeContext,
-) -> Result<(), DecodeError> {
+) -> Result<Canonicity, DecodeError> {
     let tr = &mut TagReader::new();
     let mut last_tag = None::<u32>;
-    buf.consume(|buf| {
-        let (tag, wire_type) = tr.decode_key(buf.buf())?;
+    let mut canon = Canonicity::Canonical;
+    while buf.has_remaining()? {
+        let (tag, wire_type) = tr.decode_key(buf.lend())?;
         let duplicated = last_tag == Some(tag);
         last_tag = Some(tag);
-        value.raw_decode_field_distinguished(tag, wire_type, duplicated, buf.lend(), ctx.clone())
-    })
-    .collect()
+        canon.update(value.raw_decode_field_distinguished(
+            tag,
+            wire_type,
+            duplicated,
+            buf.lend(),
+            ctx.clone(),
+        )?);
+    }
+    Ok(canon)
 }
 
-/// A Bilrost message. Provides basic encoding and decoding functionality for message types. For
-/// an object-safe proxy trait, see `MessageDyn`.
-///
-/// Messages are expected to have a `Default` implementation that is exactly the same as each
-/// field's respective `Default` value; that is, functionally identical to a derived `Default`. This
-/// is automatically satisfied by the derive macro.
-pub trait Message: Default {
-    /// Returns the encoded length of the message without a length delimiter.
-    fn encoded_len(&self) -> usize;
-
+/// A Bilrost message. Provides basic encoding and decoding functionality for message types.
+pub trait Message: EmptyState {
     /// Encodes the message to a buffer.
     ///
     /// An error will be returned if the buffer does not have sufficient capacity.
-    fn encode<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError>;
+    fn encode<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError>
+    where
+        Self: Sized;
+
+    /// Prepends the message to a buffer.
+    fn prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B)
+    where
+        Self: Sized;
+
+    /// Encodes the message with a length-delimiter to a buffer.
+    ///
+    /// An error will be returned if the buffer does not have sufficient capacity.
+    fn encode_length_delimited<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError>
+    where
+        Self: Sized;
+
+    /// Decodes an instance of the message from a buffer.
+    ///
+    /// The entire buffer will be consumed.
+    fn decode<B: Buf>(buf: B) -> Result<Self, DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes a length-delimited instance of the message from the buffer.
+    fn decode_length_delimited<B: Buf>(buf: B) -> Result<Self, DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes an instance from the given `Capped` buffer, consuming it to its cap.
+    #[doc(hidden)]
+    fn decode_capped<B: Buf + ?Sized>(buf: Capped<B>) -> Result<Self, DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes the non-ignored fields of this message from the buffer, replacing their values.
+    fn replace_from<B: Buf>(&mut self, buf: B) -> Result<(), DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes the non-ignored fields of this message, replacing their values from a
+    /// length-delimited value encoded in the buffer.
+    fn replace_from_length_delimited<B: Buf>(&mut self, buf: B) -> Result<(), DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes the non-ignored fields of this message, replacing their values from the given capped
+    /// buffer.
+    #[doc(hidden)]
+    fn replace_from_capped<B: Buf + ?Sized>(&mut self, buf: Capped<B>) -> Result<(), DecodeError>
+    where
+        Self: Sized;
+
+    // ------------ Object-safe methods follow ------------
+
+    /// Returns the encoded length of the message without a length delimiter.
+    fn encoded_len(&self) -> usize;
 
     /// Encodes the message to a newly allocated buffer.
     fn encode_to_vec(&self) -> Vec<u8>;
@@ -67,10 +123,14 @@ pub trait Message: Default {
     /// Encodes the message to a `Bytes` buffer.
     fn encode_to_bytes(&self) -> Bytes;
 
-    /// Encodes the message with a length-delimiter to a buffer.
-    ///
-    /// An error will be returned if the buffer does not have sufficient capacity.
-    fn encode_length_delimited<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError>;
+    /// Encodes the message to a `ReverseBuffer`.
+    fn encode_fast(&self) -> ReverseBuffer;
+
+    /// Encodes the message witha length-delimiter to a `ReverseBuffer`.
+    fn encode_length_delimited_fast(&self) -> ReverseBuffer;
+
+    /// Encodes the message to a `Bytes` buffer.
+    fn encode_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError>;
 
     /// Encodes the message with a length-delimiter to a newly allocated buffer.
     fn encode_length_delimited_to_vec(&self) -> Vec<u8>;
@@ -78,38 +138,118 @@ pub trait Message: Default {
     /// Encodes the message with a length-delimiter to a `Bytes` buffer.
     fn encode_length_delimited_to_bytes(&self) -> Bytes;
 
-    /// Decodes an instance of the message from a buffer.
-    ///
-    /// The entire buffer will be consumed.
-    fn decode<B: Buf>(buf: B) -> Result<Self, DecodeError>;
+    /// Encodes the message with a length-delimiter to a `Bytes` buffer.
+    fn encode_length_delimited_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError>;
 
-    /// Decodes a length-delimited instance of the message from the buffer.
-    fn decode_length_delimited<B: Buf>(buf: B) -> Result<Self, DecodeError>;
+    /// Decodes the non-ignored fields of this message from the buffer, replacing their values.
+    fn replace_from_slice(&mut self, buf: &[u8]) -> Result<(), DecodeError>;
 
-    /// Decodes an instance from the given `Capped` buffer, consuming it to its cap.
-    fn decode_capped<B: Buf + ?Sized>(buf: Capped<B>) -> Result<Self, DecodeError>;
+    /// Decodes the non-ignored fields of this message, replacing their values from a
+    /// length-delimited value encoded in the buffer.
+    fn replace_from_length_delimited_slice(&mut self, buf: &[u8]) -> Result<(), DecodeError>;
 
-    // TODO(widders): encode and decode with unknown fields in an unknown-fields companion struct
+    /// Decodes the non-ignored fields of this message from the buffer, replacing their values.
+    fn replace_from_dyn(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError>;
+
+    /// Decodes the non-ignored fields of this message, replacing their values from a
+    /// length-delimited value encoded in the buffer.
+    fn replace_from_length_delimited_dyn(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError>;
+
+    /// Decodes the non-ignored fields of this message, replacing their values from the given capped
+    /// buffer.
+    #[doc(hidden)]
+    fn replace_from_capped_dyn(&mut self, buf: Capped<dyn Buf>) -> Result<(), DecodeError>;
 }
 
 /// An enhanced trait for Bilrost messages that promise a distinguished representation.
+///
 /// Implementation of this trait comes with the following promises:
 ///
-///  1. The message will always encode to the same bytes as any other message with an equal value
-///  2. A message equal to that value will only ever decode without error from that exact sequence
-///     of bytes, not from any other.
-pub trait DistinguishedMessage: Message + Eq {
+///  1. The message will always encode to the same bytes as any other message with an equal value.
+///  2. A message equal to that value will only ever decode canonically and without error from that
+///     exact sequence of bytes, not from any other.
+pub trait DistinguishedMessage: Message {
     /// Decodes an instance of the message from a buffer in distinguished mode.
     ///
     /// The entire buffer will be consumed.
-    fn decode_distinguished<B: Buf>(buf: B) -> Result<Self, DecodeError>;
+    fn decode_distinguished<B: Buf>(buf: B) -> Result<(Self, Canonicity), DecodeError>
+    where
+        Self: Sized;
 
     /// Decodes a length-delimited instance of the message from the buffer in distinguished mode.
-    fn decode_distinguished_length_delimited<B: Buf>(buf: B) -> Result<Self, DecodeError>;
+    fn decode_distinguished_length_delimited<B: Buf>(
+        buf: B,
+    ) -> Result<(Self, Canonicity), DecodeError>
+    where
+        Self: Sized;
 
     /// Decodes an instance from the given `Capped` buffer in distinguished mode, consuming it to
     /// its cap.
-    fn decode_distinguished_capped<B: Buf + ?Sized>(buf: Capped<B>) -> Result<Self, DecodeError>;
+    #[doc(hidden)]
+    fn decode_distinguished_capped<B: Buf + ?Sized>(
+        buf: Capped<B>,
+    ) -> Result<(Self, Canonicity), DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes the non-ignored fields of this message from the buffer in distinguished mode,
+    /// replacing their values.
+    fn replace_distinguished_from<B: Buf>(&mut self, buf: B) -> Result<Canonicity, DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes the non-ignored fields of this message in distinguished mode, replacing their values
+    /// from a length-delimited value encoded in the buffer.
+    fn replace_distinguished_from_length_delimited<B: Buf>(
+        &mut self,
+        buf: B,
+    ) -> Result<Canonicity, DecodeError>
+    where
+        Self: Sized;
+
+    /// Decodes the non-ignored fields of this message in distinguished mode, replacing their values
+    /// from the given capped buffer.
+    #[doc(hidden)]
+    fn replace_distinguished_from_capped<B: Buf + ?Sized>(
+        &mut self,
+        buf: Capped<B>,
+    ) -> Result<Canonicity, DecodeError>
+    where
+        Self: Sized;
+
+    // ------------ Object-safe methods follow ------------
+
+    /// Decodes a length-delimited instance of the message from the buffer in distinguished mode.
+    fn replace_distinguished_from_slice(&mut self, buf: &[u8]) -> Result<Canonicity, DecodeError>;
+
+    /// Decodes the non-ignored fields of this message, replacing their values from a
+    /// length-delimited value encoded in the buffer in distinguished mode.
+    fn replace_distinguished_from_dyn(
+        &mut self,
+        buf: &mut dyn Buf,
+    ) -> Result<Canonicity, DecodeError>;
+
+    /// Decodes the non-ignored fields of this message from the buffer in distinguished mode,
+    /// replacing their values.
+    fn replace_distinguished_from_length_delimited_slice(
+        &mut self,
+        buf: &[u8],
+    ) -> Result<Canonicity, DecodeError>;
+
+    /// Decodes the non-ignored fields of this message, replacing their values from a
+    /// length-delimited value encoded in the buffer in distinguished mode.
+    fn replace_distinguished_from_length_delimited_dyn(
+        &mut self,
+        buf: &mut dyn Buf,
+    ) -> Result<Canonicity, DecodeError>;
+
+    /// Decodes the non-ignored fields of this message, replacing their values from the given capped
+    /// buffer in distinguished mode.
+    #[doc(hidden)]
+    fn replace_distinguished_from_capped_dyn(
+        &mut self,
+        buf: Capped<dyn Buf>,
+    ) -> Result<Canonicity, DecodeError>;
 }
 
 /// `Message` is implemented as a usability layer on top of the basic functionality afforded by
@@ -126,19 +266,70 @@ impl<T> Message for T
 where
     T: RawMessage,
 {
-    fn encoded_len(&self) -> usize {
-        self.raw_encoded_len()
-    }
-
     fn encode<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError> {
         let required = self.encoded_len();
         let remaining = buf.remaining_mut();
-        if required > buf.remaining_mut() {
+        if required > remaining {
             return Err(EncodeError::new(required, remaining));
         }
 
         self.raw_encode(buf);
         Ok(())
+    }
+
+    fn prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B)
+    where
+        Self: Sized,
+    {
+        self.raw_prepend(buf);
+    }
+
+    fn encode_length_delimited<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError> {
+        let len = self.encoded_len();
+        let required = len + encoded_len_varint(len as u64);
+        let remaining = buf.remaining_mut();
+        if required > remaining {
+            return Err(EncodeError::new(required, remaining));
+        }
+        encode_varint(len as u64, buf);
+        self.raw_encode(buf);
+        Ok(())
+    }
+
+    fn decode<B: Buf>(mut buf: B) -> Result<Self, DecodeError> {
+        Self::decode_capped(Capped::new(&mut buf))
+    }
+
+    fn decode_length_delimited<B: Buf>(mut buf: B) -> Result<Self, DecodeError> {
+        Self::decode_capped(Capped::new_length_delimited(&mut buf)?)
+    }
+
+    #[doc(hidden)]
+    fn decode_capped<B: Buf + ?Sized>(buf: Capped<B>) -> Result<Self, DecodeError> {
+        let mut message = Self::empty();
+        merge(&mut message, buf, DecodeContext::default())?;
+        Ok(message)
+    }
+
+    fn replace_from<B: Buf>(&mut self, mut buf: B) -> Result<(), DecodeError> {
+        self.replace_from_capped(Capped::new(&mut buf))
+    }
+
+    fn replace_from_length_delimited<B: Buf>(&mut self, mut buf: B) -> Result<(), DecodeError> {
+        self.replace_from_capped(Capped::new_length_delimited(&mut buf)?)
+    }
+
+    #[doc(hidden)]
+    fn replace_from_capped<B: Buf + ?Sized>(&mut self, buf: Capped<B>) -> Result<(), DecodeError> {
+        self.clear();
+        merge(self, buf, DecodeContext::default()).map_err(|err| {
+            self.clear();
+            err
+        })
+    }
+
+    fn encoded_len(&self) -> usize {
+        self.raw_encoded_len()
     }
 
     fn encode_to_vec(&self) -> Vec<u8> {
@@ -153,16 +344,20 @@ where
         buf.freeze()
     }
 
-    fn encode_length_delimited<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError> {
-        let len = self.encoded_len();
-        let required = len + encoded_len_varint(len as u64);
-        let remaining = buf.remaining_mut();
-        if required > remaining {
-            return Err(EncodeError::new(required, remaining));
-        }
-        encode_varint(len as u64, buf);
-        self.raw_encode(buf);
-        Ok(())
+    fn encode_fast(&self) -> ReverseBuffer {
+        let mut buf = ReverseBuffer::new();
+        self.raw_prepend(&mut buf);
+        buf
+    }
+
+    fn encode_length_delimited_fast(&self) -> ReverseBuffer {
+        let mut buf = self.encode_fast();
+        prepend_varint(buf.remaining() as u64, &mut buf);
+        buf
+    }
+
+    fn encode_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError> {
+        self.encode(buf)
     }
 
     fn encode_length_delimited_to_vec(&self) -> Vec<u8> {
@@ -183,143 +378,127 @@ where
         buf.freeze()
     }
 
-    fn decode<B: Buf>(mut buf: B) -> Result<Self, DecodeError> {
-        Self::decode_capped(Capped::new(&mut buf))
+    fn encode_length_delimited_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError> {
+        self.encode_length_delimited(buf)
     }
 
-    fn decode_length_delimited<B: Buf>(mut buf: B) -> Result<Self, DecodeError> {
-        Self::decode_capped(Capped::new_length_delimited(&mut buf)?)
+    fn replace_from_slice(&mut self, buf: &[u8]) -> Result<(), DecodeError> {
+        self.replace_from(buf)
     }
 
-    fn decode_capped<B: Buf + ?Sized>(buf: Capped<B>) -> Result<Self, DecodeError> {
-        let mut message = Self::default();
-        merge(&mut message, buf, DecodeContext::default())?;
-        Ok(message)
+    fn replace_from_length_delimited_slice(&mut self, buf: &[u8]) -> Result<(), DecodeError> {
+        self.replace_from_length_delimited(buf)
+    }
+
+    fn replace_from_dyn(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError> {
+        self.replace_from(buf)
+    }
+
+    fn replace_from_length_delimited_dyn(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError> {
+        self.replace_from_length_delimited(buf)
+    }
+
+    #[doc(hidden)]
+    fn replace_from_capped_dyn(&mut self, buf: Capped<dyn Buf>) -> Result<(), DecodeError> {
+        self.replace_from_capped(buf)
     }
 }
 
 impl<T> DistinguishedMessage for T
 where
-    T: RawDistinguishedMessage + Message + Eq,
+    T: RawDistinguishedMessage + Message,
 {
-    fn decode_distinguished<B: Buf>(mut buf: B) -> Result<Self, DecodeError> {
+    fn decode_distinguished<B: Buf>(mut buf: B) -> Result<(Self, Canonicity), DecodeError> {
         Self::decode_distinguished_capped(Capped::new(&mut buf))
     }
 
-    fn decode_distinguished_length_delimited<B: Buf>(mut buf: B) -> Result<Self, DecodeError> {
+    fn decode_distinguished_length_delimited<B: Buf>(
+        mut buf: B,
+    ) -> Result<(Self, Canonicity), DecodeError> {
         Self::decode_distinguished_capped(Capped::new_length_delimited(&mut buf)?)
     }
 
-    fn decode_distinguished_capped<B: Buf + ?Sized>(buf: Capped<B>) -> Result<Self, DecodeError> {
-        let mut message = Self::default();
-        merge_distinguished(&mut message, buf, DecodeContext::default())?;
-        Ok(message)
-    }
-}
-
-/// Object-safe interface implemented for all `Message` types. Accepts `dyn Buf` and `dyn BufMut`
-/// for encoding and decoding, and `replace`-* methods for decoding in-place.
-pub trait MessageDyn {
-    fn encoded_len_dyn(&self) -> usize;
-    fn encode_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError>;
-    fn encode_to_vec_dyn(&self) -> Vec<u8>;
-    fn encode_length_delimited_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError>;
-    fn encode_length_delimited_to_vec_dyn(&self) -> Vec<u8>;
-    fn encode_length_delimited_to_bytes_dyn(&self) -> Bytes;
-    fn replace_from(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError>;
-    fn replace_from_length_delimited(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError>;
-    fn replace_from_capped(&mut self, buf: Capped<dyn Buf>) -> Result<(), DecodeError>;
-}
-impl<T> MessageDyn for T
-where
-    T: RawMessage,
-{
-    fn encoded_len_dyn(&self) -> usize {
-        Message::encoded_len(self)
+    #[doc(hidden)]
+    fn decode_distinguished_capped<B: Buf + ?Sized>(
+        buf: Capped<B>,
+    ) -> Result<(Self, Canonicity), DecodeError> {
+        let mut message = Self::empty();
+        let canon = merge_distinguished(&mut message, buf, DecodeContext::default())?;
+        Ok((message, canon))
     }
 
-    fn encode_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError> {
-        Message::encode(self, buf)
-    }
-
-    fn encode_to_vec_dyn(&self) -> Vec<u8> {
-        Message::encode_to_vec(self)
-    }
-
-    fn encode_length_delimited_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError> {
-        Message::encode_length_delimited(self, buf)
-    }
-
-    fn encode_length_delimited_to_vec_dyn(&self) -> Vec<u8> {
-        Message::encode_length_delimited_to_vec(self)
-    }
-
-    fn encode_length_delimited_to_bytes_dyn(&self) -> Bytes {
-        Message::encode_length_delimited_to_bytes(self)
-    }
-
-    fn replace_from(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError> {
-        self.replace_from_capped(Capped::new(buf))
-    }
-
-    fn replace_from_length_delimited(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError> {
-        self.replace_from_capped(Capped::new_length_delimited(buf)?)
-    }
-
-    fn replace_from_capped(&mut self, buf: Capped<dyn Buf>) -> Result<(), DecodeError> {
-        self.clear();
-        merge(self, buf, DecodeContext::default()).map_err(|err| {
-            self.clear();
-            err
-        })
-    }
-}
-
-pub trait DistinguishedMessageDyn {
-    fn replace_distinguished_from(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError>;
-    fn replace_distinguished_from_length_delimited(
+    fn replace_distinguished_from<B: Buf>(
         &mut self,
-        buf: &mut dyn Buf,
-    ) -> Result<(), DecodeError>;
-    fn replace_distinguished_from_capped(
-        &mut self,
-        buf: Capped<dyn Buf>,
-    ) -> Result<(), DecodeError>;
-}
-impl<T> DistinguishedMessageDyn for T
-where
-    T: RawDistinguishedMessage,
-{
-    fn replace_distinguished_from(&mut self, buf: &mut dyn Buf) -> Result<(), DecodeError> {
-        self.replace_distinguished_from_capped(Capped::new(buf))
+        mut buf: B,
+    ) -> Result<Canonicity, DecodeError> {
+        self.replace_distinguished_from_capped(Capped::new(&mut buf))
     }
 
-    fn replace_distinguished_from_length_delimited(
+    fn replace_distinguished_from_length_delimited<B: Buf>(
         &mut self,
-        buf: &mut dyn Buf,
-    ) -> Result<(), DecodeError> {
-        self.replace_distinguished_from_capped(Capped::new_length_delimited(buf)?)
+        mut buf: B,
+    ) -> Result<Canonicity, DecodeError> {
+        self.replace_distinguished_from_capped(Capped::new_length_delimited(&mut buf)?)
     }
 
-    fn replace_distinguished_from_capped(
+    #[doc(hidden)]
+    fn replace_distinguished_from_capped<B: Buf + ?Sized>(
         &mut self,
-        buf: Capped<dyn Buf>,
-    ) -> Result<(), DecodeError> {
+        buf: Capped<B>,
+    ) -> Result<Canonicity, DecodeError> {
         self.clear();
         merge_distinguished(self, buf, DecodeContext::default()).map_err(|err| {
             self.clear();
             err
         })
     }
+
+    fn replace_distinguished_from_slice(&mut self, buf: &[u8]) -> Result<Canonicity, DecodeError> {
+        self.replace_distinguished_from(buf)
+    }
+
+    fn replace_distinguished_from_dyn(
+        &mut self,
+        buf: &mut dyn Buf,
+    ) -> Result<Canonicity, DecodeError> {
+        self.replace_distinguished_from(buf)
+    }
+
+    fn replace_distinguished_from_length_delimited_slice(
+        &mut self,
+        buf: &[u8],
+    ) -> Result<Canonicity, DecodeError> {
+        self.replace_distinguished_from_length_delimited(buf)
+    }
+
+    fn replace_distinguished_from_length_delimited_dyn(
+        &mut self,
+        buf: &mut dyn Buf,
+    ) -> Result<Canonicity, DecodeError> {
+        self.replace_distinguished_from_length_delimited(buf)
+    }
+
+    #[doc(hidden)]
+    fn replace_distinguished_from_capped_dyn(
+        &mut self,
+        buf: Capped<dyn Buf>,
+    ) -> Result<Canonicity, DecodeError> {
+        self.replace_distinguished_from_capped(buf)
+    }
 }
 
 /// Trait to be implemented by messages, which have knowledge of their fields' tags and encoding.
 /// The methods of this trait are meant to only be used by the `Message` implementation.
-pub trait RawMessage: Default {
+pub trait RawMessage: EmptyState {
+    const __ASSERTIONS: ();
+
     /// Encodes the message to a buffer.
     ///
     /// This method will panic if the buffer has insufficient capacity.
     fn raw_encode<B: BufMut + ?Sized>(&self, buf: &mut B);
+
+    /// Prepends the message to a prepend buffer.
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B);
 
     /// Returns the encoded length of the message without a length delimiter.
     fn raw_encoded_len(&self) -> usize;
@@ -335,16 +514,11 @@ pub trait RawMessage: Default {
     ) -> Result<(), DecodeError>
     where
         Self: Sized;
-
-    /// Clears the message, resetting all fields to their default.
-    fn clear(&mut self) {
-        *self = Self::default();
-    }
 }
 
 /// Complementary underlying trait for distinguished messages, all of whose fields have a
 /// distinguished encoding.
-pub trait RawDistinguishedMessage: RawMessage {
+pub trait RawDistinguishedMessage: RawMessage + Eq {
     fn raw_decode_field_distinguished<B: Buf + ?Sized>(
         &mut self,
         tag: u32,
@@ -352,7 +526,7 @@ pub trait RawDistinguishedMessage: RawMessage {
         duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError>
+    ) -> Result<Canonicity, DecodeError>
     where
         Self: Sized;
 }
@@ -361,8 +535,14 @@ impl<T> RawMessage for Box<T>
 where
     T: RawMessage,
 {
+    const __ASSERTIONS: () = ();
+
     fn raw_encode<B: BufMut + ?Sized>(&self, buf: &mut B) {
         (**self).raw_encode(buf)
+    }
+
+    fn raw_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
+        (**self).raw_prepend(buf)
     }
 
     fn raw_encoded_len(&self) -> usize {
@@ -395,7 +575,7 @@ where
         duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError>
+    ) -> Result<Canonicity, DecodeError>
     where
         Self: Sized,
     {
@@ -405,30 +585,55 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{DistinguishedMessageDyn, Message, MessageDyn, Vec};
+    use super::{DistinguishedMessage, Message, Vec};
+    use crate::WithCanonicity;
 
-    const _MESSAGE_DYN_IS_OBJECT_SAFE: Option<&dyn MessageDyn> = None;
-    const _DISTINGUISHED_MESSAGE_DYN_IS_OBJECT_SAFE: Option<&dyn DistinguishedMessageDyn> = None;
+    const _MESSAGE_DYN_IS_OBJECT_SAFE: Option<&dyn Message> = None;
+    const _DISTINGUISHED_MESSAGE_DYN_IS_OBJECT_SAFE: Option<&dyn DistinguishedMessage> = None;
 
-    fn use_dyn_messages<M: Message>(safe: &mut dyn MessageDyn, mut msg: M) {
+    fn use_dyn_messages<M: Message>(safe: &mut dyn Message, mut msg: M) {
         let mut vec = Vec::<u8>::new();
 
-        safe.encoded_len_dyn();
+        safe.encoded_len();
         safe.encode_dyn(&mut vec).unwrap();
-        safe.replace_from_length_delimited(&mut [0u8].as_slice())
+        assert_eq!(vec, safe.encode_to_vec());
+        safe.replace_from_length_delimited_dyn(&mut [0u8].as_slice())
             .unwrap();
 
         msg.encoded_len();
         msg = M::decode_length_delimited(&mut [0u8].as_slice()).unwrap();
         msg.encode(&mut vec).unwrap();
+        msg.clear();
+    }
+
+    fn use_dyn_distinguished_messages<M: DistinguishedMessage>(
+        safe: &mut dyn DistinguishedMessage,
+        mut msg: M,
+    ) {
+        let mut vec = Vec::<u8>::new();
+
+        safe.encoded_len();
+        safe.encode_dyn(&mut vec).unwrap();
+        assert_eq!(vec, safe.encode_to_vec());
+        safe.replace_from_length_delimited_dyn(&mut [0u8].as_slice())
+            .unwrap();
+        safe.replace_distinguished_from_length_delimited_dyn(&mut [0u8].as_slice())
+            .canonical()
+            .unwrap();
+        safe.clear();
+
+        msg.encoded_len();
+        msg = M::decode_length_delimited(&mut [0u8].as_slice()).unwrap();
+        msg.encode(&mut vec).unwrap();
+        msg.clear();
     }
 
     #[test]
     fn using_dyn_messages() {
         let mut vec = Vec::<u8>::new();
         use_dyn_messages(&mut (), ());
+        use_dyn_distinguished_messages(&mut (), ());
         assert_eq!(().encoded_len(), 0);
-        assert_eq!(().encoded_len_dyn(), 0);
         ().encode(&mut vec).unwrap();
         ().encode_dyn(&mut vec).unwrap();
         <()>::decode(&mut [].as_slice()).unwrap();

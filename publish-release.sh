@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Script which automates publishing a crates.io release of the bilrost crates.
 
@@ -16,7 +16,6 @@ CRATES=( \
   "bilrost-derive" \
   "." \
   "bilrost-types" \
-  "bilrost-build" \
 )
 
 for CRATE in "${CRATES[@]}"; do

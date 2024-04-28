@@ -1,19 +1,21 @@
 [package]
 name = "bilrost"
-version = "0.12.3"
+version = "0.1007.0-dev"
 authors = [
+    "Kent Ross <k@mad.cash>",
     "Dan Burkert <dan@danburkert.com>",
     "Lucio Franco <luciofranco14@gmail.com",
     "Tokio Contributors <team@tokio.rs>",
-    "Kent Ross <k@mad.cash>",
 ]
 license = "Apache-2.0"
 repository = "https://github.com/mumbleskates/bilrost"
+documentation = "https://docs.rs/bilrost"
 readme = "README.md"
 description = "A compact protobuf-like serializer and deserializer for the Rust Language."
 keywords = ["serialization"]
 categories = ["encoding"]
 edition = "2021"
+resolver = "2"
 rust-version = "1.65"
 
 [workspace]
@@ -23,42 +25,101 @@ members = [
     "fuzz",
 ]
 
-exclude = [
-    # The fuzz crate can't be compiled or tested without the 'cargo fuzz' command,
-    # so exclude it from normal builds.
-    "fuzz",
-    # Same counts for the afl fuzz targets
-    "afl",
-]
-
 [lib]
 # https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
 bench = false
 
-[features]
-default = ["derive", "std"]
-derive = ["dep:bilrost-derive"]
-extended-diagnostics = ["dep:const_panic"]
-hashbrown = ["dep:hashbrown"]
-no-recursion-limit = []
-std = []
-
-[dependencies]
-bytes = { version = "1", default-features = false }
-bilrost-derive = { version = "0.12.3", path = "bilrost-derive", optional = true }
-const_panic = { version = "0.2", optional = true }
-hashbrown = { version = ">=0.1.0", optional = true }
-
-[dev-dependencies]
-criterion = { version = "0.5", default-features = false }
-env_logger = { version = "0.11", default-features = false }
-log = "0.4"
-proptest = "1"
-rand = "0.8"
-
 [profile.bench]
 debug = true
+lto = "fat"
 
 [[bench]]
 name = "varint"
 harness = false
+
+[dependencies]
+arrayvec = { version = ">=0.6", default-features = false, optional = true }
+bilrost-derive = { version = "=0.1007.0-dev", path = "bilrost-derive", optional = true }
+bytes = { version = "1", default-features = false }
+bytestring = { version = ">=1", default-features = false, optional = true }
+const_panic = { version = "0.2", default-features = false, features = ["non_basic"], optional = true }
+hashbrown = { version = ">=0.1.0", default-features = false, optional = true }
+smallvec = { version = ">=1.6.1", default-features = false, features = ["const_generics"], optional = true }
+thin-vec = { version = ">=0.2", default-features = false, optional = true }
+tinyvec = { version = ">=1", default-features = false, features = ["alloc", "rustc_1_57"], optional = true }
+
+# pprof prevents building on windows, so must be an optional feature
+pprof = { version = "0.13", features = ["flamegraph"], optional = true }
+
+[dev-dependencies]
+bilrost = { path = ".", default-features = false, features = ["derive"] } # always enable proc-macro use for integration tests
+criterion = { version = "0.5", default-features = false }
+hashbrown = { version = ">=0.1.0", default-features = false, features = ["ahash"] }
+itertools = "0.12"
+proptest = "1"
+rand = "0.8"
+static_assertions = "1"
+
+[features]
+default = ["auto-optimize", "derive", "detailed-errors", "std"]
+derive = ["dep:bilrost-derive"]
+detailed-errors = ["dep:thin-vec"]
+extended-diagnostics = ["dep:const_panic"]
+no-recursion-limit = []
+std = []
+
+third-party-type-support = [
+    "arrayvec",
+    "bytestring",
+    "hashbrown",
+    "smallvec",
+    "thin-vec",
+    "tinyvec",
+]
+arrayvec = ["dep:arrayvec"]
+bytestring = ["dep:bytestring"]
+hashbrown = ["dep:hashbrown"]
+smallvec = ["dep:smallvec"]
+thin-vec = ["dep:thin-vec"]
+tinyvec = ["dep:tinyvec"]
+
+# Optimization controls. "auto-optimize" enables the default setting for all optimizations.
+auto-optimize = [
+    "auto-self-copy-optimization",
+    "auto-unroll-varint-encoding",
+]
+
+# Self-copy optimization: This causes copies of short segments of bytes into the prepend buffer to
+# be explicit and happen in reversed order rather than delegating to the intrinsic memcpy. On some
+# architectures (x86_64) this can be a significant improvement; on others (arm64) it's negligible or
+# worse.
+#
+# The "auto" feature here enables this optimization when on platforms that seem to benefit from it,
+# and the regular feature enables it unconditionally.
+auto-self-copy-optimization = []
+self-copy-optimization = []
+
+# Unroll varint encoding: This changes the spelling of the functions that encode varint values to
+# branch in a way that bisects the resulting length of the varint and then calls an unrollable
+# fixed-length encoding loop once the length is known, rather than implementing a plain loop that
+# may branch on each iteration if the varint is done encoding.
+#
+# This improves performance significantly in benchmarks on some CPUs but not on others, at the cost
+# of emitted code size. The observed impact of this optimization is still rather conditional
+# regardless: unless the data encoded involves long arrays of encoded varints, the advantages are
+# likely to be far less prevalent.
+#
+# As in other features, the "auto" feature enables the optimization when it seems like a good idea
+# (currently always) and the regular feature enables it unconditionally.
+auto-unroll-varint-encoding = ["unroll-varint-encoding"]
+unroll-varint-encoding = []
+
+full-test-suite = [
+    "derive",
+    "detailed-errors",
+    "extended-diagnostics",
+    "third-party-type-support",
+]
+
+# Enables pprof profiling in benchmarks.
+pprof = ["dep:pprof"]

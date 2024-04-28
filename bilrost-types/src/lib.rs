@@ -1,27 +1,27 @@
-#![doc(html_root_url = "https://docs.rs/bilrost-types/0.12.3")]
+#![no_std]
+#![doc(html_root_url = "https://docs.rs/bilrost-types/0.1007.0-dev")]
 
-//! Analogs for protobuf well-known types.
+//! Analogs for protobuf well-known types, implemented alongside the
+//! [`bilrost`][bilrost] crate. See that crate's documentation for details about the
+//! library, and the [Protobuf reference][proto] for more information about the use cases and
+//! semantics of these types.
 //!
-//! Note that the documentation for the types defined in this crate are generated from the Protobuf
-//! definitions, so code examples are not in Rust.
+//! [bilrost]: https://docs.rs/bilrost
 //!
-//! See the [Protobuf reference][1] for more information about well-known types.
-//!
-//! [1]: https://developers.google.com/protocol-buffers/docs/reference/google.protobuf
+//! [proto]: https://developers.google.com/protocol-buffers/docs/reference/google.protobuf
 
-#![cfg_attr(not(feature = "std"), no_std)]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 mod datetime;
-#[rustfmt::skip]
-mod protobuf;
-mod derived_message_tests;
+mod types;
 
-use core::convert::TryFrom;
 use core::fmt;
 use core::str::FromStr;
 use core::time;
 
-pub use protobuf::*;
+pub use types::*;
 
 // The Protobuf `Duration` and `Timestamp` types can't delegate to the standard library equivalents
 // because the Protobuf versions are signed. To make them easier to work with, `From` conversions
@@ -31,14 +31,6 @@ const NANOS_PER_SECOND: i32 = 1_000_000_000;
 const NANOS_MAX: i32 = NANOS_PER_SECOND - 1;
 
 // TODO(widders): Message and into/from impls on time::Duration, time::Instant as optional features
-
-#[cfg(feature = "std")]
-impl std::hash::Hash for Duration {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.seconds.hash(state);
-        self.nanos.hash(state);
-    }
-}
 
 impl core::ops::Neg for Duration {
     type Output = Self;
@@ -50,6 +42,8 @@ impl core::ops::Neg for Duration {
         }
     }
 }
+
+// TODO(widders): addition and subtraction with Timestamp & Duration
 
 impl Duration {
     /// Normalizes the duration to a canonical format.
@@ -97,9 +91,6 @@ impl Duration {
                 self.nanos = -NANOS_MAX;
             }
         }
-        // TODO: should this be checked?
-        // debug_assert!(self.seconds >= -315_576_000_000 && self.seconds <= 315_576_000_000,
-        //               "invalid duration: {:?}", self);
     }
 }
 
@@ -161,7 +152,6 @@ impl fmt::Display for Duration {
 }
 
 /// A duration handling error.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum DurationError {
@@ -312,21 +302,6 @@ impl Timestamp {
     }
 }
 
-/// Implements the unstable/naive version of `Eq`: a basic equality check on the internal fields of the `Timestamp`.
-/// This implies that `normalized_ts != non_normalized_ts` even if `normalized_ts == non_normalized_ts.normalized()`.
-#[cfg(feature = "std")]
-impl Eq for Timestamp {}
-
-#[cfg(feature = "std")]
-// Derived logic is correct: comparing the 2 fields for equality
-#[allow(clippy::derived_hash_with_manual_eq)]
-impl std::hash::Hash for Timestamp {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.seconds.hash(state);
-        self.nanos.hash(state);
-    }
-}
-
 #[cfg(feature = "std")]
 impl From<std::time::SystemTime> for Timestamp {
     fn from(system_time: std::time::SystemTime) -> Timestamp {
@@ -351,7 +326,6 @@ impl From<std::time::SystemTime> for Timestamp {
 }
 
 /// A timestamp handling error.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum TimestampError {
@@ -436,14 +410,178 @@ impl fmt::Display for Timestamp {
     }
 }
 
+#[cfg(feature = "serde_json")]
+impl From<serde_json::Value> for Value {
+    fn from(from: serde_json::Value) -> Self {
+        use value::Kind::*;
+        Value {
+            kind: match from {
+                serde_json::Value::Null => Null,
+                serde_json::Value::Bool(value) => Bool(value),
+                serde_json::Value::Number(number) => {
+                    if number.is_i64() {
+                        Signed(number.as_i64().unwrap())
+                    } else if number.is_u64() {
+                        Unsigned(number.as_u64().unwrap())
+                    } else {
+                        Float(number.as_f64().unwrap())
+                    }
+                }
+                serde_json::Value::String(value) => String(value),
+                serde_json::Value::Array(values) => List(ListValue {
+                    values: values.into_iter().map(Into::into).collect(),
+                }),
+                serde_json::Value::Object(items) => Struct(StructValue {
+                    fields: items
+                        .into_iter()
+                        .map(|(key, value)| (key, value.into()))
+                        .collect(),
+                }),
+            },
+        }
+    }
+}
+
+#[cfg(feature = "serde_json")]
+impl TryFrom<Value> for serde_json::Value {
+    type Error = ();
+
+    fn try_from(value: Value) -> Result<Self, ()> {
+        Ok(match value.kind {
+            value::Kind::Null => serde_json::Value::Null,
+            value::Kind::Float(value) => {
+                serde_json::Value::Number(serde_json::Number::from_f64(value).ok_or(())?)
+            }
+            value::Kind::Signed(value) => {
+                serde_json::Value::Number(serde_json::Number::from(value))
+            }
+            value::Kind::Unsigned(value) => {
+                serde_json::Value::Number(serde_json::Number::from(value))
+            }
+            value::Kind::String(value) => serde_json::Value::String(value),
+            value::Kind::Bool(value) => serde_json::Value::Bool(value),
+            value::Kind::Struct(items) => serde_json::Value::Object(
+                items
+                    .fields
+                    .into_iter()
+                    .map(|(key, value)| Ok((key, value.try_into()?)))
+                    .collect::<Result<_, _>>()?,
+            ),
+            value::Kind::List(list) => serde_json::Value::Array(
+                list.values
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[cfg(feature = "std")]
-    use proptest::prelude::*;
-    #[cfg(feature = "std")]
-    use std::time::{self, SystemTime, UNIX_EPOCH};
+    use ::{
+        alloc::format,
+        proptest::prelude::*,
+        std::time::{self, SystemTime, UNIX_EPOCH},
+    };
+
+    use crate::datetime::DateTime;
+
+    #[test]
+    fn check_overflowing_datetimes() {
+        // These DateTimes cause overflows and crashes in the prost crate.
+        assert_eq!(
+            Timestamp::from(DateTime {
+                year: i64::from_le_bytes([178, 2, 0, 0, 0, 0, 0, 128]),
+                month: 2,
+                day: 2,
+                hour: 8,
+                minute: 58,
+                second: 8,
+                nanos: u32::from_le_bytes([0, 0, 0, 50]),
+            }),
+            Timestamp::MIN
+        );
+        assert_eq!(
+            Timestamp::from(DateTime {
+                year: i64::from_le_bytes([132, 7, 0, 0, 0, 0, 0, 128]),
+                month: 2,
+                day: 2,
+                hour: 8,
+                minute: 58,
+                second: 8,
+                nanos: u32::from_le_bytes([0, 0, 0, 50]),
+            }),
+            Timestamp::MIN
+        );
+        assert_eq!(
+            Timestamp::from(DateTime {
+                year: i64::from_le_bytes([80, 96, 32, 240, 99, 0, 32, 180]),
+                month: 1,
+                day: 18,
+                hour: 19,
+                minute: 26,
+                second: 8,
+                nanos: u32::from_le_bytes([0, 0, 0, 50]),
+            }),
+            Timestamp::MIN
+        );
+        assert_eq!(
+            Timestamp::from(DateTime {
+                year: DateTime::MIN.year - 1,
+                month: 0,
+                day: 0,
+                hour: 0,
+                minute: 0,
+                second: 0,
+                nanos: 0,
+            }),
+            Timestamp::MIN
+        );
+        assert_eq!(
+            Timestamp::from(DateTime {
+                year: i64::MIN,
+                month: 0,
+                day: 0,
+                hour: 0,
+                minute: 0,
+                second: 0,
+                nanos: 0,
+            }),
+            Timestamp::MIN
+        );
+        assert_eq!(
+            Timestamp::from(DateTime {
+                year: DateTime::MAX.year + 1,
+                month: u8::MAX,
+                day: u8::MAX,
+                hour: u8::MAX,
+                minute: u8::MAX,
+                second: u8::MAX,
+                nanos: u32::MAX,
+            }),
+            Timestamp::MAX
+        );
+        assert_eq!(
+            Timestamp::from(DateTime {
+                year: i64::MAX,
+                month: u8::MAX,
+                day: u8::MAX,
+                hour: u8::MAX,
+                minute: u8::MAX,
+                second: u8::MAX,
+                nanos: u32::MAX,
+            }),
+            Timestamp::MAX
+        );
+        assert_eq!(Timestamp::from(DateTime::MIN), Timestamp::MIN);
+        assert_eq!(Timestamp::from(DateTime::MAX), Timestamp::MAX);
+        assert_eq!(DateTime::from(Timestamp::MIN), DateTime::MIN);
+        assert_eq!(DateTime::from(Timestamp::MAX), DateTime::MAX);
+    }
 
     #[cfg(feature = "std")]
     proptest! {
@@ -464,6 +602,15 @@ mod tests {
             if let Ok(system_time) = SystemTime::try_from(timestamp.clone()) {
                 prop_assert_eq!(Timestamp::from(system_time), timestamp);
             }
+        }
+
+        #[test]
+        fn check_timestamp_datetime_roundtrip(seconds: i64, nanos: i32) {
+            let mut timestamp = Timestamp { seconds, nanos };
+            timestamp.normalize();
+            let timestamp = timestamp;
+            let datetime: DateTime = timestamp.clone().into();
+            prop_assert_eq!(Timestamp::from(datetime), timestamp);
         }
 
         #[test]
@@ -555,28 +702,28 @@ mod tests {
             Timestamp::from(UNIX_EPOCH - time::Duration::new(1_001, 0)),
             Timestamp {
                 seconds: -1_001,
-                nanos: 0
+                nanos: 0,
             }
         );
         assert_eq!(
             Timestamp::from(UNIX_EPOCH - time::Duration::new(0, 999_999_900)),
             Timestamp {
                 seconds: -1,
-                nanos: 100
+                nanos: 100,
             }
         );
         assert_eq!(
             Timestamp::from(UNIX_EPOCH - time::Duration::new(2_001_234, 12_300)),
             Timestamp {
                 seconds: -2_001_235,
-                nanos: 999_987_700
+                nanos: 999_987_700,
             }
         );
         assert_eq!(
             Timestamp::from(UNIX_EPOCH - time::Duration::new(768, 65_432_100)),
             Timestamp {
                 seconds: -769,
-                nanos: 934_567_900
+                nanos: 934_567_900,
             }
         );
     }
@@ -589,21 +736,21 @@ mod tests {
             Timestamp::from(UNIX_EPOCH - time::Duration::new(0, 999_999_999)),
             Timestamp {
                 seconds: -1,
-                nanos: 1
+                nanos: 1,
             }
         );
         assert_eq!(
             Timestamp::from(UNIX_EPOCH - time::Duration::new(1_234_567, 123)),
             Timestamp {
                 seconds: -1_234_568,
-                nanos: 999_999_877
+                nanos: 999_999_877,
             }
         );
         assert_eq!(
             Timestamp::from(UNIX_EPOCH - time::Duration::new(890, 987_654_321)),
             Timestamp {
                 seconds: -891,
-                nanos: 12_345_679
+                nanos: 12_345_679,
             }
         );
     }

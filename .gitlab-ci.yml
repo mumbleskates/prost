@@ -1,19 +1,18 @@
 default:
   image:
     name: rust:latest
+  cache:
+    key: "$CI_JOB_NAME---$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cargo/bin
+      - .cargo/registry/index
+      - .cargo/registry/cache
+      - target/debug/deps
+      - target/debug/build
+    policy: pull-push
 
 variables:
   CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
-
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - .cargo/bin
-    - .cargo/registry/index
-    - .cargo/registry/cache
-    - target/debug/deps
-    - target/debug/build
-  policy: pull-push
 
 stages:
   - test
@@ -21,14 +20,31 @@ stages:
 lint:
   stage: test
   script:
-    - rustup component add clippy
-    - cargo clippy --all --all-targets --all-features
-    - cargo clippy --all --all-targets --no-default-features
+    - rustup component add clippy rustfmt
+    - cargo clippy --workspace --all-targets --features full-test-suite
+    - cargo clippy --workspace --all-targets --features full-test-suite --no-default-features
+    - cargo clippy --workspace --all-targets --no-default-features
+    - cargo fmt --all --check
 
 test:
   stage: test
   script:
-    - cargo test --workspace --all-targets --all-features --exclude fuzz
-    - cargo test --workspace --doc
-    - cargo test --workspace --all-targets --no-default-features --exclude fuzz
-    - cargo test --workspace --doc --no-default-features
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite
+    - cargo test --workspace --doc                        --features full-test-suite
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite --no-default-features
+    - cargo test --workspace --doc                        --features full-test-suite --no-default-features
+    - cargo test --workspace --all-targets --exclude fuzz --no-default-features
+    - cargo test --workspace --doc                        --no-default-features
+
+test-msrv:
+  image: rust:1.65
+  stage: test
+  before_script:
+    - ./downgrade-for-msrv.sh
+  script:
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite
+    - cargo test --workspace --doc                        --features full-test-suite
+    - cargo test --workspace --all-targets --exclude fuzz --features full-test-suite --no-default-features
+    - cargo test --workspace --doc                        --features full-test-suite --no-default-features
+    - cargo test --workspace --all-targets --exclude fuzz --no-default-features
+    - cargo test --workspace --doc                        --no-default-features

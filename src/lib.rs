@@ -1,30 +1,37 @@
-#![doc(html_root_url = "https://docs.rs/bilrost/0.12.3")]
-#![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/mumbleskates/bilrost/bilrost/logo/bilrost256.jpg"
+)]
+#![doc(html_root_url = "https://docs.rs/bilrost/0.1007.0-dev")]
+#![no_std]
+#![forbid(unsafe_op_in_unsafe_fn)]
 
-// Re-export the alloc crate for use within derived code.
-#[doc(hidden)]
-pub extern crate alloc;
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
-// Re-export the bytes crate for use within derived code.
+/// Re-export of the bytes crate for use within derived code.
 pub use bytes;
 
 #[cfg(feature = "derive")]
 #[doc(hidden)]
 pub use bilrost_derive::{DistinguishedMessage, DistinguishedOneof, Enumeration, Message, Oneof};
 
+pub mod buf;
 mod error;
 mod message;
 mod types;
 
 #[doc(hidden)]
 pub mod encoding;
+#[doc(hidden)]
+mod iter;
 
-pub use crate::error::{DecodeError, EncodeError};
-pub use crate::message::{
-    DistinguishedMessage, DistinguishedMessageDyn, Message, MessageDyn, RawDistinguishedMessage,
-    RawMessage,
-};
+pub use crate::encoding::{Canonicity, Enumeration, WithCanonicity};
+pub use crate::error::{DecodeError, DecodeErrorKind, EncodeError};
+pub use crate::message::{DistinguishedMessage, Message};
+#[doc(hidden)]
+pub use crate::message::{RawDistinguishedMessage, RawMessage};
 
 pub use types::Blob;
 
@@ -45,6 +52,7 @@ const RECURSION_LIMIT: u32 = 100;
 ///
 /// An error will be returned if the buffer does not have sufficient capacity to encode the
 /// delimiter.
+#[inline]
 pub fn encode_length_delimiter<B>(length: usize, buf: &mut B) -> Result<(), EncodeError>
 where
     B: BufMut,
@@ -63,6 +71,7 @@ where
 ///
 /// Applications may use this method to ensure sufficient buffer capacity before calling
 /// `encode_length_delimiter`. The returned size will be between 1 and 9, inclusive.
+#[inline(always)]
 pub fn length_delimiter_len(length: usize) -> usize {
     encoded_len_varint(length as u64)
 }
@@ -78,13 +87,15 @@ pub fn length_delimiter_len(length: usize) -> usize {
 ///    input is required to decode the full delimiter.
 ///  * If the supplied buffer contains 9 or more bytes, then the buffer contains an invalid
 ///    delimiter, and typically the buffer should be considered corrupt.
+#[inline(always)]
 pub fn decode_length_delimiter<B: Buf>(mut buf: B) -> Result<usize, DecodeError> {
     decode_varint(&mut buf)?
         .try_into()
-        .map_err(|_| DecodeError::new("length delimiter exceeds maximum usize value"))
+        .map_err(|_| DecodeError::new(DecodeErrorKind::Oversize))
 }
 
 /// Helper function for derived types, asserting that lists of tags are equal at compile time.
+#[doc(hidden)]
 pub const fn assert_tags_are_equal(failure_description: &str, a: &[u32], b: &[u32]) {
     if a.len() != b.len() {
         #[cfg(feature = "extended-diagnostics")]
