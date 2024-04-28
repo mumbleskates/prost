@@ -190,12 +190,18 @@ impl Field {
         let ty = &self.ty;
         if self.in_oneof {
             quote!(
-                <#ty as ::bilrost::encoding::FieldEncoder<#encoder>>::decode_field(
-                    wire_type,
-                    #ident,
-                    buf,
-                    ctx,
-                )
+                if duplicated {
+                    return ::core::result::Result::Err(::bilrost::DecodeError::new(
+                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                    ));
+                } else {
+                    <#ty as ::bilrost::encoding::FieldEncoder<#encoder>>::decode_field(
+                        wire_type,
+                        #ident,
+                        buf,
+                        ctx,
+                    )
+                }
             )
         } else {
             quote!(
@@ -217,14 +223,20 @@ impl Field {
         let ty = &self.ty;
         if self.in_oneof {
             quote!(
-                // Allow empty values: oneof field values are nested
-                <#ty as ::bilrost::encoding::DistinguishedFieldEncoder<#encoder>>
-                    ::decode_field_distinguished::<true>(
-                        wire_type,
-                        #ident,
-                        buf,
-                        ctx,
-                    )
+                if duplicated {
+                    return ::core::result::Result::Err(::bilrost::DecodeError::new(
+                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                    ));
+                } else {
+                    // Allow empty values: oneof field values are nested
+                    <#ty as ::bilrost::encoding::DistinguishedFieldEncoder<#encoder>>
+                        ::decode_field_distinguished::<true>(
+                            wire_type,
+                            #ident,
+                            buf,
+                            ctx,
+                        )
+                }
             )
         } else {
             quote!(
