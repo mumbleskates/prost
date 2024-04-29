@@ -15,7 +15,7 @@ cargo-fuzz = true
 
 [dependencies]
 anyhow = "1"
-bilrost = { path = "../..", features = ["tinyvec"] }
+bilrost = { path = "../..", default-features = false, features = ["derive", "auto-optimize", "no-recursion-limit", "tinyvec"] }
 bilrost-types = { path = "../../bilrost-types" }
 bytes = "1"
 tinyvec = "1"
