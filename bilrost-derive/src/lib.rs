@@ -1625,7 +1625,7 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             let tag = field.first_tag();
             let decode = field.decode_distinguished(quote!(value));
             let with_new_value = field.with_value(quote!(new_value));
-            let with_whatever = field.with_value(quote!(_ ));
+            let with_whatever = field.with_value(quote!(_));
             quote! {
                 #tag => match self {
                     #ident::#empty_ident => {
