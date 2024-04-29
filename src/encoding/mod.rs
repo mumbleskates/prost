@@ -1620,7 +1620,6 @@ pub trait Oneof: EmptyState {
         &mut self,
         tag: u32,
         wire_type: WireType,
-        duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError>;
@@ -1648,7 +1647,6 @@ pub trait NonEmptyOneof: Sized {
         value: &mut Option<Self>,
         tag: u32,
         wire_type: WireType,
-        duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError>;
@@ -1693,11 +1691,10 @@ where
         &mut self,
         tag: u32,
         wire_type: WireType,
-        duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
-        T::oneof_decode_field(self, tag, wire_type, duplicated, buf, ctx)
+        T::oneof_decode_field(self, tag, wire_type, buf, ctx)
     }
 }
 
@@ -1709,7 +1706,6 @@ pub trait DistinguishedOneof: Oneof {
         &mut self,
         tag: u32,
         wire_type: WireType,
-        duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError>;
@@ -1723,7 +1719,6 @@ pub trait NonEmptyDistinguishedOneof: Sized {
         value: &mut Option<Self>,
         tag: u32,
         wire_type: WireType,
-        duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError>;
@@ -1739,11 +1734,10 @@ where
         &mut self,
         tag: u32,
         wire_type: WireType,
-        duplicated: bool,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        T::oneof_decode_field_distinguished(self, tag, wire_type, duplicated, buf, ctx)
+        T::oneof_decode_field_distinguished(self, tag, wire_type, buf, ctx)
     }
 }
 

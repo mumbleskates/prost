@@ -66,7 +66,6 @@ impl Field {
                 #ident,
                 tag,
                 wire_type,
-                duplicated,
                 buf,
                 ctx,
             )
@@ -80,7 +79,6 @@ impl Field {
                 #ident,
                 tag,
                 wire_type,
-                duplicated,
                 buf,
                 ctx,
             )

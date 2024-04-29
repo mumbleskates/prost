@@ -2347,6 +2347,30 @@ fn oneof_field_decoding() {
         [(1, OV::bool(true)), (1, OV::bool(false))],
         UnexpectedlyRepeated,
     );
+
+    #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
+    enum CD {
+        None,
+        #[bilrost(1)]
+        C(bool),
+        #[bilrost(2)]
+        D(bool),
+    }
+    use CD::*;
+
+    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Bar(#[bilrost(oneof = "1, 2")] CD);
+
+    assert::decodes_distinguished([(1, OV::bool(true))], Bar(C(true)));
+    assert::decodes_distinguished([(2, OV::bool(false))], Bar(D(false)));
+    assert::never_decodes::<Bar>(
+        [(1, OV::bool(false)), (2, OV::bool(true))],
+        ConflictingFields,
+    );
+    assert::never_decodes::<Bar>(
+        [(1, OV::bool(true)), (1, OV::bool(false))],
+        UnexpectedlyRepeated,
+    );
 }
 
 #[test]

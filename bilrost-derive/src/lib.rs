@@ -803,7 +803,7 @@ fn message_via_oneof(input: DeriveInput) -> Result<TokenStream, Error> {
                 &mut self,
                 tag: u32,
                 wire_type: ::bilrost::encoding::WireType,
-                duplicated: bool,
+                _duplicated: bool,
                 buf: ::bilrost::encoding::Capped<__B>,
                 ctx: ::bilrost::encoding::DecodeContext,
             ) -> ::core::result::Result<(), ::bilrost::DecodeError>
@@ -815,7 +815,6 @@ fn message_via_oneof(input: DeriveInput) -> Result<TokenStream, Error> {
                         self,
                         tag,
                         wire_type,
-                        duplicated,
                         buf,
                         ctx,
                     )
@@ -964,7 +963,7 @@ fn distinguished_message_via_oneof(input: DeriveInput) -> Result<TokenStream, Er
                 &mut self,
                 tag: u32,
                 wire_type: ::bilrost::encoding::WireType,
-                duplicated: bool,
+                _duplicated: bool,
                 buf: ::bilrost::encoding::Capped<__B>,
                 ctx: ::bilrost::encoding::DecodeContext,
             ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError>
@@ -976,7 +975,6 @@ fn distinguished_message_via_oneof(input: DeriveInput) -> Result<TokenStream, Er
                         self,
                         tag,
                         wire_type,
-                        duplicated,
                         buf,
                         ctx,
                     )
@@ -1375,23 +1373,34 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             let tag = field.first_tag();
             let decode = field.decode_expedient(quote!(value));
             let with_new_value = field.with_value(quote!(new_value));
-            let with_value = field.with_value(quote!(value));
+            let with_whatever = field.with_value(quote!(_));
             quote! {
                 #tag => match self {
                     #ident::#empty_ident => {
                         let mut new_value =
                             ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
                         let mut value = &mut new_value;
-                        #decode?;
+                        #decode.map_err(|mut error| {
+                            error.push(stringify!(#ident), stringify!(#variant_ident));
+                            error
+                        })?;
                         *self = #ident::#variant_ident #with_new_value;
                         Ok(())
                     }
-                    #ident::#variant_ident #with_value => {
-                        #decode
-                    }
-                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::ConflictingFields
-                    )),
+                    #ident::#variant_ident #with_whatever => ::core::result::Result::Err({
+                        let mut error = ::bilrost::DecodeError::new(
+                            ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                        );
+                        error.push(stringify!(#ident), stringify!(#variant_ident));
+                        error
+                    }),
+                    _ => ::core::result::Result::Err({
+                        let mut error = ::bilrost::DecodeError::new(
+                            ::bilrost::DecodeErrorKind::ConflictingFields
+                        );
+                        error.push(stringify!(#ident), stringify!(#variant_ident));
+                        error
+                    }),
                 }
             }
         });
@@ -1445,7 +1454,6 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     &mut self,
                     tag: u32,
                     wire_type: ::bilrost::encoding::WireType,
-                    duplicated: bool,
                     buf: ::bilrost::encoding::Capped<__B>,
                     ctx: ::bilrost::encoding::DecodeContext,
                 ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
@@ -1488,23 +1496,36 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             let tag = field.first_tag();
             let decode = field.decode_expedient(quote!(value));
             let with_new_value = field.with_value(quote!(new_value));
-            let with_value = field.with_value(quote!(value));
+            let with_whatever = field.with_value(quote!(_));
             quote! {
                 #tag => match field {
                     ::core::option::Option::None => {
                         let mut new_value =
                             ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
                         let value = &mut new_value;
-                        #decode?;
+                        #decode.map_err(|mut error| {
+                            error.push(stringify!(#ident), stringify!(#variant_ident));
+                            error
+                        })?;
                         *field = Some(#ident::#variant_ident #with_new_value);
                         ::core::result::Result::Ok(())
                     }
-                    ::core::option::Option::Some(#ident::#variant_ident #with_value) => {
-                        #decode
+                    ::core::option::Option::Some(#ident::#variant_ident #with_whatever) => {
+                        ::core::result::Result::Err({
+                            let mut error = ::bilrost::DecodeError::new(
+                                ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                            );
+                            error.push(stringify!(#ident), stringify!(#variant_ident));
+                            error
+                        })
                     }
-                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::ConflictingFields
-                    )),
+                    _ => ::core::result::Result::Err({
+                        let mut error = ::bilrost::DecodeError::new(
+                            ::bilrost::DecodeErrorKind::ConflictingFields
+                        );
+                        error.push(stringify!(#ident), stringify!(#variant_ident));
+                        error
+                    }),
                 }
             }
         });
@@ -1554,7 +1575,6 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     field: &mut ::core::option::Option<Self>,
                     tag: u32,
                     wire_type: ::bilrost::encoding::WireType,
-                    duplicated: bool,
                     buf: ::bilrost::encoding::Capped<__B>,
                     ctx: ::bilrost::encoding::DecodeContext,
                 ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
@@ -1605,23 +1625,36 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             let tag = field.first_tag();
             let decode = field.decode_distinguished(quote!(value));
             let with_new_value = field.with_value(quote!(new_value));
-            let with_value = field.with_value(quote!(value));
+            let with_whatever = field.with_value(quote!(_ ));
             quote! {
                 #tag => match self {
                     #ident::#empty_ident => {
                         let mut new_value =
                             ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
                         let mut value = &mut new_value;
-                        let canon = #decode?;
+                        let canon = #decode.map_err(|mut error| {
+                            error.push(stringify!(#ident), stringify!(#variant_ident));
+                            error
+                        })?;
                         *self = #ident::#variant_ident #with_new_value;
                         Ok(canon)
                     }
-                    #ident::#variant_ident #with_value => {
-                        #decode
+                    #ident::#variant_ident #with_whatever => {
+                        ::core::result::Result::Err({
+                            let mut error = ::bilrost::DecodeError::new(
+                                ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                            );
+                            error.push(stringify!(#ident), stringify!(#variant_ident));
+                            error
+                        })
                     }
-                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::ConflictingFields
-                    )),
+                    _ => ::core::result::Result::Err({
+                        let mut error = ::bilrost::DecodeError::new(
+                            ::bilrost::DecodeErrorKind::ConflictingFields
+                        );
+                        error.push(stringify!(#ident), stringify!(#variant_ident));
+                        error
+                    }),
                 }
             }
         });
@@ -1634,7 +1667,6 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     &mut self,
                     tag: u32,
                     wire_type: ::bilrost::encoding::WireType,
-                    duplicated: bool,
                     buf: ::bilrost::encoding::Capped<__B>,
                     ctx: ::bilrost::encoding::DecodeContext,
                 ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
@@ -1653,23 +1685,36 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             let tag = field.first_tag();
             let decode = field.decode_distinguished(quote!(value));
             let with_new_value = field.with_value(quote!(new_value));
-            let with_value = field.with_value(quote!(value));
+            let with_whatever = field.with_value(quote!(_));
             quote! {
                 #tag => match field {
                     ::core::option::Option::None => {
                         let mut new_value =
                             ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
                         let value = &mut new_value;
-                        let canon = #decode?;
+                        let canon = #decode.map_err(|mut error| {
+                            error.push(stringify!(#ident), stringify!(#variant_ident));
+                            error
+                        })?;
                         *field = Some(#ident::#variant_ident #with_new_value);
                         ::core::result::Result::Ok(canon)
                     }
-                    ::core::option::Option::Some(#ident::#variant_ident #with_value) => {
-                        #decode
+                    ::core::option::Option::Some(#ident::#variant_ident #with_whatever) => {
+                        ::core::result::Result::Err({
+                            let mut error = ::bilrost::DecodeError::new(
+                                ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                            );
+                            error.push(stringify!(#ident), stringify!(#variant_ident));
+                            error
+                        })
                     }
-                    _ => ::core::result::Result::Err(::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::ConflictingFields
-                    )),
+                    _ => ::core::result::Result::Err({
+                        let mut error = ::bilrost::DecodeError::new(
+                            ::bilrost::DecodeErrorKind::ConflictingFields
+                        );
+                        error.push(stringify!(#ident), stringify!(#variant_ident));
+                        error
+                    }),
                 }
             }
         });
@@ -1682,7 +1727,6 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     field: &mut ::core::option::Option<Self>,
                     tag: u32,
                     wire_type: ::bilrost::encoding::WireType,
-                    duplicated: bool,
                     buf: ::bilrost::encoding::Capped<__B>,
                     ctx: ::bilrost::encoding::DecodeContext,
                 ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
