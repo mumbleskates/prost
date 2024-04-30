@@ -53,7 +53,7 @@ macro_rules! fixed_width_common {
                 mut buf: Capped<B>,
                 _ctx: DecodeContext,
             ) -> Result<(), DecodeError> {
-                if buf.remaining() < WireType::$wire_type.fixed_size().unwrap() {
+                if buf.remaining_before_cap() < WireType::$wire_type.fixed_size().unwrap() {
                     return Err(DecodeError::new(Truncated));
                 }
                 *value = buf.$get();
