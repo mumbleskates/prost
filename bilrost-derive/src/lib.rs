@@ -1349,128 +1349,62 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         );
     }
 
-    let encode = fields.iter().map(|(variant_ident, field)| {
-        let encode = field.encode(quote!(*value));
-        let with_value = field.with_value(quote!(value));
-        quote!(#ident::#variant_ident #with_value => { #encode })
-    });
+    let mut encode: Vec<TokenStream> = fields
+        .iter()
+        .map(|(variant_ident, field)| {
+            let encode = field.encode(quote!(*value));
+            let with_value = field.with_value(quote!(value));
+            quote!(#ident::#variant_ident #with_value => { #encode })
+        })
+        .collect();
 
-    let prepend = fields.iter().map(|(variant_ident, field)| {
-        let prepend = field.prepend(quote!(*value));
-        let with_value = field.with_value(quote!(value));
-        quote!(#ident::#variant_ident #with_value => { #prepend })
-    });
+    let mut prepend: Vec<TokenStream> = fields
+        .iter()
+        .map(|(variant_ident, field)| {
+            let prepend = field.prepend(quote!(*value));
+            let with_value = field.with_value(quote!(value));
+            quote!(#ident::#variant_ident #with_value => { #prepend })
+        })
+        .collect();
 
-    let encoded_len = fields.iter().map(|(variant_ident, field)| {
-        let encoded_len = field.encoded_len(quote!(*value));
-        let with_value = field.with_value(quote!(value));
-        quote!(#ident::#variant_ident #with_value => #encoded_len)
-    });
+    let mut encoded_len: Vec<TokenStream> = fields
+        .iter()
+        .map(|(variant_ident, field)| {
+            let encoded_len = field.encoded_len(quote!(*value));
+            let with_value = field.with_value(quote!(value));
+            quote!(#ident::#variant_ident #with_value => #encoded_len)
+        })
+        .collect();
 
-    let expanded = if let Some(empty_ident) = empty_variant {
-        let current_tag = fields.iter().map(|(variant_ident, field)| {
-            let tag = field.tags()[0];
-            let ignored = field.with_value(quote!(_));
-            quote!(#ident::#variant_ident #ignored => ::core::option::Option::Some(#tag))
-        });
+    let appropriate_oneof_trait;
+    let decode_field_self_ty;
+    let some;
+    let match_empty_variant;
+    let current_tag_ty;
+    let current_tag: Vec<TokenStream>;
+    let empty_state;
 
-        let decode = fields.iter().map(|(variant_ident, field)| {
-            let tag = field.first_tag();
-            let decode = field.decode_expedient(quote!(value));
-            let with_new_value = field.with_value(quote!(new_value));
-            let with_whatever = field.with_value(quote!(_));
-            quote! {
-                #tag => match self {
-                    #ident::#empty_ident => {
-                        let mut new_value =
-                            ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
-                        let mut value = &mut new_value;
-                        #decode.map_err(|mut error| {
-                            error.push(stringify!(#ident), stringify!(#variant_ident));
-                            error
-                        })?;
-                        *self = #ident::#variant_ident #with_new_value;
-                        Ok(())
-                    }
-                    #ident::#variant_ident #with_whatever => ::core::result::Result::Err({
-                        let mut error = ::bilrost::DecodeError::new(
-                            ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
-                        );
-                        error.push(stringify!(#ident), stringify!(#variant_ident));
-                        error
-                    }),
-                    _ => ::core::result::Result::Err({
-                        let mut error = ::bilrost::DecodeError::new(
-                            ::bilrost::DecodeErrorKind::ConflictingFields
-                        );
-                        error.push(stringify!(#ident), stringify!(#variant_ident));
-                        error
-                    }),
-                }
-            }
-        });
+    if let Some(empty_ident) = empty_variant {
+        appropriate_oneof_trait = quote!(Oneof);
+        decode_field_self_ty = quote!(Self);
+        some = None;
+        match_empty_variant = quote!(#ident::#empty_ident);
 
-        quote! {
-            impl #impl_generics ::bilrost::encoding::Oneof
-            for #ident #ty_generics #where_clause
-            {
-                const FIELD_TAGS: &'static [u32] = &[#(#sorted_tags),*];
+        current_tag_ty = quote!(::core::option::Option<u32>);
+        current_tag = fields
+            .iter()
+            .map(|(variant_ident, field)| {
+                let tag = field.tags()[0];
+                let ignored = field.with_value(quote!(_));
+                quote!(#ident::#variant_ident #ignored => ::core::option::Option::Some(#tag))
+            })
+            .chain([quote!(#ident::#empty_ident => ::core::option::Option::None)])
+            .collect();
+        encode.push(quote!(#ident::#empty_ident => {}));
+        prepend.push(quote!(#ident::#empty_ident => {}));
+        encoded_len.push(quote!(#ident::#empty_ident => 0));
 
-                fn oneof_encode<__B: ::bilrost::bytes::BufMut + ?Sized>(
-                    &self,
-                    buf: &mut __B,
-                    tw: &mut ::bilrost::encoding::TagWriter,
-                ) {
-                    match self {
-                        #ident::#empty_ident => {}
-                        #(#encode,)*
-                    }
-                }
-
-                fn oneof_prepend<__B: ::bilrost::buf::ReverseBuf + ?Sized>(
-                    &self,
-                    buf: &mut __B,
-                    tw: &mut ::bilrost::encoding::TagRevWriter,
-                ) {
-                    match self {
-                        #ident::#empty_ident => {}
-                        #(#prepend,)*
-                    }
-                }
-
-                fn oneof_encoded_len(
-                    &self,
-                    tm: &mut impl ::bilrost::encoding::TagMeasurer,
-                ) -> usize {
-                    match self {
-                        #ident::#empty_ident => 0,
-                        #(#encoded_len,)*
-                    }
-                }
-
-                fn oneof_current_tag(&self) -> ::core::option::Option<u32> {
-                    match self {
-                        #ident::#empty_ident => ::core::option::Option::None,
-                        #(#current_tag,)*
-                    }
-                }
-
-                fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
-                    &mut self,
-                    tag: u32,
-                    wire_type: ::bilrost::encoding::WireType,
-                    buf: ::bilrost::encoding::Capped<__B>,
-                    ctx: ::bilrost::encoding::DecodeContext,
-                ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
-                    match tag {
-                        #(#decode,)*
-                        _ => unreachable!(
-                            concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                        ),
-                    }
-                }
-            }
-
+        empty_state = Some(quote! {
             impl #impl_generics ::bilrost::encoding::EmptyState
             for #ident #ty_generics #where_clause {
                 #[inline]
@@ -1488,110 +1422,121 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                     *self = Self::empty();
                 }
             }
-        }
-    } else {
-        // The oneof enum has no "empty" unit variant, so we implement the "non-empty" trait.
-        let current_tag = fields.iter().map(|(variant_ident, field)| {
-            let tag = field.tags()[0];
-            let ignored = field.with_value(quote!(_));
-            quote!(#ident::#variant_ident #ignored => #tag)
         });
+    } else {
+        appropriate_oneof_trait = quote!(NonEmptyOneof);
+        decode_field_self_ty = quote!(::core::option::Option<Self>);
+        some = Some(quote!(::core::option::Option::Some));
+        match_empty_variant = quote!(::core::option::Option::None);
 
-        let decode = fields.iter().map(|(variant_ident, field)| {
-            let tag = field.first_tag();
-            let decode = field.decode_expedient(quote!(value));
-            let with_new_value = field.with_value(quote!(new_value));
-            let with_whatever = field.with_value(quote!(_));
-            quote! {
-                #tag => match field {
-                    ::core::option::Option::None => {
-                        let mut new_value =
-                            ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
-                        let value = &mut new_value;
-                        #decode.map_err(|mut error| {
-                            error.push(stringify!(#ident), stringify!(#variant_ident));
-                            error
-                        })?;
-                        *field = Some(#ident::#variant_ident #with_new_value);
-                        ::core::result::Result::Ok(())
-                    }
-                    ::core::option::Option::Some(#ident::#variant_ident #with_whatever) => {
-                        ::core::result::Result::Err({
-                            let mut error = ::bilrost::DecodeError::new(
-                                ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
-                            );
-                            error.push(stringify!(#ident), stringify!(#variant_ident));
-                            error
-                        })
-                    }
-                    _ => ::core::result::Result::Err({
-                        let mut error = ::bilrost::DecodeError::new(
-                            ::bilrost::DecodeErrorKind::ConflictingFields
-                        );
+        // The oneof enum has no "empty" unit variant, so we implement the "non-empty" trait.
+        current_tag_ty = quote!(u32);
+        current_tag = fields
+            .iter()
+            .map(|(variant_ident, field)| {
+                let tag = field.tags()[0];
+                let ignored = field.with_value(quote!(_));
+                quote!(#ident::#variant_ident #ignored => #tag)
+            })
+            .collect();
+
+        empty_state = None;
+    };
+
+    let decode = fields.iter().map(|(variant_ident, field)| {
+        let tag = field.first_tag();
+        let decode = field.decode_expedient(quote!(value));
+        let with_new_value = field.with_value(quote!(new_value));
+        let with_whatever = field.with_value(quote!(_));
+        quote! {
+            #tag => match field {
+                #match_empty_variant => {
+                    let mut new_value =
+                        ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
+                    let value = &mut new_value;
+                    #decode.map_err(|mut error| {
                         error.push(stringify!(#ident), stringify!(#variant_ident));
                         error
-                    }),
+                    })?;
+                    *field = #some(#ident::#variant_ident #with_new_value);
+                    ::core::result::Result::Ok(())
+                }
+                #some(#ident::#variant_ident #with_whatever) => ::core::result::Result::Err({
+                    let mut error = ::bilrost::DecodeError::new(
+                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                    );
+                    error.push(stringify!(#ident), stringify!(#variant_ident));
+                    error
+                }),
+                _ => ::core::result::Result::Err({
+                    let mut error = ::bilrost::DecodeError::new(
+                        ::bilrost::DecodeErrorKind::ConflictingFields
+                    );
+                    error.push(stringify!(#ident), stringify!(#variant_ident));
+                    error
+                }),
+            }
+        }
+    });
+
+    let expanded = quote! {
+        impl #impl_generics ::bilrost::encoding::#appropriate_oneof_trait
+        for #ident #ty_generics #where_clause
+        {
+            const FIELD_TAGS: &'static [u32] = &[#(#sorted_tags),*];
+
+            fn oneof_encode<__B: ::bilrost::bytes::BufMut + ?Sized>(
+                &self,
+                buf: &mut __B,
+                tw: &mut ::bilrost::encoding::TagWriter,
+            ) {
+                match self {
+                    #(#encode,)*
                 }
             }
-        });
 
-        quote! {
-            impl #impl_generics ::bilrost::encoding::NonEmptyOneof
-            for #ident #ty_generics #where_clause
-            {
-                const FIELD_TAGS: &'static [u32] = &[#(#sorted_tags),*];
-
-                fn oneof_encode<__B: ::bilrost::bytes::BufMut + ?Sized>(
-                    &self,
-                    buf: &mut __B,
-                    tw: &mut ::bilrost::encoding::TagWriter,
-                ) {
-                    match self {
-                        #(#encode,)*
-                    }
+            fn oneof_prepend<__B: ::bilrost::buf::ReverseBuf + ?Sized>(
+                &self,
+                buf: &mut __B,
+                tw: &mut ::bilrost::encoding::TagRevWriter,
+            ) {
+                match self {
+                    #(#prepend,)*
                 }
+            }
 
-                fn oneof_prepend<__B: ::bilrost::buf::ReverseBuf + ?Sized>(
-                    &self,
-                    buf: &mut __B,
-                    tw: &mut ::bilrost::encoding::TagRevWriter,
-                ) {
-                    match self {
-                        #(#prepend,)*
-                    }
+            fn oneof_encoded_len(
+                &self,
+                tm: &mut impl ::bilrost::encoding::TagMeasurer,
+            ) -> usize {
+                match self {
+                    #(#encoded_len,)*
                 }
+            }
 
-                fn oneof_encoded_len(
-                    &self,
-                    tm: &mut impl ::bilrost::encoding::TagMeasurer,
-                ) -> usize {
-                    match self {
-                        #(#encoded_len,)*
-                    }
+            fn oneof_current_tag(&self) -> #current_tag_ty {
+                match self {
+                    #(#current_tag,)*
                 }
+            }
 
-                fn oneof_current_tag(&self) -> u32 {
-                    match self {
-                        #(#current_tag,)*
-                    }
-                }
-
-                fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
-                    field: &mut ::core::option::Option<Self>,
-                    tag: u32,
-                    wire_type: ::bilrost::encoding::WireType,
-                    buf: ::bilrost::encoding::Capped<__B>,
-                    ctx: ::bilrost::encoding::DecodeContext,
-                ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
-                    match tag {
-                        #(#decode,)*
-                        _ => unreachable!(
-                            concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                        ),
-                    }
+            fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
+                field: &mut #decode_field_self_ty,
+                tag: u32,
+                wire_type: ::bilrost::encoding::WireType,
+                buf: ::bilrost::encoding::Capped<__B>,
+                ctx: ::bilrost::encoding::DecodeContext,
+            ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
+                match tag {
+                    #(#decode,)*
+                    _ => unreachable!(
+                        concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
+                    ),
                 }
             }
         }
+
+        #empty_state
     };
 
     let aliases = encoder_alias_header();
