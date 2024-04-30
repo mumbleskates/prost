@@ -86,6 +86,7 @@ mod assert {
     use bilrost::{Canonicity, DecodeError};
     use bytes::BufMut;
 
+    #[allow(unused_variables)]
     pub(super) fn assert_error(
         err: DecodeError,
         expected_kind: DecodeErrorKind,
