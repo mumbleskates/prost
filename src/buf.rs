@@ -2,6 +2,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::{max, min};
+use core::iter;
 use core::marker::PhantomData;
 use core::mem::{self, transmute, MaybeUninit};
 use core::ptr;
@@ -25,7 +26,6 @@ const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 ///
 /// It is not guaranteed to be efficient to interleave reads via `bytes::Buf` and writes via
 /// `ReverseBuf::prepend`.
-// TODO(widders): to ioslice for vectored
 pub trait ReverseBuf: Buf {
     /// Prepends bytes to the buffer. These bytes will still be in the order they appear in the
     /// provided `Buf` when they are read back, but they will appear immediately before any bytes
@@ -436,6 +436,12 @@ impl ReverseBuffer {
             capacity: self.capacity,
         }
     }
+
+    /// Returns an iterator over the slices of data in this buffer, suitable for vectored writing.
+    pub fn slices(&self) -> impl Iterator<Item = &[u8]> {
+        // SAFETY: self is valid
+        unsafe { to_vectorable_slices(&self.chunks, self.front) }
+    }
 }
 
 /// Copies bytes out of a `bytes::Buf` directly into a slice of uninitialized bytes, filling it. The
@@ -453,6 +459,23 @@ fn copy_buf<B: Buf>(data: &mut B, mut dest_chunk: &mut [MaybeUninit<u8>]) {
         dest_chunk = &mut dest_chunk[copy_size..];
         data.advance(copy_size);
     }
+}
+
+// SAFETY: front must be a valid front index in the front chunk.
+#[inline(always)]
+unsafe fn to_vectorable_slices(
+    chunks: &[Box<[MaybeUninit<u8>]>],
+    front: usize,
+) -> impl Iterator<Item = &[u8]> {
+    chunks
+        .split_last()
+        .into_iter()
+        .flat_map(move |(front_chunk, rest)| {
+            iter::once(&front_chunk[front..]).chain(rest.iter().rev().map(Box::as_ref))
+        })
+        // SAFETY: the portion of the front chunk after `front` that we have sliced, and every chunk
+        // after that, are all valid bytes.
+        .map(|m| unsafe { transmute::<&[MaybeUninit<u8>], &[u8]>(m) })
 }
 
 impl ReverseBuf for ReverseBuffer {
@@ -636,6 +659,12 @@ impl ReverseBufferReader<'_> {
             _ => None,
         }
     }
+
+    /// Returns an iterator over the slices of data in this buffer, suitable for vectored writing.
+    pub fn slices(&self) -> impl Iterator<Item = &[u8]> {
+        // SAFETY: self is valid
+        unsafe { to_vectorable_slices(self.chunks, self.front) }
+    }
 }
 
 impl Buf for ReverseBufferReader<'_> {
@@ -697,6 +726,19 @@ mod test {
     fn check_read(buf: ReverseBuffer, expected: &[u8]) {
         assert_eq!(buf.len(), expected.len());
         assert_eq!(buf.is_empty(), buf.len() == 0);
+
+        let mut vectored = Vec::new();
+        for slice in buf.slices() {
+            vectored.extend_from_slice(slice);
+        }
+        assert_eq!(vectored, expected);
+
+        let mut vectored = Vec::new();
+        for slice in buf.buf_reader().slices() {
+            vectored.extend_from_slice(slice);
+        }
+        assert_eq!(vectored, expected);
+
         compare_buf(buf.buf_reader(), expected);
         compare_buf(buf, expected);
     }
