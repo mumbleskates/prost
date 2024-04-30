@@ -1547,22 +1547,15 @@ impl ToTokens for DecoderForOneof<'_> {
             some = Some(quote!(::core::option::Option::Some));
         }
 
-        let let_canon_equal;
-        let decode;
-        let ok_value;
-        if self.distinguished {
-            let_canon_equal = Some(quote!(let canon = ));
-            decode = field.decode_distinguished(quote!(new_value_ref));
-            ok_value = quote!(canon);
-        } else {
-            let_canon_equal = None;
-            decode = field.decode_expedient(quote!(new_value_ref));
-            ok_value = quote!(());
-        }
-
         let tag = field.first_tag();
         let with_new_value = field.with_value(quote!(new_value));
         let with_whatever = field.with_value(quote!(_));
+
+        let decode = if self.distinguished {
+            field.decode_distinguished(quote!(new_value_ref))
+        } else {
+            field.decode_expedient(quote!(new_value_ref))
+        };
 
         tokens.append_all(quote! {
             #tag => match value {
@@ -1570,28 +1563,21 @@ impl ToTokens for DecoderForOneof<'_> {
                     let mut new_value =
                         ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
                     let new_value_ref = &mut new_value;
-                    #let_canon_equal #decode.map_err(|mut error| {
-                        error.push(stringify!(#ident), stringify!(#variant_ident));
-                        error
-                    })?;
-                    *value = #some(#ident::#variant_ident #with_new_value);
-                    ::core::result::Result::Ok(#ok_value)
+                    #decode.map(|res| {
+                        *value = #some(#ident::#variant_ident #with_new_value);
+                        res
+                    })
                 }
-                #some(#ident::#variant_ident #with_whatever) => ::core::result::Result::Err({
-                    let mut error = ::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
-                    );
-                    error.push(stringify!(#ident), stringify!(#variant_ident));
-                    error
-                }),
-                _ => ::core::result::Result::Err({
-                    let mut error = ::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::ConflictingFields
-                    );
-                    error.push(stringify!(#ident), stringify!(#variant_ident));
-                    error
-                }),
-            }
+                #some(#ident::#variant_ident #with_whatever) => ::core::result::Result::Err(
+                    ::bilrost::DecodeError::new(::bilrost::DecodeErrorKind::UnexpectedlyRepeated)
+                ),
+                _ => ::core::result::Result::Err(
+                    ::bilrost::DecodeError::new(::bilrost::DecodeErrorKind::ConflictingFields)
+                ),
+            }.map_err(|mut error| {
+                error.push(stringify!(#ident), stringify!(#variant_ident));
+                error
+            })
         })
     }
 }
