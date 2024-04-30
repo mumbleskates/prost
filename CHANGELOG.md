@@ -2,6 +2,8 @@
 
 ### Breaking changes
 
+* Tuple typed structs (with anonymous fields accessed like `value.0`) now start
+  their field numbering from zero by default, matching the names of the fields.
 * Renamed the `.reader()` method on `ReverseBuffer` to `.buf_reader()` so it no
   longer conflicts with the `bytes::Buf` method.
 

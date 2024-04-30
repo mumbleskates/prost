@@ -492,7 +492,9 @@ The `Message` trait can be derived to allow encoding just about any struct as a
 Bilrost message, as long as its fields' types are supported.
 
 If not otherwise specified, fields are tagged sequentially in the order they
-are specified in the struct, starting with `1`.
+are specified in the struct. If not specified, structs with named fields have
+their fields tagged starting with `1`, and tuple structs with anonymous fields
+have their fields numbered starting with `0` (matching their Rust index-names).
 
 Tags can also be explicitly specified. If a field's tag is the only attribute
 provided, the number of the tag can be provided with no ceremony as the only
