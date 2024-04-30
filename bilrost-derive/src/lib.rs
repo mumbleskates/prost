@@ -160,7 +160,12 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
         } => Vec::new(),
     };
 
-    let mut next_tag = Some(1);
+    // Tuple structs with anonymous fields have their field numbering start at zero, and structs
+    // with named fields start at 1.
+    let mut next_tag = Some(match variant_data.fields {
+        Fields::Unnamed(..) => 0,
+        _ => 1,
+    });
     let mut has_ignored_fields = false;
     let unsorted_fields: Vec<(TokenStream, Field)> = fields
         .into_iter()
