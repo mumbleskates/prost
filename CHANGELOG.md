@@ -15,6 +15,9 @@
 
 ### Fixes
 
+* Fixed some incorrect tests, including coverage of third-party inline vecs and
+  packed/unpacked fixed-size arrays.
+
 ### Cleanups
 
 * Cleaned up and re-added fuzzers! Fuzzers are available via both `libfuzzer`
