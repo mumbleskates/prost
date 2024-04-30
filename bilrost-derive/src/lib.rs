@@ -1912,7 +1912,7 @@ mod test {
     fn test_attribute_forms_are_equivalent() {
         let one = try_message(quote! {
             struct A (
-                #[bilrost(tag = "1")] bool,
+                #[bilrost(tag = "0")] bool,
                 #[bilrost(oneof = "2, 3")] B,
                 #[bilrost(tag = "4")] u32,
                 #[bilrost(tag = "5", encoding = "::custom<Z>")] String,
@@ -1936,7 +1936,7 @@ mod test {
         .to_string();
         let three = try_message(quote! {
             struct A (
-                #[bilrost(tag(1))] bool,
+                #[bilrost(tag(0))] bool,
                 #[bilrost(oneof(2, 3))] B,
                 u32,
                 #[bilrost(encoding = "::custom <Z>")] String,
@@ -1948,7 +1948,7 @@ mod test {
         .to_string();
         let four = try_message(quote! {
             struct A (
-                #[bilrost(1)] bool,
+                #[bilrost(0)] bool,
                 #[bilrost(oneof(2, 3))] B,
                 u32,
                 #[bilrost(encoding(::custom<Z>))] String,

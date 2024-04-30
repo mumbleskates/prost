@@ -786,7 +786,7 @@ struct Bar(
 
 assert_eq!(
     Bar("bar".to_string()).encode_to_vec(),
-    b"\x05\x03bar".as_slice()
+    b"\x01\x03bar".as_slice()
 );
 ```
 

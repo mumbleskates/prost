@@ -75,6 +75,12 @@ impl From<&DecodeError> for DecodeErrorKind {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FieldName {
+    pub message: &'static str,
+    pub field: &'static str,
+}
+
 /// A Bilrost message decoding error.
 ///
 /// `DecodeError` indicates that the input buffer does not contain a valid Bilrost message. The
@@ -92,7 +98,7 @@ pub struct DecodeError {
     /// A stack of (message, field) name pairs, which identify the specific
     /// message type and field where decoding failed. The stack contains an
     /// entry per level of nesting.
-    stack: thin_vec::ThinVec<(&'static str, &'static str)>,
+    stack: thin_vec::ThinVec<FieldName>,
 }
 
 impl DecodeError {
@@ -114,13 +120,23 @@ impl DecodeError {
         self.kind
     }
 
+    /// Returns a description of the path inside the structure at which the error was encountered,
+    /// if available. The deepest field will be listed first, and the most top-level field will be
+    /// last.
+    pub fn path(&self) -> &[FieldName] {
+        #[cfg(feature = "detailed-errors")]
+        return self.stack.as_slice();
+        #[cfg(not(feature = "detailed-errors"))]
+        return &[];
+    }
+
     /// Pushes a (message, field) name location pair on to the location stack.
     ///
     /// Meant to be used only by `Message` implementations.
     #[doc(hidden)]
     pub fn push(&mut self, message: &'static str, field: &'static str) {
         #[cfg(feature = "detailed-errors")]
-        self.stack.push((message, field));
+        self.stack.push(FieldName { message, field });
         _ = (message, field);
     }
 }
@@ -145,7 +161,7 @@ impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("failed to decode Bilrost message: ")?;
         #[cfg(feature = "detailed-errors")]
-        for (message, field) in self.stack.iter() {
+        for FieldName { message, field } in self.stack.iter() {
             write!(f, "{}.{}: ", message, field)?;
         }
         self.kind.fmt(f)
