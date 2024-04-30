@@ -46,6 +46,16 @@ impl core::ops::Neg for Duration {
 // TODO(widders): addition and subtraction with Timestamp & Duration
 
 impl Duration {
+    /// Returns true iff the duration is already normalized.
+    pub fn is_canonical(&self) -> bool {
+        (-NANOS_MAX..=NANOS_MAX).contains(&self.nanos)
+            && match self.seconds.signum() {
+                -1 => self.nanos <= 0,
+                1 => self.nanos >= 0,
+                _ => true,
+            }
+    }
+
     /// Normalizes the duration to a canonical format.
     ///
     /// Based on [`google::protobuf::util::CreateNormalized`][1].
@@ -200,6 +210,11 @@ impl FromStr for Duration {
 }
 
 impl Timestamp {
+    /// Returns true iff the timestamp is already normalized.
+    pub fn is_canonical(&self) -> bool {
+        (0..NANOS_PER_SECOND).contains(&self.nanos)
+    }
+
     /// Normalizes the timestamp to a canonical format.
     ///
     /// Based on [`google::protobuf::util::CreateNormalized`][1].
@@ -592,7 +607,9 @@ mod tests {
             nanos in i32::arbitrary(),
         ) {
             let mut timestamp = Timestamp { seconds, nanos };
+            let is_canonical = timestamp.is_canonical();
             timestamp.normalize();
+            prop_assert_eq!(is_canonical, timestamp == Timestamp{ seconds, nanos });
             if let Ok(system_time) = SystemTime::try_from(timestamp.clone()) {
                 prop_assert_eq!(Timestamp::from(system_time), timestamp);
             }
@@ -601,7 +618,9 @@ mod tests {
         #[test]
         fn check_timestamp_datetime_roundtrip(seconds: i64, nanos: i32) {
             let mut timestamp = Timestamp { seconds, nanos };
+            let is_canonical = timestamp.is_canonical();
             timestamp.normalize();
+            prop_assert_eq!(is_canonical, timestamp == Timestamp{ seconds, nanos });
             let timestamp = timestamp;
             let datetime: DateTime = timestamp.clone().into();
             prop_assert_eq!(Timestamp::from(datetime), timestamp);
@@ -805,21 +824,20 @@ mod tests {
             (line!(), i64::MAX - 1,    999_999_998,     i64::MAX - 1,    999_999_998),
         ];
 
-        for case in cases.iter() {
-            let mut test_duration = Duration {
-                seconds: case.1,
-                nanos: case.2,
-            };
+        for case in cases.into_iter() {
+            let (line, seconds, nanos, canonical_seconds, canonical_nanos) = case;
+            let mut test_duration = Duration { seconds, nanos };
+            let is_canonical = test_duration.is_canonical();
             test_duration.normalize();
+            assert_eq!(is_canonical, test_duration == Duration { seconds, nanos });
 
             assert_eq!(
                 test_duration,
                 Duration {
-                    seconds: case.3,
-                    nanos: case.4,
+                    seconds: canonical_seconds,
+                    nanos: canonical_nanos,
                 },
-                "test case on line {} doesn't match",
-                case.0,
+                "test case on line {line} doesn't match",
             );
         }
     }
@@ -882,21 +900,23 @@ mod tests {
             (line!(), i64::MAX - 1,    999_999_998,     i64::MAX - 1,    999_999_998),
         ];
 
-        for case in cases.iter() {
-            let mut test_timestamp = crate::Timestamp {
-                seconds: case.1,
-                nanos: case.2,
+        for case in cases.into_iter() {
+            let (line, seconds, nanos, canonical_seconds, canonical_nanos) = case;
+            let mut test_timestamp = Timestamp {
+                seconds,
+                nanos,
             };
+            let is_canonical = test_timestamp.is_canonical();
             test_timestamp.normalize();
+            assert_eq!(is_canonical, test_timestamp == Timestamp { seconds, nanos });
 
             assert_eq!(
                 test_timestamp,
-                crate::Timestamp {
-                    seconds: case.3,
-                    nanos: case.4,
+                Timestamp {
+                    seconds: canonical_seconds,
+                    nanos: canonical_nanos,
                 },
-                "test case on line {} doesn't match",
-                case.0,
+                "test case on line {line} doesn't match",
             );
         }
     }

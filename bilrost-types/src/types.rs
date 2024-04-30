@@ -2,7 +2,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use bilrost::{Message, Oneof};
+use bilrost::{Message, Oneof, DistinguishedMessage};
 
 /// A Duration represents a signed, fixed-length span of time represented
 /// as a count of seconds and fractions of seconds at nanosecond
@@ -71,8 +71,7 @@ use bilrost::{Message, Oneof};
 /// encoded in JSON format as "3s", while 3 seconds and 1 nanosecond should
 /// be expressed in JSON format as "3.000000001s", and 3 seconds and 1
 /// microsecond should be expressed in JSON format as "3.000001s".
-#[cfg_attr(feature = "std", derive(Eq, Hash))]
-#[derive(Clone, Debug, PartialEq, PartialOrd, Message)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Message, DistinguishedMessage)]
 pub struct Duration {
     /// Signed seconds of the span of time. Must be from -315,576,000,000
     /// to +315,576,000,000 inclusive. Note: these bounds are computed from:
@@ -193,8 +192,7 @@ pub struct Duration {
 /// can use the Joda Time's
 /// [`ISODateTimeFormat.dateTime()`](<http://www.joda.org/joda-time/apidocs/org/joda/time/format/ISODateTimeFormat.html#dateTime%2D%2D>)
 /// to obtain a formatter capable of generating timestamps in this format.
-#[cfg_attr(feature = "std", derive(Eq, Hash))]
-#[derive(Clone, Debug, PartialEq, PartialOrd, Message)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Message, DistinguishedMessage)]
 pub struct Timestamp {
     /// Represents seconds of UTC time since Unix epoch 1970-01-01T00:00:00Z.
     #[bilrost(1)]
