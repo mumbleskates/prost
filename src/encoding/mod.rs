@@ -1703,7 +1703,7 @@ where
 pub trait DistinguishedOneof: Oneof {
     /// Decodes from the given buffer in distinguished mode.
     fn oneof_decode_field_distinguished<B: Buf + ?Sized>(
-        &mut self,
+        value: &mut Self,
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
@@ -1731,13 +1731,13 @@ where
 {
     #[inline]
     fn oneof_decode_field_distinguished<B: Buf + ?Sized>(
-        &mut self,
+        value: &mut Self,
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        T::oneof_decode_field_distinguished(self, tag, wire_type, buf, ctx)
+        T::oneof_decode_field_distinguished(value, tag, wire_type, buf, ctx)
     }
 }
 

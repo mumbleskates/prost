@@ -23,7 +23,7 @@ use core::ops::{Deref, RangeInclusive};
 use anyhow::{anyhow, bail, Error};
 use itertools::Itertools;
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse2, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, FieldsNamed,
     FieldsUnnamed, Ident, ImplGenerics, Index, Meta, MetaList, MetaNameValue, TypeGenerics,
@@ -1443,40 +1443,13 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         empty_state = None;
     };
 
-    let decode = fields.iter().map(|(variant_ident, field)| {
-        let tag = field.first_tag();
-        let decode = field.decode_expedient(quote!(value));
-        let with_new_value = field.with_value(quote!(new_value));
-        let with_whatever = field.with_value(quote!(_));
-        quote! {
-            #tag => match field {
-                #match_empty_variant => {
-                    let mut new_value =
-                        ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
-                    let value = &mut new_value;
-                    #decode.map_err(|mut error| {
-                        error.push(stringify!(#ident), stringify!(#variant_ident));
-                        error
-                    })?;
-                    *field = #some(#ident::#variant_ident #with_new_value);
-                    ::core::result::Result::Ok(())
-                }
-                #some(#ident::#variant_ident #with_whatever) => ::core::result::Result::Err({
-                    let mut error = ::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
-                    );
-                    error.push(stringify!(#ident), stringify!(#variant_ident));
-                    error
-                }),
-                _ => ::core::result::Result::Err({
-                    let mut error = ::bilrost::DecodeError::new(
-                        ::bilrost::DecodeErrorKind::ConflictingFields
-                    );
-                    error.push(stringify!(#ident), stringify!(#variant_ident));
-                    error
-                }),
-            }
-        }
+    let decode = fields.iter().map(|(variant_ident, field)| DecoderForOneof {
+        ident: &ident,
+        variant_ident,
+        field,
+        match_empty_variant: &match_empty_variant,
+        some: &some,
+        distinguished: false,
     });
 
     let expanded = quote! {
@@ -1521,7 +1494,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             }
 
             fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
-                field: &mut #decode_field_self_ty,
+                value: &mut #decode_field_self_ty,
                 tag: u32,
                 wire_type: ::bilrost::encoding::WireType,
                 buf: ::bilrost::encoding::Capped<__B>,
@@ -1549,6 +1522,75 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     })
 }
 
+/// Oneof decoders have four different cases they may be implemented in: implemented for either
+/// NonEmptyOneof or Oneof, and either expedient or distinguished. The code for these should all be
+/// similarly deduplicated.
+struct DecoderForOneof<'a> {
+    ident: &'a Ident,
+    variant_ident: &'a Ident,
+    field: &'a Field,
+    match_empty_variant: &'a TokenStream,
+    some: &'a Option<TokenStream>,
+    distinguished: bool,
+}
+
+impl ToTokens for DecoderForOneof<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let ident = self.ident;
+        let variant_ident = self.variant_ident;
+        let field = self.field;
+        let match_empty_variant = self.match_empty_variant;
+        let some = self.some;
+
+        let tag = field.first_tag();
+        let with_new_value = field.with_value(quote!(new_value));
+        let with_whatever = field.with_value(quote!(_));
+
+        let let_canon_equal;
+        let decode;
+        let ok_value;
+        if self.distinguished {
+            let_canon_equal = Some(quote!(let canon = ));
+            decode = field.decode_distinguished(quote!(new_value_ref));
+            ok_value = quote!(canon);
+        } else {
+            let_canon_equal = None;
+            decode = field.decode_expedient(quote!(new_value_ref));
+            ok_value = quote!(());
+        }
+
+        tokens.append_all(quote! {
+            #tag => match value {
+                #match_empty_variant => {
+                    let mut new_value =
+                        ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
+                    let new_value_ref = &mut new_value;
+                    #let_canon_equal #decode.map_err(|mut error| {
+                        error.push(stringify!(#ident), stringify!(#variant_ident));
+                        error
+                    })?;
+                    *value = #some(#ident::#variant_ident #with_new_value);
+                    ::core::result::Result::Ok(#ok_value)
+                }
+                #some(#ident::#variant_ident #with_whatever) => ::core::result::Result::Err({
+                    let mut error = ::bilrost::DecodeError::new(
+                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                    );
+                    error.push(stringify!(#ident), stringify!(#variant_ident));
+                    error
+                }),
+                _ => ::core::result::Result::Err({
+                    let mut error = ::bilrost::DecodeError::new(
+                        ::bilrost::DecodeErrorKind::ConflictingFields
+                    );
+                    error.push(stringify!(#ident), stringify!(#variant_ident));
+                    error
+                }),
+            }
+        })
+    }
+}
+
 #[proc_macro_derive(Oneof, attributes(bilrost))]
 pub fn oneof(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     try_oneof(input.into()).unwrap().into()
@@ -1565,127 +1607,56 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         fields,
         empty_variant,
     } = preprocess_oneof(&input)?;
-    let expanded = if let Some(empty_ident) = empty_variant {
-        let where_clause = append_distinguished_encoder_wheres(
+
+    let appropriate_oneof_trait;
+    let full_where_clause;
+    let some;
+    let match_empty_variant;
+    let decode_field_self_ty;
+
+    if let Some(empty_ident) = empty_variant {
+        appropriate_oneof_trait = quote!(DistinguishedOneof);
+        full_where_clause = append_distinguished_encoder_wheres(
             where_clause,
             Some(quote!(Self: ::bilrost::encoding::Oneof)),
             &fields,
         );
-        let decode = fields.iter().map(|(variant_ident, field)| {
-            let tag = field.first_tag();
-            let decode = field.decode_distinguished(quote!(value));
-            let with_new_value = field.with_value(quote!(new_value));
-            let with_whatever = field.with_value(quote!(_));
-            quote! {
-                #tag => match self {
-                    #ident::#empty_ident => {
-                        let mut new_value =
-                            ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
-                        let mut value = &mut new_value;
-                        let canon = #decode.map_err(|mut error| {
-                            error.push(stringify!(#ident), stringify!(#variant_ident));
-                            error
-                        })?;
-                        *self = #ident::#variant_ident #with_new_value;
-                        Ok(canon)
-                    }
-                    #ident::#variant_ident #with_whatever => {
-                        ::core::result::Result::Err({
-                            let mut error = ::bilrost::DecodeError::new(
-                                ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
-                            );
-                            error.push(stringify!(#ident), stringify!(#variant_ident));
-                            error
-                        })
-                    }
-                    _ => ::core::result::Result::Err({
-                        let mut error = ::bilrost::DecodeError::new(
-                            ::bilrost::DecodeErrorKind::ConflictingFields
-                        );
-                        error.push(stringify!(#ident), stringify!(#variant_ident));
-                        error
-                    }),
-                }
-            }
-        });
-
-        quote! {
-            impl #impl_generics ::bilrost::encoding::DistinguishedOneof
-            for #ident #ty_generics #where_clause
-            {
-                fn oneof_decode_field_distinguished<__B: ::bilrost::bytes::Buf + ?Sized>(
-                    &mut self,
-                    tag: u32,
-                    wire_type: ::bilrost::encoding::WireType,
-                    buf: ::bilrost::encoding::Capped<__B>,
-                    ctx: ::bilrost::encoding::DecodeContext,
-                ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
-                    match tag {
-                        #(#decode,)*
-                        _ => unreachable!(
-                            concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                        ),
-                    }
-                }
-            }
-        }
+        some = None;
+        match_empty_variant = quote!(#ident::#empty_ident);
+        decode_field_self_ty = quote!(Self);
     } else {
-        let where_clause = append_distinguished_encoder_wheres(where_clause, None, &fields);
-        let decode = fields.iter().map(|(variant_ident, field)| {
-            let tag = field.first_tag();
-            let decode = field.decode_distinguished(quote!(value));
-            let with_new_value = field.with_value(quote!(new_value));
-            let with_whatever = field.with_value(quote!(_));
-            quote! {
-                #tag => match field {
-                    ::core::option::Option::None => {
-                        let mut new_value =
-                            ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
-                        let value = &mut new_value;
-                        let canon = #decode.map_err(|mut error| {
-                            error.push(stringify!(#ident), stringify!(#variant_ident));
-                            error
-                        })?;
-                        *field = Some(#ident::#variant_ident #with_new_value);
-                        ::core::result::Result::Ok(canon)
-                    }
-                    ::core::option::Option::Some(#ident::#variant_ident #with_whatever) => {
-                        ::core::result::Result::Err({
-                            let mut error = ::bilrost::DecodeError::new(
-                                ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
-                            );
-                            error.push(stringify!(#ident), stringify!(#variant_ident));
-                            error
-                        })
-                    }
-                    _ => ::core::result::Result::Err({
-                        let mut error = ::bilrost::DecodeError::new(
-                            ::bilrost::DecodeErrorKind::ConflictingFields
-                        );
-                        error.push(stringify!(#ident), stringify!(#variant_ident));
-                        error
-                    }),
-                }
-            }
-        });
+        appropriate_oneof_trait = quote!(NonEmptyDistinguishedOneof);
+        full_where_clause = append_distinguished_encoder_wheres(where_clause, None, &fields);
+        some = Some(quote!(::core::option::Option::Some));
+        match_empty_variant = quote!(::core::option::Option::None);
+        decode_field_self_ty = quote!(::core::option::Option<Self>);
+    };
 
-        quote! {
-            impl #impl_generics ::bilrost::encoding::NonEmptyDistinguishedOneof
-            for #ident #ty_generics #where_clause
-            {
-                fn oneof_decode_field_distinguished<__B: ::bilrost::bytes::Buf + ?Sized>(
-                    field: &mut ::core::option::Option<Self>,
-                    tag: u32,
-                    wire_type: ::bilrost::encoding::WireType,
-                    buf: ::bilrost::encoding::Capped<__B>,
-                    ctx: ::bilrost::encoding::DecodeContext,
-                ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
-                    match tag {
-                        #(#decode,)*
-                        _ => unreachable!(
-                            concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                        ),
-                    }
+    let decode = fields.iter().map(|(variant_ident, field)| DecoderForOneof {
+        ident: &ident,
+        variant_ident,
+        field,
+        match_empty_variant: &match_empty_variant,
+        some: &some,
+        distinguished: true,
+    });
+
+    let expanded = quote! {
+        impl #impl_generics ::bilrost::encoding::#appropriate_oneof_trait
+        for #ident #ty_generics #full_where_clause
+        {
+            fn oneof_decode_field_distinguished<__B: ::bilrost::bytes::Buf + ?Sized>(
+                value: &mut #decode_field_self_ty,
+                tag: u32,
+                wire_type: ::bilrost::encoding::WireType,
+                buf: ::bilrost::encoding::Capped<__B>,
+                ctx: ::bilrost::encoding::DecodeContext,
+            ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
+                match tag {
+                    #(#decode,)*
+                    _ => unreachable!(
+                        concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
+                    ),
                 }
             }
         }
