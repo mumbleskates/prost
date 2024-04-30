@@ -25,6 +25,7 @@ const MIN_CHUNK_SIZE: usize = 2 * mem::size_of::<&[u8]>();
 ///
 /// It is not guaranteed to be efficient to interleave reads via `bytes::Buf` and writes via
 /// `ReverseBuf::prepend`.
+// TODO(widders): to ioslice for vectored
 pub trait ReverseBuf: Buf {
     /// Prepends bytes to the buffer. These bytes will still be in the order they appear in the
     /// provided `Buf` when they are read back, but they will appear immediately before any bytes
