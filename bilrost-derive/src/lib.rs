@@ -1378,17 +1378,13 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
 
     let appropriate_oneof_trait;
     let decode_field_self_ty;
-    let some;
-    let match_empty_variant;
     let current_tag_ty;
     let current_tag: Vec<TokenStream>;
-    let empty_state;
+    let empty_state_impl;
 
-    if let Some(empty_ident) = empty_variant {
+    if let Some(empty_ident) = &empty_variant {
         appropriate_oneof_trait = quote!(Oneof);
         decode_field_self_ty = quote!(Self);
-        some = None;
-        match_empty_variant = quote!(#ident::#empty_ident);
 
         current_tag_ty = quote!(::core::option::Option<u32>);
         current_tag = fields
@@ -1404,7 +1400,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         prepend.push(quote!(#ident::#empty_ident => {}));
         encoded_len.push(quote!(#ident::#empty_ident => 0));
 
-        empty_state = Some(quote! {
+        empty_state_impl = Some(quote! {
             impl #impl_generics ::bilrost::encoding::EmptyState
             for #ident #ty_generics #where_clause {
                 #[inline]
@@ -1426,8 +1422,6 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     } else {
         appropriate_oneof_trait = quote!(NonEmptyOneof);
         decode_field_self_ty = quote!(::core::option::Option<Self>);
-        some = Some(quote!(::core::option::Option::Some));
-        match_empty_variant = quote!(::core::option::Option::None);
 
         // The oneof enum has no "empty" unit variant, so we implement the "non-empty" trait.
         current_tag_ty = quote!(u32);
@@ -1440,15 +1434,14 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             })
             .collect();
 
-        empty_state = None;
+        empty_state_impl = None;
     };
 
     let decode = fields.iter().map(|(variant_ident, field)| DecoderForOneof {
         ident: &ident,
         variant_ident,
         field,
-        match_empty_variant: &match_empty_variant,
-        some: &some,
+        empty_variant: &empty_variant,
         distinguished: false,
     });
 
@@ -1509,7 +1502,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             }
         }
 
-        #empty_state
+        #empty_state_impl
     };
 
     let aliases = encoder_alias_header();
@@ -1526,11 +1519,15 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
 /// NonEmptyOneof or Oneof, and either expedient or distinguished. The code for these should all be
 /// similarly deduplicated.
 struct DecoderForOneof<'a> {
+    /// The ident of the oneof enum itself
     ident: &'a Ident,
+    /// The ident of this variant
     variant_ident: &'a Ident,
+    /// The Field struct for this variant
     field: &'a Field,
-    match_empty_variant: &'a TokenStream,
-    some: &'a Option<TokenStream>,
+    /// The "empty" variant of this enum, if it exists
+    empty_variant: &'a Option<Ident>,
+    /// True to generate a distinguished impl, false for expedient
     distinguished: bool,
 }
 
@@ -1539,12 +1536,16 @@ impl ToTokens for DecoderForOneof<'_> {
         let ident = self.ident;
         let variant_ident = self.variant_ident;
         let field = self.field;
-        let match_empty_variant = self.match_empty_variant;
-        let some = self.some;
 
-        let tag = field.first_tag();
-        let with_new_value = field.with_value(quote!(new_value));
-        let with_whatever = field.with_value(quote!(_));
+        let match_empty_variant;
+        let some;
+        if let Some(empty_ident) = self.empty_variant {
+            match_empty_variant = quote!(#ident::#empty_ident);
+            some = None;
+        } else {
+            match_empty_variant = quote!(::core::option::Option::None);
+            some = Some(quote!(::core::option::Option::Some));
+        }
 
         let let_canon_equal;
         let decode;
@@ -1558,6 +1559,10 @@ impl ToTokens for DecoderForOneof<'_> {
             decode = field.decode_expedient(quote!(new_value_ref));
             ok_value = quote!(());
         }
+
+        let tag = field.first_tag();
+        let with_new_value = field.with_value(quote!(new_value));
+        let with_whatever = field.with_value(quote!(_));
 
         tokens.append_all(quote! {
             #tag => match value {
@@ -1610,25 +1615,18 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
 
     let appropriate_oneof_trait;
     let full_where_clause;
-    let some;
-    let match_empty_variant;
     let decode_field_self_ty;
-
-    if let Some(empty_ident) = empty_variant {
+    if empty_variant.is_some() {
         appropriate_oneof_trait = quote!(DistinguishedOneof);
         full_where_clause = append_distinguished_encoder_wheres(
             where_clause,
             Some(quote!(Self: ::bilrost::encoding::Oneof)),
             &fields,
         );
-        some = None;
-        match_empty_variant = quote!(#ident::#empty_ident);
         decode_field_self_ty = quote!(Self);
     } else {
         appropriate_oneof_trait = quote!(NonEmptyDistinguishedOneof);
         full_where_clause = append_distinguished_encoder_wheres(where_clause, None, &fields);
-        some = Some(quote!(::core::option::Option::Some));
-        match_empty_variant = quote!(::core::option::Option::None);
         decode_field_self_ty = quote!(::core::option::Option<Self>);
     };
 
@@ -1636,8 +1634,7 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         ident: &ident,
         variant_ident,
         field,
-        match_empty_variant: &match_empty_variant,
-        some: &some,
+        empty_variant: &empty_variant,
         distinguished: true,
     });
 
