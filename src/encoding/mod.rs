@@ -1617,7 +1617,7 @@ pub trait Oneof: EmptyState {
 
     /// Decodes from the given buffer.
     fn oneof_decode_field<B: Buf + ?Sized>(
-        &mut self,
+        value: &mut Self,
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
@@ -1688,13 +1688,13 @@ where
 
     #[inline]
     fn oneof_decode_field<B: Buf + ?Sized>(
-        &mut self,
+        value: &mut Self,
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
-        T::oneof_decode_field(self, tag, wire_type, buf, ctx)
+        T::oneof_decode_field(value, tag, wire_type, buf, ctx)
     }
 }
 
