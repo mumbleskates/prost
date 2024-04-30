@@ -12,6 +12,11 @@
 * Added support for encoding `usize` and `isize` pointer-sized integers. They
   will still have different supported maximums on platforms with different sized
   values, but this still has completely reasonable failure modes.
+* Added support for deriving `Message` for `enum` types, which is implemented in
+  terms of `Oneof`. The message implementations encode and decode exactly like a
+  message which contains only that oneof; see the readme for more details.
+* Changed the `Value` type in `bilrost-types` to be a message-via-oneof in this
+  way, making it much nicer to use without changing its meaning.
 
 ### Fixes
 
