@@ -96,7 +96,7 @@ mod assert {
         #[cfg(feature = "detailed-errors")]
         assert_eq!(
             err.path()
-                .into_iter()
+                .iter()
                 .rev()
                 .map(|p| format!("{}.{}", p.message, p.field))
                 .join("/"),
