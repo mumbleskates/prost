@@ -902,10 +902,7 @@ mod tests {
 
         for case in cases.into_iter() {
             let (line, seconds, nanos, canonical_seconds, canonical_nanos) = case;
-            let mut test_timestamp = Timestamp {
-                seconds,
-                nanos,
-            };
+            let mut test_timestamp = Timestamp { seconds, nanos };
             let is_canonical = test_timestamp.is_canonical();
             test_timestamp.normalize();
             assert_eq!(is_canonical, test_timestamp == Timestamp { seconds, nanos });

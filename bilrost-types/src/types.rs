@@ -2,7 +2,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use bilrost::{Message, Oneof, DistinguishedMessage};
+use bilrost::{DistinguishedMessage, Message, Oneof};
 
 /// A Duration represents a signed, fixed-length span of time represented
 /// as a count of seconds and fractions of seconds at nanosecond
