@@ -509,8 +509,8 @@ sequentially occurring tag values by specifying the tag number to skip to with
 the `tag` attribute on the first field after the gap. The following fields will
 be tagged sequentially starting from the next number.
 
-When defining message types for interoperation, or when fields are likely to
-be added, removed, or shuffled, it may be good practice to explicitly specify
+When defining message types for interoperation -- or when fields are likely to
+be added, removed, or shuffled -- it may be good practice to explicitly specify
 the tags of all fields in a struct instead, but this is not mandatory.
 
 <details><summary>Example of a struct with a derived `Message` impl</summary>
