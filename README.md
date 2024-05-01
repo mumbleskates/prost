@@ -1052,7 +1052,9 @@ through that trait.
 `ReverseBuffer` allocates lazily, grows exponentially, and stores its data in
 multiple allocations of increasing size. It is often the most efficient type
 to encode a `bilrost` message into, and it can be efficiently read and copied
-out as a `bytes::Buf` the same as the other options (`Vec` and `Bytes`).
+out as a `bytes::Buf` the same as the other options (`Vec` and `Bytes`). Both
+classes also provide a `slices` method which allows iterating over the slices in
+the buffer for vectored writing.
 
 ### Encoding and decoding example
 

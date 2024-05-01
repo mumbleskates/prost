@@ -17,6 +17,8 @@
   message which contains only that oneof; see the readme for more details.
 * Changed the `Value` type in `bilrost-types` to be a message-via-oneof in this
   way, making it much nicer to use without changing its meaning.
+* Added a `.slices()` method to `ReverseBuffer` and `ReverseBufferReader` which
+  iterates its slices, useful for sending to `write_vectored`.
 
 ### Fixes
 
