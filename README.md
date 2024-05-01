@@ -513,7 +513,11 @@ When defining message types for interoperation -- or when fields are likely to
 be added, removed, or shuffled -- it may be good practice to explicitly specify
 the tags of all fields in a struct instead, but this is not mandatory.
 
-<details><summary>Example of a struct with a derived `Message` impl</summary>
+<details><summary>
+
+Example of a struct with a derived `Message` impl
+
+</summary>
 
 ```rust,
 use bilrost::{Enumeration, Message};
@@ -686,7 +690,11 @@ corresponding oneof implementation derived. They encode and decode as messages
 that only have up to one field, as if the type was a message that only contains
 the enum with an appropriate `#[bilrost(oneof(..))]` attribute.
 
-<details><summary>Example of `Message` derived for a `Oneof` enum</summary>
+<details><summary>
+
+Example of `Message` derived for a `Oneof` enum
+
+</summary>
 
 ```rust
 use bilrost::{Message, Oneof};
