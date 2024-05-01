@@ -1486,6 +1486,10 @@ that comprises it, and conventions for how that data is interpreted.
 
 ### Opaque format
 
+Bilrost data is encoded as zero or more key-value pairs, referred to as
+"fields". Keys are numeric and bear information about both the tag of the field
+and the opaque type of its value.
+
 Values in bilrost are encoded opaquely as strings of bytes or as non-negative
 integers not greater than the maximum value representable in an unsigned 64 bit
 integer (2^64-1). The only four scalar types supported by the encoding format
@@ -1504,7 +1508,9 @@ message is some string of zero or more bytes with a specific length.
 
 #### Fields
 
-Encoded messages are comprised of zero or more encoded fields.
+Encoded messages are comprised of zero or more encoded fields. Each field has a
+numeric "tag", a number in the range representable by an unsigned 32 bit
+integer, and some type of value.
 
 Each field is encoded as two parts: first its key, and then its value. The
 field's key is always encoded as a varint. The interpretation of the encoded
