@@ -1411,15 +1411,15 @@ Old message data will always decode to an equivalent/corresponding value, and
 those corresponding values will re-encode from the new widened struct into the
 same representation.
 
-| Change                                                                                 | Corresponding values                                                                        | Backwards compatibility breaks when...                         |
-|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|----------------------------------------------------------------|
-| `bool` --> `u8` --> `u16` --> `u32` --> `u64`, all with `general` or `varint` encoding | `true`/`false` becomes 1/0                                                                  | value is out of range of the narrower type                     |
-| `bool` --> `i8` --> `i16` --> `i32` --> `i64`, all with `general` or `varint` encoding | `true`/`false` becomes -1/0                                                                 | value is out of range of the narrower type                     |
-| `String` --> `Vec<u8>`                                                                 | string becomes its UTF-8 data                                                               | value contains invalid UTF-8                                   |
-| `T` --> `Option<T>`                                                                    | default value of `T` becomes `None`                                                         | `Some(default)` is encoded, then decoded in distinguished mode |
-| `Option<T>` --> `Vec<T>` (with `unpacked` encoding)                                    | maybe-contained value is identical                                                          | multiple values are in the `Vec`                               |
-| `[T; N]` --> `Vec<T>`                                                                  | when each array value is empty, the `Vec` will be empty instead of filled with empty values | data is a nonzero length different than that of the array      |
-| `Option<[T; N]>` --> `Vec<T>`                                                          | no change                                                                                   | data is a length different than that of the array              |
+| Change                                                                                 | Corresponding values                                                                        | Backwards compatibility breaks when...                        |
+|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| `bool` --> `u8` --> `u16` --> `u32` --> `u64`, all with `general` or `varint` encoding | `true`/`false` becomes 1/0                                                                  | value is out of range of the narrower type                    |
+| `bool` --> `i8` --> `i16` --> `i32` --> `i64`, all with `general` or `varint` encoding | `true`/`false` becomes -1/0                                                                 | value is out of range of the narrower type                    |
+| `String` --> `Vec<u8>`                                                                 | string becomes its UTF-8 data                                                               | value contains invalid UTF-8                                  |
+| `T` --> `Option<T>`                                                                    | default value of `T` becomes `None`                                                         | `Some(empty)` is encoded; it will be considered non-canonical |
+| `Option<T>` --> `Vec<T>` (with `unpacked` encoding)                                    | maybe-contained value is identical                                                          | multiple values are in the `Vec`                              |
+| `[T; N]` --> `Vec<T>`                                                                  | when each array value is empty, the `Vec` will be empty instead of filled with empty values | data is a nonzero length different than that of the array     |
+| `Option<[T; N]>` --> `Vec<T>`                                                          | no change                                                                                   | data is a length different than that of the array             |
 
 `Vec<T>` and other list- and set-like collections that contain repeated values
 can also be changed between `unpacked` and `packed` encoding, as long as the
