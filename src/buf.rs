@@ -437,7 +437,13 @@ impl ReverseBuffer {
         }
     }
 
-    /// Returns an iterator over the slices of data in this buffer, suitable for vectored writing.
+    /// Returns an iterator over the slices of data in the buffer, suitable for vectored writing.
+    ///
+    /// This can be used like so in conjunction with [`write_vectored`](
+    /// https://doc.rust-lang.org/stable/std/io/trait.Write.html#method.write_vectored) (or
+    /// [`write_all_vectored`](
+    /// https://doc.rust-lang.org/stable/std/io/trait.Write.html#method.write_all_vectored), first
+    /// collecting the slices like `b.slices().map(IoSlice::new)`.
     pub fn slices(&self) -> impl Iterator<Item = &[u8]> {
         // SAFETY: self is valid
         unsafe { to_vectorable_slices(&self.chunks, self.front) }
@@ -661,6 +667,12 @@ impl ReverseBufferReader<'_> {
     }
 
     /// Returns an iterator over the slices of data in this buffer, suitable for vectored writing.
+    ///
+    /// This can be used like so in conjunction with [`write_vectored`](
+    /// https://doc.rust-lang.org/stable/std/io/trait.Write.html#method.write_vectored) (or
+    /// [`write_all_vectored`](
+    /// https://doc.rust-lang.org/stable/std/io/trait.Write.html#method.write_all_vectored), first
+    /// collecting the slices like `b.slices().map(IoSlice::new)`.
     pub fn slices(&self) -> impl Iterator<Item = &[u8]> {
         // SAFETY: self is valid
         unsafe { to_vectorable_slices(self.chunks, self.front) }
