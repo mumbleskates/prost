@@ -1,11 +1,10 @@
-use std::{iter, mem};
+use std::iter;
 
 use bilrost::buf::ReverseBuffer;
 use bilrost::encoding::{
     const_varint, decode_varint, encode_varint, encoded_len_varint, prepend_varint, Capped,
-    TagReader, WireType,
+    TagReader,
 };
-use bilrost::DecodeError;
 use bytes::Buf;
 use criterion::{Criterion, Throughput};
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
@@ -20,10 +19,10 @@ fn benchmark_varint(criterion: &mut Criterion, name: &str, mut values: Vec<u64>)
         .cloned()
         .map(encoded_len_varint)
         .sum::<usize>() as u64;
-    let decoded_len = (values.len() * mem::size_of::<u64>()) as u64;
 
     criterion
         .benchmark_group(&name)
+        .throughput(Throughput::Bytes(encoded_len))
         .bench_function("encode", {
             let encode_values = values.clone();
             move |b| {
@@ -36,11 +35,11 @@ fn benchmark_varint(criterion: &mut Criterion, name: &str, mut values: Vec<u64>)
                     criterion::black_box(&buf);
                 })
             }
-        })
-        .throughput(Throughput::Bytes(encoded_len));
+        });
 
     criterion
         .benchmark_group(&name)
+        .throughput(Throughput::Bytes(encoded_len))
         .bench_function("prepend", {
             let encode_values = values.clone();
             move |b| {
@@ -53,11 +52,11 @@ fn benchmark_varint(criterion: &mut Criterion, name: &str, mut values: Vec<u64>)
                     criterion::black_box(&buf);
                 })
             }
-        })
-        .throughput(Throughput::Bytes(encoded_len));
+        });
 
     criterion
         .benchmark_group(&name)
+        .throughput(Throughput::Bytes(encoded_len))
         .bench_function("decode", {
             let decode_values = values.clone();
 
@@ -76,11 +75,11 @@ fn benchmark_varint(criterion: &mut Criterion, name: &str, mut values: Vec<u64>)
                     }
                 })
             }
-        })
-        .throughput(Throughput::Bytes(decoded_len));
+        });
 
     criterion
         .benchmark_group(&name)
+        .throughput(Throughput::Elements(values.len() as u64))
         .bench_function("encoded_len", move |b| {
             b.iter(|| {
                 let mut sum = 0;
@@ -89,8 +88,7 @@ fn benchmark_varint(criterion: &mut Criterion, name: &str, mut values: Vec<u64>)
                 }
                 criterion::black_box(sum);
             })
-        })
-        .throughput(Throughput::Bytes(decoded_len));
+        });
 }
 
 fn benchmark_decode_key(criterion: &mut Criterion, name: &str, mut values: Vec<u64>) {
@@ -98,11 +96,15 @@ fn benchmark_decode_key(criterion: &mut Criterion, name: &str, mut values: Vec<u
     values.shuffle(&mut StdRng::seed_from_u64(0));
     let name = format!("field/{}", name);
 
-    let decoded_len =
-        (values.len() * mem::size_of::<Result<(u32, WireType), DecodeError>>()) as u64;
+    let encoded_len = values
+        .iter()
+        .cloned()
+        .map(encoded_len_varint)
+        .sum::<usize>() as u64;
 
     criterion
         .benchmark_group(&name)
+        .throughput(Throughput::Bytes(encoded_len))
         .bench_function("decode_key", {
             let decode_values = values.clone();
 
@@ -122,8 +124,7 @@ fn benchmark_decode_key(criterion: &mut Criterion, name: &str, mut values: Vec<u
                     }
                 })
             }
-        })
-        .throughput(Throughput::Bytes(decoded_len));
+        });
 }
 
 fn assert_all_sized(
