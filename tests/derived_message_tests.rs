@@ -2145,6 +2145,11 @@ fn decoding_arrays() {
         InvalidValue,
         "FooFixed.packed",
     );
+    assert::never_decodes::<FooGeneral<Option<[i32; 2]>>>(
+        [(1, OV::packed([OV::i32(1)]))],
+        InvalidValue,
+        "FooGeneral.packed",
+    );
     // Too many values
     assert::never_decodes::<FooGeneral<[String; 2]>>(
         [(
@@ -2167,6 +2172,11 @@ fn decoding_arrays() {
         InvalidValue,
         "FooFixed.packed",
     );
+    assert::never_decodes::<FooGeneral<Option<[i32; 2]>>>(
+        [(1, OV::packed([OV::i32(3), OV::i32(4), OV::i32(5)]))],
+        InvalidValue,
+        "FooGeneral.packed",
+    );
     // Just right
     assert::decodes_distinguished(
         [(1, OV::packed([OV::str("foo"), OV::str("bar")]))],
@@ -2182,11 +2192,33 @@ fn decoding_arrays() {
             unpacked: [0, 0],
         },
     );
+    assert::decodes_non_canonically(
+        [(1, OV::packed([OV::i32(0), OV::i32(0)]))],
+        FooGeneral {
+            packed: [0i32, 0],
+            unpacked: [0, 0],
+        },
+        NotCanonical,
+    );
     assert::decodes_distinguished(
         [(1, OV::packed([OV::fixed_u64(3), OV::fixed_u64(4)]))],
         FooFixed {
             packed: [3u64, 4],
             unpacked: [0, 0],
+        },
+    );
+    assert::decodes_distinguished(
+        [(1, OV::packed([OV::i32(3), OV::i32(4)]))],
+        FooGeneral {
+            packed: Some([3i32, 4]),
+            unpacked: None,
+        },
+    );
+    assert::decodes_distinguished(
+        [(1, OV::packed([OV::i32(0), OV::i32(0)]))],
+        FooGeneral {
+            packed: Some([0i32, 0]),
+            unpacked: None,
         },
     );
 
@@ -2206,6 +2238,11 @@ fn decoding_arrays() {
         [(2, OV::fixed_u64(1))],
         InvalidValue,
         "FooFixed.unpacked",
+    );
+    assert::never_decodes::<FooGeneral<Option<[i32; 2]>>>(
+        [(2, OV::i32(1))],
+        InvalidValue,
+        "FooGeneral.unpacked",
     );
     // Too many values
     assert::never_decodes::<FooGeneral<[String; 2]>>(
@@ -2231,6 +2268,11 @@ fn decoding_arrays() {
         InvalidValue,
         "FooFixed.unpacked",
     );
+    assert::never_decodes::<FooGeneral<Option<[i32; 2]>>>(
+        [(2, OV::i32(3)), (2, OV::i32(4)), (2, OV::i32(5))],
+        InvalidValue,
+        "FooGeneral.unpacked",
+    );
     // Just right
     assert::decodes_distinguished(
         [(2, OV::str("foo")), (2, OV::str("bar"))],
@@ -2246,12 +2288,32 @@ fn decoding_arrays() {
             unpacked: [3, 4],
         },
     );
+    assert::decodes_non_canonically(
+        [(2, OV::i32(0)), (2, OV::i32(0))],
+        FooGeneral {
+            packed: [0i32, 0],
+            unpacked: [0, 0],
+        },
+        NotCanonical,
+    );
     assert::decodes_distinguished(
         [(2, OV::fixed_u64(3)), (2, OV::fixed_u64(4))],
         FooFixed {
             packed: [0u64, 0],
             unpacked: [3, 4],
         },
+    );
+    assert::decodes_distinguished(
+        [(2, OV::i32(3)), (2, OV::i32(4))],
+        FooGeneral {
+            packed: None,
+            unpacked: Some([3i32, 4])},
+    );
+    assert::decodes_distinguished(
+        [(2, OV::i32(0)), (2, OV::i32(0))],
+        FooGeneral {
+            packed: None,
+            unpacked: Some([0i32, 0])},
     );
 }
 
@@ -2854,19 +2916,12 @@ fn enumeration_decoding() {
 
     static_assertions::assert_impl_all!(Packed<Option<[HasZero; 5]>>:
         Message, DistinguishedMessage);
-    // We don't support unpacked fixed-size arrays that have an empty state because... why?
-    // TODO(widders): no really, why. this was supposed to work.
-    static_assertions::assert_not_impl_any!(Unpacked<Option<[HasZero; 5]>>:
+    static_assertions::assert_impl_all!(Unpacked<Option<[HasZero; 5]>>:
         Message, DistinguishedMessage);
-    // Currently, even optional fixed-size arrays of non-EmptyState enumerations are unsupported.
-    // Supporting this would require a NewForOverwrite impl for arrays of non-EmptyState
-    // enumerations, but there is seemingly no good way to make a general implementation of this
-    // (since EmptyState has a covering impl of fixed size arrays of impl EmptyState, and
-    // NewForOverwrite is implemented for all impl EmptyState) and the derive macro can't implement
-    // NewForOverwrite for [T; N] either because arrays are not marked as a fundamental type.
+    // TODO(widders): make this one work
     static_assertions::assert_not_impl_any!(Packed<Option<[DefaultButNoZero; 5]>>:
         Message, DistinguishedMessage);
-    static_assertions::assert_not_impl_any!(Unpacked<Option<[DefaultButNoZero; 5]>>:
+    static_assertions::assert_impl_all!(Unpacked<Option<[DefaultButNoZero; 5]>>:
         Message, DistinguishedMessage);
 
     static_assertions::assert_impl_all!(Packed<Vec<HasZero>>: Message, DistinguishedMessage);

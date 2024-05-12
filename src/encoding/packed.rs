@@ -365,7 +365,7 @@ where
             Self::decode_value(value, buf, ctx)
         } else {
             // Otherwise, try decoding it in the unpacked representation
-            unpacked::decode_array::<T, N, E>(wire_type, value, buf, ctx)
+            unpacked::decode_array_unpacked_only::<T, N, E>(wire_type, value, buf, ctx)
         }
     }
 }
@@ -393,7 +393,7 @@ where
             )
         } else {
             // Otherwise, try decoding it in the unpacked representation
-            unpacked::decode_array::<T, N, E>(wire_type, value, buf, ctx)?;
+            unpacked::decode_array_unpacked_only::<T, N, E>(wire_type, value, buf, ctx)?;
             Ok(Canonicity::NotCanonical)
         }
     }
