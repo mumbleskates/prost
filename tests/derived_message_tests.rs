@@ -2839,30 +2839,44 @@ fn enumeration_decoding() {
     assert::decodes_distinguished([(1, OV::u32(1_000_000))], Foo(None, Bigger));
 
     #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-    struct Bar<T>(
-        #[bilrost(encoding(packed))] [T; 5],
-        #[bilrost(encoding(unpacked))] [T; 5],
-    );
+    struct Packed<T>(#[bilrost(encoding(packed))] T);
+    #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Unpacked<T>(#[bilrost(encoding(unpacked))] T);
 
-    static_assertions::assert_impl_all!(Bar<HasZero>: Message, DistinguishedMessage);
+    static_assertions::assert_impl_all!(Packed<[HasZero; 5]>: Message, DistinguishedMessage);
+    static_assertions::assert_impl_all!(Unpacked<[HasZero; 5]>: Message, DistinguishedMessage);
     // Fixed-size arrays of enumeration types that don't impl EmptyState aren't supported, because
     // the array type has no empty state either.
-    static_assertions::assert_not_impl_any!(Bar<DefaultButNoZero>: Message, DistinguishedMessage);
+    static_assertions::assert_not_impl_any!(Packed<[DefaultButNoZero; 5]>:
+        Message, DistinguishedMessage);
+    static_assertions::assert_not_impl_any!(Unpacked<[DefaultButNoZero; 5]>:
+        Message, DistinguishedMessage);
 
-    #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-    struct Baz<T>(
-        #[bilrost(encoding(packed))] Option<[T; 5]>,
-        #[bilrost(encoding(unpacked))] Option<[T; 5]>,
-    );
-
-    static_assertions::assert_impl_all!(Bar<HasZero>: Message, DistinguishedMessage);
+    static_assertions::assert_impl_all!(Packed<Option<[HasZero; 5]>>:
+        Message, DistinguishedMessage);
+    // We don't support unpacked fixed-size arrays that have an empty state because... why?
+    // TODO(widders): no really, why. this was supposed to work.
+    static_assertions::assert_not_impl_any!(Unpacked<Option<[HasZero; 5]>>:
+        Message, DistinguishedMessage);
     // Currently, even optional fixed-size arrays of non-EmptyState enumerations are unsupported.
     // Supporting this would require a NewForOverwrite impl for arrays of non-EmptyState
     // enumerations, but there is seemingly no good way to make a general implementation of this
     // (since EmptyState has a covering impl of fixed size arrays of impl EmptyState, and
     // NewForOverwrite is implemented for all impl EmptyState) and the derive macro can't implement
     // NewForOverwrite for [T; N] either because arrays are not marked as a fundamental type.
-    static_assertions::assert_not_impl_any!(Bar<DefaultButNoZero>: Message, DistinguishedMessage);
+    static_assertions::assert_not_impl_any!(Packed<Option<[DefaultButNoZero; 5]>>:
+        Message, DistinguishedMessage);
+    static_assertions::assert_not_impl_any!(Unpacked<Option<[DefaultButNoZero; 5]>>:
+        Message, DistinguishedMessage);
+
+    static_assertions::assert_impl_all!(Packed<Vec<HasZero>>: Message, DistinguishedMessage);
+    static_assertions::assert_impl_all!(Unpacked<Vec<HasZero>>: Message, DistinguishedMessage);
+    // If the empty state of the collection is that it has no items, then we *can* represent a
+    // collection of values that don't implement EmptyState themselves.
+    static_assertions::assert_impl_all!(Packed<Vec<DefaultButNoZero>>:
+        Message, DistinguishedMessage);
+    static_assertions::assert_impl_all!(Unpacked<Vec<DefaultButNoZero>>:
+        Message, DistinguishedMessage);
 }
 
 #[test]
