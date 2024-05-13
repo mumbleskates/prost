@@ -2030,7 +2030,7 @@ mod test {
                 B,
                 #[bilrost(2 + 1)]
                 C,
-                #[bilrost(SomeType<T>::SOME_CONSTANT)]
+                #[bilrost(SomeType::<T>::SOME_CONSTANT)]
                 D,
             }
         ))
@@ -2042,11 +2042,11 @@ mod test {
         let output = try_enumeration(quote!(
             enum X<T> {
                 A = 1,
-                #[bilrost = 1 + 1]
+                #[bilrost = 2]
                 B,
-                #[bilrost(2 + 1)]
+                #[bilrost(3)]
                 C,
-                #[bilrost(SomeType<T>::SOME_CONSTANT)]
+                #[bilrost(SomeType::<T>::SOME_CONSTANT)]
                 D,
                 HasNoValue,
             }
