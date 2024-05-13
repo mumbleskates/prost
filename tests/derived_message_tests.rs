@@ -2307,13 +2307,15 @@ fn decoding_arrays() {
         [(2, OV::i32(3)), (2, OV::i32(4))],
         FooGeneral {
             packed: None,
-            unpacked: Some([3i32, 4])},
+            unpacked: Some([3i32, 4]),
+        },
     );
     assert::decodes_distinguished(
         [(2, OV::i32(0)), (2, OV::i32(0))],
         FooGeneral {
             packed: None,
-            unpacked: Some([0i32, 0])},
+            unpacked: Some([0i32, 0]),
+        },
     );
 }
 
