@@ -26,7 +26,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse2, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Fields, FieldsNamed,
-    FieldsUnnamed, Ident, ImplGenerics, Index, Meta, MetaList, MetaNameValue, TypeGenerics,
+    FieldsUnnamed, Ident, ImplGenerics, Index, Meta, MetaList, MetaNameValue, Pat, TypeGenerics,
     Variant, WhereClause,
 };
 
@@ -1217,11 +1217,25 @@ fn variant_attr(attrs: &Vec<Attribute>) -> Result<Option<Expr>, Error> {
     let mut result: Option<Expr> = None;
     for attr in attrs {
         if attr.meta.path().is_ident("bilrost") {
-            let expr = match &attr.meta {
-                Meta::List(MetaList { tokens, .. }) => parse2(tokens.clone())?,
-                Meta::NameValue(MetaNameValue { value, .. }) => value.clone(),
-                _ => bail!("attribute on enumeration variant should be its represented value"),
+            // attribute values for enumerations don't have to be exactly numeric literals, but they
+            // will need to be used both as a literal-equivalent u32 value and as the match pattern
+            // for the variant's corresponding value.
+            let Some(expr) = match &attr.meta {
+                Meta::List(MetaList { tokens, .. }) => parse2::<Expr>(tokens.clone()).ok(),
+                Meta::NameValue(MetaNameValue { value, .. }) => Some(value.clone()),
+                _ => None,
+            }
+            .filter(|expr| {
+                // it's a valid expression; also make sure that it parses successfully as a
+                // single-variant pattern
+                syn::parse::Parser::parse2(Pat::parse_single, expr.to_token_stream()).is_ok()
+            }) else {
+                bail!(
+                    "attribute on enumeration variant must be valid as both an expression and a \
+                    match pattern for u32"
+                );
             };
+
             set_option(
                 &mut result,
                 expr,
@@ -2026,9 +2040,9 @@ mod test {
         _ = try_enumeration(quote!(
             enum X<T> {
                 A = 1,
-                #[bilrost = 1 + 1]
+                #[bilrost = 2]
                 B,
-                #[bilrost(2 + 1)]
+                #[bilrost(3)]
                 C,
                 #[bilrost(SomeType::<T>::SOME_CONSTANT)]
                 D,
