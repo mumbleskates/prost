@@ -319,7 +319,7 @@ where
 
 impl<T, const N: usize, E> DistinguishedValueEncoder<Packed<E>> for [T; N]
 where
-    T: Eq + EmptyState + DistinguishedValueEncoder<E>,
+    T: Eq + DistinguishedValueEncoder<E>,
 {
     const CHECKS_EMPTY: bool = false;
 
