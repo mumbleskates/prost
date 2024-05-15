@@ -2950,7 +2950,7 @@ fn nonempty_enumeration_nesting() {
     use DefaultButNoZero::*;
 
     // TODO(widders): distinguished here also
-    #[derive(Debug, PartialEq, Eq, Message, /*DistinguishedMessage*/)]
+    #[derive(Debug, PartialEq, Eq, Message /*DistinguishedMessage*/)]
     struct Foo(#[bilrost(encoding(packed<packed>))] Vec<[DefaultButNoZero; 5]>);
 }
 

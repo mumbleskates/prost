@@ -20,7 +20,7 @@ pub trait EmptyState: ForOverwrite {
     /// Produces the empty state for this type.
     fn empty() -> Self
     where
-        Self: Sized
+        Self: Sized,
     {
         ForOverwrite::for_overwrite()
     }

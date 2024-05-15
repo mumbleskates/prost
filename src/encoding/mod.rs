@@ -26,8 +26,8 @@ mod value_traits;
 mod varint;
 
 pub use value_traits::{
-    Collection, DistinguishedCollection, DistinguishedMapping, EmptyState, Enumeration, Mapping,
-    ForOverwrite,
+    Collection, DistinguishedCollection, DistinguishedMapping, EmptyState, Enumeration,
+    ForOverwrite, Mapping,
 };
 
 /// Fixed-size encoder. Encodes integers in fixed-size format.
@@ -1601,11 +1601,7 @@ where
             return Err(DecodeError::new(UnexpectedlyRepeated));
         }
         check_wire_type(T::WIRE_TYPE, wire_type)?;
-        T::decode_value_distinguished::<true>(
-            value.get_or_insert_with(T::for_overwrite),
-            buf,
-            ctx,
-        )
+        T::decode_value_distinguished::<true>(value.get_or_insert_with(T::for_overwrite), buf, ctx)
     }
 }
 
@@ -2906,10 +2902,7 @@ mod test {
         );
     }
 
-    fn check_rejects_wrong_wire_type_distinguished<
-        T: ForOverwrite + DistinguishedEncoder<E>,
-        E,
-    >(
+    fn check_rejects_wrong_wire_type_distinguished<T: ForOverwrite + DistinguishedEncoder<E>, E>(
         wire_type: WireType,
     ) {
         let mut out = T::for_overwrite();
