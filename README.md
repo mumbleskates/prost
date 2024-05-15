@@ -1420,6 +1420,8 @@ same representation.
 | `Option<T>` --> `Vec<T>` (with `unpacked` encoding)                                    | maybe-contained value is identical                                                          | multiple values are in the `Vec`                              |
 | `[T; N]` --> `Vec<T>`                                                                  | when each array value is empty, the `Vec` will be empty instead of filled with empty values | data is a nonzero length different than that of the array     |
 | `Option<[T; N]>` --> `Vec<T>`                                                          | no change                                                                                   | data is a length different than that of the array             |
+| `Message` types --> with new fields added                                              | no change, new fields are empty                                                             | new fields are not empty; it will be considered non-canonical |
+| `Enumeration` types --> with new variants added                                        | no change                                                                                   | value is a new variant                                        |
 
 `Vec<T>` and other list- and set-like collections that contain repeated values
 can also be changed between `unpacked` and `packed` encoding, as long as the

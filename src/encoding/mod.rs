@@ -27,7 +27,7 @@ mod varint;
 
 pub use value_traits::{
     Collection, DistinguishedCollection, DistinguishedMapping, EmptyState, Enumeration, Mapping,
-    NewForOverwrite,
+    ForOverwrite,
 };
 
 /// Fixed-size encoder. Encodes integers in fixed-size format.
@@ -1532,7 +1532,7 @@ where
 /// type for each is not stored.
 impl<T, E> Encoder<E> for Option<T>
 where
-    T: NewForOverwrite + ValueEncoder<E>,
+    T: ForOverwrite + ValueEncoder<E>,
 {
     #[inline]
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &Self, buf: &mut B, tw: &mut TagWriter) {
@@ -1575,7 +1575,7 @@ where
         }
         <T as FieldEncoder<E>>::decode_field(
             wire_type,
-            value.get_or_insert_with(T::new_for_overwrite),
+            value.get_or_insert_with(T::for_overwrite),
             buf,
             ctx,
         )
@@ -1587,7 +1587,7 @@ where
 impl<T, E> DistinguishedEncoder<E> for Option<T>
 where
     Self: Encoder<E>,
-    T: DistinguishedValueEncoder<E> + NewForOverwrite + Eq,
+    T: DistinguishedValueEncoder<E> + ForOverwrite + Eq,
 {
     #[inline]
     fn decode_distinguished<B: Buf + ?Sized>(
@@ -1602,7 +1602,7 @@ where
         }
         check_wire_type(T::WIRE_TYPE, wire_type)?;
         T::decode_value_distinguished::<true>(
-            value.get_or_insert_with(T::new_for_overwrite),
+            value.get_or_insert_with(T::for_overwrite),
             buf,
             ctx,
         )
@@ -2191,7 +2191,7 @@ mod test {
                     wire_type: WireType,
                 ) -> TestCaseResult
                 where
-                    T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
+                    T: Debug + ForOverwrite + PartialEq + $encoder_trait<E>,
                 {
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
@@ -2264,7 +2264,7 @@ mod test {
 
                         check_legal_remaining(tag, wire_type, buf.remaining())?;
 
-                        let mut roundtrip_value = T::new_for_overwrite();
+                        let mut roundtrip_value = T::for_overwrite();
                         <T as $encoder_trait<E>>::$decode(
                             wire_type,
                             false,
@@ -2293,7 +2293,7 @@ mod test {
                     wire_type: WireType,
                 ) -> TestCaseResult
                 where
-                    T: Debug + NewForOverwrite + PartialEq + $encoder_trait<E>,
+                    T: Debug + ForOverwrite + PartialEq + $encoder_trait<E>,
                 {
                     let expected_len = <T as Encoder<E>>::encoded_len(
                         tag,
@@ -2346,7 +2346,7 @@ mod test {
                         let mut buf = Capped::new(&mut slice);
                         let mut tr = TagReader::new();
 
-                        let mut roundtrip_value = T::new_for_overwrite();
+                        let mut roundtrip_value = T::for_overwrite();
                         let (decoded_tag, decoded_wire_type) = tr
                             .decode_key(buf.lend())
                             .map_err(|error| TestCaseError::fail(error.to_string()))?;
@@ -2417,7 +2417,7 @@ mod test {
         let mut capped = Capped::new(&mut buf);
         let (tag, wire_type) = TagReader::new().decode_key(capped.lend()).unwrap();
         assert_eq!(tag, 123);
-        let mut decoded = T::new_for_overwrite();
+        let mut decoded = T::for_overwrite();
         assert_eq!(
             DistinguishedEncoder::<E>::decode_distinguished(
                 wire_type,
@@ -2892,8 +2892,8 @@ mod test {
         );
     }
 
-    fn check_rejects_wrong_wire_type<T: NewForOverwrite + Encoder<E>, E>(wire_type: WireType) {
-        let mut out = T::new_for_overwrite();
+    fn check_rejects_wrong_wire_type<T: ForOverwrite + Encoder<E>, E>(wire_type: WireType) {
+        let mut out = T::for_overwrite();
         assert_eq!(
             <T as Encoder<E>>::decode(
                 wire_type,
@@ -2907,12 +2907,12 @@ mod test {
     }
 
     fn check_rejects_wrong_wire_type_distinguished<
-        T: NewForOverwrite + DistinguishedEncoder<E>,
+        T: ForOverwrite + DistinguishedEncoder<E>,
         E,
     >(
         wire_type: WireType,
     ) {
-        let mut out = T::new_for_overwrite();
+        let mut out = T::for_overwrite();
         assert_eq!(
             <T as DistinguishedEncoder<E>>::decode_distinguished(
                 wire_type,

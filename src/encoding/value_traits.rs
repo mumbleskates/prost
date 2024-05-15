@@ -15,11 +15,15 @@ use crate::{Canonicity, DecodeErrorKind};
 ///
 /// This type must be implemented for every type encodable as a directly included field in a bilrost
 /// message.
-pub trait EmptyState {
+pub trait EmptyState: ForOverwrite {
+    #[inline(always)]
     /// Produces the empty state for this type.
     fn empty() -> Self
     where
-        Self: Sized;
+        Self: Sized
+    {
+        ForOverwrite::for_overwrite()
+    }
 
     /// Returns true iff this instance is in the empty state.
     fn is_empty(&self) -> bool;
@@ -31,20 +35,33 @@ pub trait EmptyState {
 /// than a value that is definitely empty. This is implemented for types that can be present
 /// optionally (in `Option` or `Vec`, for instance) but don't have an "empty" value, such as
 /// enumerations without a zero value.
-pub trait NewForOverwrite {
+pub trait ForOverwrite {
     /// Produces a new `Self` value to be overwritten.
-    fn new_for_overwrite() -> Self;
+    fn for_overwrite() -> Self
+    where
+        Self: Sized;
 }
 
-impl<T> NewForOverwrite for T
-where
-    T: EmptyState,
-{
-    #[inline]
-    fn new_for_overwrite() -> Self {
-        Self::empty()
-    }
+/// Implements `ForOverwrite` in terms of `Default`.
+macro_rules! for_overwrite_via_default {
+    (
+        $ty:ty
+        $(, with generics ($($generics:tt)*))?
+        $(, with where clause ($($where_clause:tt)*))?
+    ) => {
+        impl<$($($generics)*)?> $crate::encoding::ForOverwrite for $ty
+        where
+            Self: ::core::default::Default,
+            $($($where_clause)*)?
+        {
+            #[inline]
+            fn for_overwrite() -> Self {
+                ::core::default::Default::default()
+            }
+        }
+    };
 }
+pub(crate) use for_overwrite_via_default;
 
 /// Implements `EmptyState` in terms of `Default`.
 macro_rules! empty_state_via_default {
@@ -53,28 +70,31 @@ macro_rules! empty_state_via_default {
         $(, with generics ($($generics:tt)*))?
         $(, with where clause ($($where_clause:tt)*))?
     ) => {
+        for_overwrite_via_default!(
+            $ty
+            $(, with generics ($($generics)*))?
+            $(, with where clause ($($where_clause)*))?
+        );
+
         impl<$($($generics)*)?> $crate::encoding::EmptyState for $ty
         where
-            Self: Default + PartialEq,
+            Self: ::core::default::Default + ::core::cmp::PartialEq,
             $($($where_clause)*)?
         {
             #[inline]
-            fn empty() -> Self {
-                Self::default()
-            }
-
-            #[inline]
             fn is_empty(&self) -> bool {
-                *self == Self::default()
+                *self == ::core::default::Default::default()
             }
 
             #[inline]
             fn clear(&mut self) {
-                *self = Self::empty();
+                *self = $crate::encoding::EmptyState::empty();
             }
         }
     };
 }
+pub(crate) use empty_state_via_default;
+
 empty_state_via_default!(bool);
 empty_state_via_default!(u8);
 empty_state_via_default!(u16);
@@ -89,12 +109,14 @@ empty_state_via_default!(isize);
 
 macro_rules! empty_state_for_float {
     ($ty:ty) => {
-        impl EmptyState for $ty {
+        impl ForOverwrite for $ty {
             #[inline]
-            fn empty() -> Self {
+            fn for_overwrite() -> Self {
                 0.0
             }
+        }
 
+        impl EmptyState for $ty {
             #[inline]
             fn is_empty(&self) -> bool {
                 // Preserve -0.0. This is actually the original motivation for `EmptyState`.
@@ -111,12 +133,9 @@ macro_rules! empty_state_for_float {
 empty_state_for_float!(f32);
 empty_state_for_float!(f64);
 
-impl EmptyState for String {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(String);
 
+impl EmptyState for String {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -128,12 +147,9 @@ impl EmptyState for String {
     }
 }
 
-impl EmptyState for Cow<'_, str> {
-    #[inline]
-    fn empty() -> Self {
-        Self::default()
-    }
+for_overwrite_via_default!(Cow<'_, str>);
 
+impl EmptyState for Cow<'_, str> {
     #[inline]
     fn is_empty(&self) -> bool {
         str::is_empty(self)
@@ -152,12 +168,9 @@ impl EmptyState for Cow<'_, str> {
     }
 }
 
-impl EmptyState for bytes::Bytes {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(bytes::Bytes);
 
+impl EmptyState for bytes::Bytes {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -169,11 +182,9 @@ impl EmptyState for bytes::Bytes {
     }
 }
 
-impl EmptyState for Blob {
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(Blob);
 
+impl EmptyState for Blob {
     fn is_empty(&self) -> bool {
         Vec::is_empty(self)
     }
@@ -184,12 +195,10 @@ impl EmptyState for Blob {
 }
 
 #[cfg(feature = "bytestring")]
-impl EmptyState for bytestring::ByteString {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(bytestring::ByteString);
 
+#[cfg(feature = "bytestring")]
+impl EmptyState for bytestring::ByteString {
     #[inline]
     fn is_empty(&self) -> bool {
         str::is_empty(self)
@@ -201,15 +210,14 @@ impl EmptyState for bytestring::ByteString {
     }
 }
 
-impl<T> EmptyState for Option<T> {
+impl<T> ForOverwrite for Option<T> {
     #[inline]
-    fn empty() -> Self
-    where
-        Self: Sized,
-    {
+    fn for_overwrite() -> Self {
         None
     }
+}
 
+impl<T> EmptyState for Option<T> {
     #[inline]
     fn is_empty(&self) -> bool {
         self.is_none()
@@ -218,6 +226,16 @@ impl<T> EmptyState for Option<T> {
     #[inline]
     fn clear(&mut self) {
         *self = None;
+    }
+}
+
+impl<T> ForOverwrite for Box<T>
+where
+    T: ForOverwrite,
+{
+    #[inline(always)]
+    fn for_overwrite() -> Self {
+        Box::new(T::for_overwrite())
     }
 }
 
@@ -238,6 +256,16 @@ where
     #[inline]
     fn clear(&mut self) {
         self.as_mut().clear()
+    }
+}
+
+impl<T, const N: usize> ForOverwrite for [T; N]
+where
+    T: ForOverwrite,
+{
+    #[inline]
+    fn for_overwrite() -> Self {
+        core::array::from_fn(|_| T::for_overwrite())
     }
 }
 
@@ -266,9 +294,11 @@ where
     }
 }
 
-impl EmptyState for () {
-    fn empty() -> Self {}
+impl ForOverwrite for () {
+    fn for_overwrite() -> Self {}
+}
 
+impl EmptyState for () {
     fn is_empty(&self) -> bool {
         true
     }
@@ -276,8 +306,17 @@ impl EmptyState for () {
     fn clear(&mut self) {}
 }
 
-macro_rules! empty_state_for_tuple {
+macro_rules! impls_for_tuple {
     (($($letters:ident),*), ($($numbers:tt),*),) => {
+        impl<$($letters,)*> ForOverwrite for ($($letters,)*)
+        where
+            $($letters: ForOverwrite,)*
+        {
+            #[inline]
+            fn for_overwrite() -> Self {
+                ($($letters::for_overwrite(),)*)
+            }
+        }
 
         impl<$($letters,)*> EmptyState for ($($letters,)*)
         where
@@ -300,24 +339,24 @@ macro_rules! empty_state_for_tuple {
         }
     };
 }
-empty_state_for_tuple!((A), (0),);
-empty_state_for_tuple!((A, B), (0, 1),);
-empty_state_for_tuple!((A, B, C), (0, 1, 2),);
-empty_state_for_tuple!((A, B, C, D), (0, 1, 2, 3),);
-empty_state_for_tuple!((A, B, C, D, E), (0, 1, 2, 3, 4),);
-empty_state_for_tuple!((A, B, C, D, E, F), (0, 1, 2, 3, 4, 5),);
-empty_state_for_tuple!((A, B, C, D, E, F, G), (0, 1, 2, 3, 4, 5, 6),);
-empty_state_for_tuple!((A, B, C, D, E, F, G, H), (0, 1, 2, 3, 4, 5, 6, 7),);
-empty_state_for_tuple!((A, B, C, D, E, F, G, H, I), (0, 1, 2, 3, 4, 5, 6, 7, 8),);
-empty_state_for_tuple!(
+impls_for_tuple!((A), (0),);
+impls_for_tuple!((A, B), (0, 1),);
+impls_for_tuple!((A, B, C), (0, 1, 2),);
+impls_for_tuple!((A, B, C, D), (0, 1, 2, 3),);
+impls_for_tuple!((A, B, C, D, E), (0, 1, 2, 3, 4),);
+impls_for_tuple!((A, B, C, D, E, F), (0, 1, 2, 3, 4, 5),);
+impls_for_tuple!((A, B, C, D, E, F, G), (0, 1, 2, 3, 4, 5, 6),);
+impls_for_tuple!((A, B, C, D, E, F, G, H), (0, 1, 2, 3, 4, 5, 6, 7),);
+impls_for_tuple!((A, B, C, D, E, F, G, H, I), (0, 1, 2, 3, 4, 5, 6, 7, 8),);
+impls_for_tuple!(
     (A, B, C, D, E, F, G, H, I, J),
     (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
 );
-empty_state_for_tuple!(
+impls_for_tuple!(
     (A, B, C, D, E, F, G, H, I, J, K),
     (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
 );
-empty_state_for_tuple!(
+impls_for_tuple!(
     (A, B, C, D, E, F, G, H, I, J, K, L),
     (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11),
 );
@@ -401,12 +440,9 @@ pub trait DistinguishedMapping: Mapping {
     ) -> Result<Canonicity, DecodeErrorKind>;
 }
 
-impl<T> EmptyState for Vec<T> {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(Vec<T>, with generics (T));
 
+impl<T> EmptyState for Vec<T> {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -453,15 +489,12 @@ impl<T> Collection for Vec<T> {
 
 impl<T> TriviallyDistinguishedCollection for Vec<T> {}
 
+for_overwrite_via_default!(Cow<'_, [T]>, with generics (T), with where clause (T: Clone));
+
 impl<T> EmptyState for Cow<'_, [T]>
 where
     T: Clone,
 {
-    #[inline]
-    fn empty() -> Self {
-        Self::default()
-    }
-
     #[inline]
     fn is_empty(&self) -> bool {
         <[T]>::is_empty(self)
@@ -519,15 +552,10 @@ where
 impl<T> TriviallyDistinguishedCollection for Cow<'_, [T]> where T: Clone {}
 
 #[cfg(feature = "arrayvec")]
-impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
-    #[inline]
-    fn empty() -> Self
-    where
-        Self: Sized,
-    {
-        Self::new()
-    }
+for_overwrite_via_default!(arrayvec::ArrayVec<T, N>, with generics (T, const N: usize));
 
+#[cfg(feature = "arrayvec")]
+impl<T, const N: usize> EmptyState for arrayvec::ArrayVec<T, N> {
     #[inline]
     fn is_empty(&self) -> bool {
         arrayvec::ArrayVec::is_empty(self)
@@ -577,12 +605,12 @@ impl<T, const N: usize> Collection for arrayvec::ArrayVec<T, N> {
 impl<T, const N: usize> TriviallyDistinguishedCollection for arrayvec::ArrayVec<T, N> {}
 
 #[cfg(feature = "smallvec")]
-impl<T, A: smallvec::Array<Item = T>> EmptyState for smallvec::SmallVec<A> {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(smallvec::SmallVec<A>,
+    with generics(A),
+    with where clause (A: smallvec::Array));
 
+#[cfg(feature = "smallvec")]
+impl<A: smallvec::Array> EmptyState for smallvec::SmallVec<A> {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -632,12 +660,10 @@ impl<T, A: smallvec::Array<Item = T>> Collection for smallvec::SmallVec<A> {
 impl<A: smallvec::Array> TriviallyDistinguishedCollection for smallvec::SmallVec<A> {}
 
 #[cfg(feature = "thin-vec")]
-impl<T> EmptyState for thin_vec::ThinVec<T> {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(thin_vec::ThinVec<T>, with generics (T));
 
+#[cfg(feature = "thin-vec")]
+impl<T> EmptyState for thin_vec::ThinVec<T> {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -687,15 +713,12 @@ impl<T> Collection for thin_vec::ThinVec<T> {
 impl<T> TriviallyDistinguishedCollection for thin_vec::ThinVec<T> {}
 
 #[cfg(feature = "tinyvec")]
-impl<T, A: tinyvec::Array<Item = T>> EmptyState for tinyvec::ArrayVec<A> {
-    #[inline]
-    fn empty() -> Self
-    where
-        Self: Sized,
-    {
-        Self::new()
-    }
+for_overwrite_via_default!(tinyvec::ArrayVec<A>,
+    with generics (A),
+    with where clause (A: tinyvec::Array));
 
+#[cfg(feature = "tinyvec")]
+impl<A: tinyvec::Array> EmptyState for tinyvec::ArrayVec<A> {
     #[inline]
     fn is_empty(&self) -> bool {
         tinyvec::ArrayVec::is_empty(self)
@@ -747,12 +770,12 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::ArrayVec<A> {
 impl<A: tinyvec::Array> TriviallyDistinguishedCollection for tinyvec::ArrayVec<A> {}
 
 #[cfg(feature = "tinyvec")]
-impl<A: tinyvec::Array> EmptyState for tinyvec::TinyVec<A> {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(tinyvec::TinyVec<A>,
+    with generics (A),
+    with where clause (A: tinyvec::Array));
 
+#[cfg(feature = "tinyvec")]
+impl<A: tinyvec::Array> EmptyState for tinyvec::TinyVec<A> {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -801,12 +824,9 @@ impl<T, A: tinyvec::Array<Item = T>> Collection for tinyvec::TinyVec<A> {
 #[cfg(feature = "tinyvec")]
 impl<A: tinyvec::Array> TriviallyDistinguishedCollection for tinyvec::TinyVec<A> {}
 
-impl<T> EmptyState for BTreeSet<T> {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(BTreeSet<T>, with generics(T));
 
+impl<T> EmptyState for BTreeSet<T> {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -881,15 +901,15 @@ where
 }
 
 #[cfg(feature = "std")]
+for_overwrite_via_default!(HashSet<T, S>,
+    with generics (T, S),
+    with where clause (S: Default + core::hash::BuildHasher));
+
+#[cfg(feature = "std")]
 impl<T, S> EmptyState for HashSet<T, S>
 where
     S: Default + core::hash::BuildHasher,
 {
-    #[inline]
-    fn empty() -> Self {
-        HashSet::with_hasher(Default::default())
-    }
-
     #[inline]
     fn is_empty(&self) -> bool {
         HashSet::is_empty(self)
@@ -942,15 +962,15 @@ where
 }
 
 #[cfg(feature = "hashbrown")]
+for_overwrite_via_default!(hashbrown::HashSet<T, S>,
+    with generics (T, S),
+    with where clause (S: Default + core::hash::BuildHasher));
+
+#[cfg(feature = "hashbrown")]
 impl<T, S> EmptyState for hashbrown::HashSet<T, S>
 where
     S: Default + core::hash::BuildHasher,
 {
-    #[inline]
-    fn empty() -> Self {
-        hashbrown::HashSet::with_hasher(Default::default())
-    }
-
     #[inline]
     fn is_empty(&self) -> bool {
         hashbrown::HashSet::is_empty(self)
@@ -1002,12 +1022,9 @@ where
     }
 }
 
-impl<K, V> EmptyState for BTreeMap<K, V> {
-    #[inline]
-    fn empty() -> Self {
-        Self::new()
-    }
+for_overwrite_via_default!(BTreeMap<K, V>, with generics (K, V));
 
+impl<K, V> EmptyState for BTreeMap<K, V> {
     #[inline]
     fn is_empty(&self) -> bool {
         Self::is_empty(self)
@@ -1091,15 +1108,15 @@ where
 }
 
 #[cfg(feature = "std")]
+for_overwrite_via_default!(HashMap<K, V, S>,
+    with generics (K, V, S),
+    with where clause (S: Default + core::hash::BuildHasher));
+
+#[cfg(feature = "std")]
 impl<K, V, S> EmptyState for HashMap<K, V, S>
 where
     S: Default + core::hash::BuildHasher,
 {
-    #[inline]
-    fn empty() -> Self {
-        HashMap::with_hasher(Default::default())
-    }
-
     #[inline]
     fn is_empty(&self) -> bool {
         HashMap::is_empty(self)
@@ -1157,15 +1174,15 @@ where
 }
 
 #[cfg(feature = "hashbrown")]
+for_overwrite_via_default!(hashbrown::HashMap<K, V, S>,
+    with generics (K, V, S),
+    with where clause (S: Default + core::hash::BuildHasher));
+
+#[cfg(feature = "hashbrown")]
 impl<K, V, S> EmptyState for hashbrown::HashMap<K, V, S>
 where
     S: Default + core::hash::BuildHasher,
 {
-    #[inline]
-    fn empty() -> Self {
-        hashbrown::HashMap::with_hasher(Default::default())
-    }
-
     #[inline]
     fn is_empty(&self) -> bool {
         hashbrown::HashMap::is_empty(self)

@@ -4,7 +4,7 @@ use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{DistinguishedMapping, Mapping};
 use crate::encoding::{
     encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Canonicity,
-    Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, NewForOverwrite,
+    Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, ForOverwrite,
     ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeErrorKind::Truncated;
@@ -52,8 +52,8 @@ where
 impl<M, K, V, KE, VE> ValueEncoder<Map<KE, VE>> for M
 where
     M: Mapping<Key = K, Value = V>,
-    K: NewForOverwrite + ValueEncoder<KE>,
-    V: NewForOverwrite + ValueEncoder<VE>,
+    K: ForOverwrite + ValueEncoder<KE>,
+    V: ForOverwrite + ValueEncoder<VE>,
 {
     fn encode_value<B: BufMut + ?Sized>(value: &M, buf: &mut B) {
         encode_varint(map_encoded_length::<M, KE, VE>(value) as u64, buf);
@@ -95,8 +95,8 @@ where
             return Err(DecodeError::new(Truncated));
         }
         while capped.has_remaining()? {
-            let mut new_key = K::new_for_overwrite();
-            let mut new_val = V::new_for_overwrite();
+            let mut new_key = K::for_overwrite();
+            let mut new_val = V::for_overwrite();
             ValueEncoder::<KE>::decode_value(&mut new_key, capped.lend(), ctx.clone())?;
             ValueEncoder::<VE>::decode_value(&mut new_val, capped.lend(), ctx.clone())?;
             value.insert(new_key, new_val)?;
@@ -108,8 +108,8 @@ where
 impl<M, K, V, KE, VE> DistinguishedValueEncoder<Map<KE, VE>> for M
 where
     M: DistinguishedMapping<Key = K, Value = V> + Eq,
-    K: NewForOverwrite + Eq + DistinguishedValueEncoder<KE>,
-    V: NewForOverwrite + Eq + DistinguishedValueEncoder<VE>,
+    K: ForOverwrite + Eq + DistinguishedValueEncoder<KE>,
+    V: ForOverwrite + Eq + DistinguishedValueEncoder<VE>,
 {
     const CHECKS_EMPTY: bool = false;
 
@@ -132,8 +132,8 @@ where
         }
         let mut canon = Canonicity::Canonical;
         while capped.has_remaining()? {
-            let mut new_key = K::new_for_overwrite();
-            let mut new_val = V::new_for_overwrite();
+            let mut new_key = K::for_overwrite();
+            let mut new_val = V::for_overwrite();
             canon.update(
                 DistinguishedValueEncoder::<KE>::decode_value_distinguished::<true>(
                     &mut new_key,

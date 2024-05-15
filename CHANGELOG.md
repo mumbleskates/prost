@@ -8,6 +8,10 @@
 
 ### Cleanups
 
+* Renamed the `NewForOverwrite` value trait to `ForOverwrite`.
+* Restructured so that `ForOverwrite` is now a supertrait of `EmptyState`, and
+  every existing implementation of `EmptyState::empty` defers to `ForOverwrite`.
+
 ## v0.1007.0
 
 ### Breaking changes

@@ -2,7 +2,7 @@ use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{
-    Collection, DistinguishedCollection, EmptyState, NewForOverwrite,
+    Collection, DistinguishedCollection, EmptyState, ForOverwrite,
 };
 use crate::encoding::{
     encode_varint, encoded_len_varint, prepend_varint, unpacked, Canonicity, Capped, DecodeContext,
@@ -21,7 +21,7 @@ impl<T, E> Wiretyped<Packed<E>> for T {
 impl<C, T, E> ValueEncoder<Packed<E>> for C
 where
     C: Collection<Item = T>,
-    T: NewForOverwrite + ValueEncoder<E>,
+    T: ForOverwrite + ValueEncoder<E>,
 {
     #[inline]
     fn encode_value<B: BufMut + ?Sized>(value: &C, buf: &mut B) {
@@ -67,7 +67,7 @@ where
             return Err(DecodeError::new(Truncated));
         }
         while capped.has_remaining()? {
-            let mut new_val = T::new_for_overwrite();
+            let mut new_val = T::for_overwrite();
             ValueEncoder::<E>::decode_value(&mut new_val, capped.lend(), ctx.clone())?;
             value.insert(new_val)?;
         }
@@ -78,7 +78,7 @@ where
 impl<C, T, E> DistinguishedValueEncoder<Packed<E>> for C
 where
     C: DistinguishedCollection<Item = T> + Eq,
-    T: NewForOverwrite + Eq + DistinguishedValueEncoder<E>,
+    T: ForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
     const CHECKS_EMPTY: bool = false;
 
@@ -99,7 +99,7 @@ where
         }
         let mut canon = Canonicity::Canonical;
         while capped.has_remaining()? {
-            let mut new_val = T::new_for_overwrite();
+            let mut new_val = T::for_overwrite();
             canon.update(
                 DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
                     &mut new_val,
@@ -117,7 +117,7 @@ where
 impl<C, T, E> Encoder<Packed<E>> for C
 where
     C: Collection<Item = T> + ValueEncoder<Packed<E>>,
-    T: NewForOverwrite + ValueEncoder<E>,
+    T: ForOverwrite + ValueEncoder<E>,
 {
     #[inline]
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &C, buf: &mut B, tw: &mut TagWriter) {
@@ -171,7 +171,7 @@ where
 impl<C, T, E> DistinguishedEncoder<Packed<E>> for C
 where
     C: DistinguishedCollection<Item = T> + DistinguishedValueEncoder<Packed<E>>,
-    T: NewForOverwrite + Eq + ValueEncoder<E>,
+    T: ForOverwrite + Eq + ValueEncoder<E>,
 {
     #[inline]
     fn decode_distinguished<B: Buf + ?Sized>(
@@ -270,52 +270,67 @@ where
     }
 }
 
+/// Decodes a packed array value in distinguished mode without checking whether the result is empty
+/// or not.
+#[inline]
+fn decode_array_value_distinguished<T, const N: usize, E>(
+    value: &mut [T; N],
+    mut buf: Capped<impl Buf + ?Sized>,
+    ctx: DecodeContext,
+) -> Result<Canonicity, DecodeError>
+where
+    T: Eq + DistinguishedValueEncoder<E>,
+{
+    let mut capped = buf.take_length_delimited()?;
+    // MSRV: this could be .is_some_and(..)
+    if matches!(
+        <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
+        Some(fixed_size) if capped.remaining_before_cap() != fixed_size * N
+    ) {
+        // We know the exact size of a valid value and this isn't it.
+        return Err(DecodeError::new(InvalidValue));
+    }
+
+    let mut canon = Canonicity::Canonical;
+    for dest in value.iter_mut() {
+        // If the value's size was already checked, we don't need to check again
+        if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
+            // Not enough values
+            return Err(DecodeError::new(InvalidValue));
+        }
+        canon.update(
+            // Empty values are allowed because they are nested
+            DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
+                dest,
+                capped.lend(),
+                ctx.clone(),
+            )?,
+        );
+    }
+
+    // If the value's size was already checked, we don't need to check again
+    if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && capped.has_remaining()? {
+        // Too many values or trailing data
+        Err(DecodeError::new(InvalidValue))
+    } else {
+        Ok(canon)
+    }
+}
+
 impl<T, const N: usize, E> DistinguishedValueEncoder<Packed<E>> for [T; N]
 where
-    T: DistinguishedValueEncoder<E>,
+    T: Eq + EmptyState + DistinguishedValueEncoder<E>,
 {
     const CHECKS_EMPTY: bool = false;
 
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut [T; N],
-        mut buf: Capped<impl Buf + ?Sized>,
+        buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        let mut capped = buf.take_length_delimited()?;
-        // MSRV: this could be .is_some_and(..)
-        if matches!(
-            <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
-            Some(fixed_size) if capped.remaining_before_cap() != fixed_size * N
-        ) {
-            // We know the exact size of a valid value and this isn't it.
-            return Err(DecodeError::new(InvalidValue));
-        }
-
-        let mut canon = Canonicity::Canonical;
-        for dest in value.iter_mut() {
-            // If the value's size was already checked, we don't need to check again
-            if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
-                // Not enough values
-                return Err(DecodeError::new(InvalidValue));
-            }
-            canon.update(
-                // Empty values are allowed because they are nested
-                DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
-                    dest,
-                    capped.lend(),
-                    ctx.clone(),
-                )?,
-            );
-        }
-
-        // If the value's size was already checked, we don't need to check again
-        if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && capped.has_remaining()? {
-            // Too many values or trailing data
-            Err(DecodeError::new(InvalidValue))
-        } else {
-            Ok(canon)
-        }
+        let canon = decode_array_value_distinguished::<T, N, E>(value, buf, ctx)?;
+        Ok(canon)
     }
 }
 

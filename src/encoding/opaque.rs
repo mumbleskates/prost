@@ -10,7 +10,7 @@ use bytes::{Buf, BufMut};
 use crate::buf::ReverseBuf;
 use crate::encoding::{
     encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState,
-    RuntimeTagMeasurer, TagMeasurer, TagRevWriter, TagWriter, WireType,
+    ForOverwrite, RuntimeTagMeasurer, TagMeasurer, TagRevWriter, TagWriter, WireType,
 };
 use crate::iter::FlatAdapter;
 use crate::DecodeErrorKind::Truncated;
@@ -329,12 +329,13 @@ impl<'a> FromIterator<(u32, OpaqueValue<'a>)> for OpaqueMessage<'a> {
     }
 }
 
-impl EmptyState for OpaqueMessage<'_> {
-    #[inline]
-    fn empty() -> Self {
+impl ForOverwrite for OpaqueMessage<'_> {
+    fn for_overwrite() -> Self {
         Self::new()
     }
+}
 
+impl EmptyState for OpaqueMessage<'_> {
     #[inline]
     fn is_empty(&self) -> bool {
         self.0.is_empty()

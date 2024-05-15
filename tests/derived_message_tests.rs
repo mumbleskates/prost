@@ -2920,9 +2920,11 @@ fn enumeration_decoding() {
         Message, DistinguishedMessage);
     static_assertions::assert_impl_all!(Unpacked<Option<[HasZero; 5]>>:
         Message, DistinguishedMessage);
-    // TODO(widders): make this one work
+    // TODO(widders): get distinguished working too
+    static_assertions::assert_impl_all!(Packed<Option<[DefaultButNoZero; 5]>>:
+        Message);
     static_assertions::assert_not_impl_any!(Packed<Option<[DefaultButNoZero; 5]>>:
-        Message, DistinguishedMessage);
+        DistinguishedMessage);
     static_assertions::assert_impl_all!(Unpacked<Option<[DefaultButNoZero; 5]>>:
         Message, DistinguishedMessage);
 
@@ -2934,6 +2936,22 @@ fn enumeration_decoding() {
         Message, DistinguishedMessage);
     static_assertions::assert_impl_all!(Unpacked<Vec<DefaultButNoZero>>:
         Message, DistinguishedMessage);
+}
+
+#[test]
+fn nonempty_enumeration_nesting() {
+    #[derive(Clone, Debug, Default, PartialEq, Eq, Enumeration)]
+    enum DefaultButNoZero {
+        #[default]
+        Five = 5,
+        Ten = 10,
+        Fifteen = 15,
+    }
+    use DefaultButNoZero::*;
+
+    // TODO(widders): distinguished here also
+    #[derive(Debug, PartialEq, Eq, Message, /*DistinguishedMessage*/)]
+    struct Foo(#[bilrost(encoding(packed<packed>))] Vec<[DefaultButNoZero; 5]>);
 }
 
 #[test]

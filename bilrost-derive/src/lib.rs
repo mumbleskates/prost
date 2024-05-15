@@ -715,15 +715,18 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
             }
         }
 
-        impl #impl_generics ::bilrost::encoding::EmptyState
+        impl #impl_generics ::bilrost::encoding::ForOverwrite
         for #ident #ty_generics #where_clause {
-            fn empty() -> Self {
+            fn for_overwrite() -> Self {
                 Self {
-                    #(#field_idents: ::bilrost::encoding::EmptyState::empty(),)*
+                    #(#field_idents: ::bilrost::encoding::ForOverwrite::for_overwrite(),)*
                     #initialize_ignored
                 }
             }
+        }
 
+        impl #impl_generics ::bilrost::encoding::EmptyState
+        for #ident #ty_generics #where_clause {
             fn is_empty(&self) -> bool {
                 true #(&& ::bilrost::encoding::EmptyState::is_empty(&self.#field_idents))*
             }
@@ -1056,17 +1059,20 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
         .map(|(variant, value)| quote!(#value => #ident::#variant));
 
     // When the type has a zero-valued variant, we implement `EmptyState`. When it doesn't, we
-    // need an alternate way to create a value to be overwritten, so we impl `NewForOverwrite`
-    // directly.
+    // need at least some way to create a value to be overwritten, so we impl `ForOverwrite`
+    // directly with an arbitrary variant.
     let creation_impl = if let Some(zero) = &zero_variant_ident {
         quote! {
-            impl #impl_generics ::bilrost::encoding::EmptyState
+            impl #impl_generics ::bilrost::encoding::ForOverwrite
             for #ident #ty_generics #where_clause {
                 #[inline]
-                fn empty() -> Self {
+                fn for_overwrite() -> Self {
                     Self::#zero
                 }
+            }
 
+            impl #impl_generics ::bilrost::encoding::EmptyState
+            for #ident #ty_generics #where_clause {
                 #[inline]
                 fn is_empty(&self) -> bool {
                     matches!(self, Self::#zero)
@@ -1081,9 +1087,9 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
     } else {
         let (first_variant, _) = variants.first().unwrap();
         quote! {
-            impl #impl_generics ::bilrost::encoding::NewForOverwrite
+            impl #impl_generics ::bilrost::encoding::ForOverwrite
             for #ident #ty_generics #where_clause {
-                fn new_for_overwrite() -> Self {
+                fn for_overwrite() -> Self {
                     Self::#first_variant
                 }
             }
@@ -1406,13 +1412,16 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         encoded_len.push(quote!(#ident::#empty_ident => 0));
 
         empty_state_impl = Some(quote! {
-            impl #impl_generics ::bilrost::encoding::EmptyState
+            impl #impl_generics ::bilrost::encoding::ForOverwrite
             for #ident #ty_generics #where_clause {
                 #[inline]
-                fn empty() -> Self {
+                fn for_overwrite() -> Self {
                     #ident::#empty_ident
                 }
+            }
 
+            impl #impl_generics ::bilrost::encoding::EmptyState
+            for #ident #ty_generics #where_clause {
                 #[inline]
                 fn is_empty(&self) -> bool {
                     matches!(self, #ident::#empty_ident)
@@ -1566,7 +1575,7 @@ impl ToTokens for DecoderForOneof<'_> {
             #tag => match value {
                 #match_empty_variant => {
                     let mut new_value =
-                        ::bilrost::encoding::NewForOverwrite::new_for_overwrite();
+                        ::bilrost::encoding::ForOverwrite::for_overwrite();
                     let new_value_ref = &mut new_value;
                     #decode.map(|res| {
                         *value = #some(#ident::#variant_ident #with_new_value);

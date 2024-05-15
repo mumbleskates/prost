@@ -4,7 +4,7 @@ use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{
-    Collection, DistinguishedCollection, EmptyState, NewForOverwrite,
+    Collection, DistinguishedCollection, EmptyState, ForOverwrite,
 };
 use crate::encoding::{
     check_wire_type, peek_repeated_field, Capped, DecodeContext, DistinguishedEncoder,
@@ -27,12 +27,12 @@ pub(crate) fn decode<T, E>(
 ) -> Result<(), DecodeError>
 where
     T: Collection,
-    T::Item: NewForOverwrite + ValueEncoder<E>,
+    T::Item: ForOverwrite + ValueEncoder<E>,
 {
     check_wire_type(<T::Item as Wiretyped<E>>::WIRE_TYPE, wire_type)?;
     loop {
         // Decode one item
-        let mut new_item = T::Item::new_for_overwrite();
+        let mut new_item = T::Item::for_overwrite();
         ValueEncoder::<E>::decode_value(&mut new_item, buf.lend(), ctx.clone())?;
         collection.insert(new_item)?;
 
@@ -115,13 +115,13 @@ pub(crate) fn decode_distinguished<T, E>(
 ) -> Result<Canonicity, DecodeError>
 where
     T: DistinguishedCollection,
-    T::Item: NewForOverwrite + Eq + DistinguishedValueEncoder<E>,
+    T::Item: ForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
     check_wire_type(<T::Item as Wiretyped<E>>::WIRE_TYPE, wire_type)?;
     let mut canon = Canonicity::Canonical;
     loop {
         // Decode one item
-        let mut new_item = T::Item::new_for_overwrite();
+        let mut new_item = T::Item::for_overwrite();
         // Decoded field values are nested within the collection; empty values are OK
         canon.update(
             DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
@@ -214,7 +214,7 @@ where
 impl<C, T, E> Encoder<Unpacked<E>> for C
 where
     C: Collection<Item = T>,
-    T: NewForOverwrite + ValueEncoder<E>,
+    T: ForOverwrite + ValueEncoder<E>,
 {
     #[inline]
     fn encode<B: BufMut + ?Sized>(tag: u32, value: &C, buf: &mut B, tw: &mut TagWriter) {
@@ -274,7 +274,7 @@ where
 impl<C, T, E> DistinguishedEncoder<Unpacked<E>> for C
 where
     Self: DistinguishedCollection<Item = T> + ValueEncoder<Packed<E>> + Encoder<Unpacked<E>>,
-    T: NewForOverwrite + Eq + DistinguishedValueEncoder<E>,
+    T: ForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
     #[inline]
     fn decode_distinguished<B: Buf + ?Sized>(
@@ -384,7 +384,7 @@ where
 /// Unpacked encodes arrays as repeated fields if any of the values are non-empty.
 impl<T, const N: usize, E> Encoder<Unpacked<E>> for Option<[T; N]>
 where
-    T: NewForOverwrite + ValueEncoder<E>,
+    T: ForOverwrite + ValueEncoder<E>,
 {
     #[inline]
     fn encode<B: BufMut + ?Sized>(
@@ -437,7 +437,7 @@ where
         }
         decode_array_either_repr(
             wire_type,
-            value.get_or_insert_with(|| array::from_fn(|_| T::new_for_overwrite())),
+            value.get_or_insert_with(|| array::from_fn(|_| T::for_overwrite())),
             buf,
             ctx,
         )
@@ -448,7 +448,7 @@ where
 /// canonical.
 impl<T, const N: usize, E> DistinguishedEncoder<Unpacked<E>> for Option<[T; N]>
 where
-    T: Eq + NewForOverwrite + DistinguishedValueEncoder<E> + ValueEncoder<E>,
+    T: Eq + ForOverwrite + DistinguishedValueEncoder<E> + ValueEncoder<E>,
 {
     #[inline]
     fn decode_distinguished<B: Buf + ?Sized>(
@@ -463,7 +463,7 @@ where
         }
         decode_distinguished_array_either_repr(
             wire_type,
-            value.get_or_insert_with(|| array::from_fn(|_| T::new_for_overwrite())),
+            value.get_or_insert_with(|| array::from_fn(|_| T::for_overwrite())),
             buf,
             ctx,
         )
