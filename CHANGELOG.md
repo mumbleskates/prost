@@ -2,9 +2,20 @@
 
 ### Breaking changes
 
+* The (unstable) internal encoding traits continue to evolve, now making checks
+  for whether a value decoded in distinguished mode was empty optional at the
+  value-decoder trait level. It is not always faster to check emptiness while
+  decoding a value, and letting the distinguished value decoder implementation
+  specify whether it takes responsibility for checking emptiness enables new
+  type support like better nesting of never-empty types as described below.
+
 ### New features
 
 ### Fixes
+
+* Enumerations that do not have a defined zero value (and therefore do not have
+  an "empty" state) can now be nested in fixed-size arrays as long as they are
+  nested again, such as in an `Option` or `Vec`.
 
 ### Cleanups
 
