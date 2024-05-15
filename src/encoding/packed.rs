@@ -393,11 +393,15 @@ where
             let canon = DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
                 value, buf, ctx,
             )?;
-            Ok(if /* !<[T; N]>::CHECKS_EMPTY && /* it never checks */ */ value.is_empty() {
-                Canonicity::NotCanonical
-            } else {
-                canon
-            })
+            Ok(
+                if
+                /* !<[T; N]>::CHECKS_EMPTY && /* it never checks */ */
+                value.is_empty() {
+                    Canonicity::NotCanonical
+                } else {
+                    canon
+                },
+            )
         } else {
             // Otherwise, try decoding it in the unpacked representation
             unpacked::decode_array_unpacked_only::<T, N, E>(wire_type, value, buf, ctx)?;
