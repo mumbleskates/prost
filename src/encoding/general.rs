@@ -173,6 +173,8 @@ impl ValueEncoder<General> for String {
 }
 
 impl DistinguishedValueEncoder<General> for String {
+    const CHECKS_EMPTY: bool = false;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut String,
@@ -180,11 +182,7 @@ impl DistinguishedValueEncoder<General> for String {
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         Self::decode_value(value, buf, ctx)?;
-        Ok(if !ALLOW_EMPTY && value.is_empty() {
-            Canonicity::NotCanonical
-        } else {
-            Canonicity::Canonical
-        })
+        Ok(Canonicity::Canonical)
     }
 }
 
@@ -229,6 +227,8 @@ impl ValueEncoder<General> for Cow<'_, str> {
 }
 
 impl DistinguishedValueEncoder<General> for Cow<'_, str> {
+    const CHECKS_EMPTY: bool = <String as DistinguishedValueEncoder<General>>::CHECKS_EMPTY;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Cow<str>,
@@ -291,6 +291,8 @@ impl ValueEncoder<General> for bytestring::ByteString {
 
 #[cfg(feature = "bytestring")]
 impl DistinguishedValueEncoder<General> for bytestring::ByteString {
+    const CHECKS_EMPTY: bool = false;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut bytestring::ByteString,
@@ -298,11 +300,7 @@ impl DistinguishedValueEncoder<General> for bytestring::ByteString {
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         Self::decode_value(value, buf, ctx)?;
-        Ok(if !ALLOW_EMPTY && value.is_empty() {
-            Canonicity::NotCanonical
-        } else {
-            Canonicity::Canonical
-        })
+        Ok(Canonicity::Canonical)
     }
 }
 
@@ -311,7 +309,8 @@ impl DistinguishedValueEncoder<General> for bytestring::ByteString {
 mod bytestring_string {
     use super::{General, String};
     use crate::encoding::test::check_type_test;
-    check_type_test!(General, expedient, from String, into bytestring::ByteString, WireType::LengthDelimited);
+    check_type_test!(General, expedient, from String,
+        into bytestring::ByteString, WireType::LengthDelimited);
     check_type_test!(General, distinguished, from String, into bytestring::ByteString,
         WireType::LengthDelimited);
 }
@@ -352,6 +351,8 @@ impl ValueEncoder<General> for Bytes {
 }
 
 impl DistinguishedValueEncoder<General> for Bytes {
+    const CHECKS_EMPTY: bool = false;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Bytes,
@@ -359,11 +360,7 @@ impl DistinguishedValueEncoder<General> for Bytes {
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         Self::decode_value(value, buf, ctx)?;
-        Ok(if !ALLOW_EMPTY && value.is_empty() {
-            Canonicity::NotCanonical
-        } else {
-            Canonicity::Canonical
-        })
+        Ok(Canonicity::Canonical)
     }
 }
 
@@ -407,6 +404,8 @@ impl ValueEncoder<General> for Blob {
 }
 
 impl DistinguishedValueEncoder<General> for Blob {
+    const CHECKS_EMPTY: bool = <Vec<u8> as DistinguishedValueEncoder<PlainBytes>>::CHECKS_EMPTY;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Blob,
@@ -474,6 +473,8 @@ impl<T> DistinguishedValueEncoder<General> for T
 where
     T: RawDistinguishedMessage + Eq,
 {
+    const CHECKS_EMPTY: bool = true; // Empty messages are always zero-length
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut T,

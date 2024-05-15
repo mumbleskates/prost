@@ -80,6 +80,8 @@ where
     C: DistinguishedCollection<Item = T> + Eq,
     T: NewForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
+    const CHECKS_EMPTY: bool = false;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut C,
@@ -87,9 +89,6 @@ where
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut capped = buf.take_length_delimited()?;
-        if !ALLOW_EMPTY && capped.remaining_before_cap() == 0 {
-            return Ok(Canonicity::NotCanonical);
-        }
         // MSRV: this could be .is_some_and(..)
         if matches!(
             <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
@@ -188,9 +187,14 @@ where
         if wire_type == WireType::LengthDelimited {
             // We've encountered the expected length-delimited type: decode it in packed format.
             // Set ALLOW_EMPTY to false: empty collections are not canonical
-            DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
+            let canon = DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
                 value, buf, ctx,
-            )
+            )?;
+            Ok(if !C::CHECKS_EMPTY && value.is_empty() {
+                Canonicity::NotCanonical
+            } else {
+                canon
+            })
         } else {
             // Otherwise, try decoding it in the unpacked representation
             unpacked::decode::<C, E>(wire_type, value, buf, ctx)?;
@@ -268,8 +272,10 @@ where
 
 impl<T, const N: usize, E> DistinguishedValueEncoder<Packed<E>> for [T; N]
 where
-    T: Eq + EmptyState + DistinguishedValueEncoder<E>,
+    T: DistinguishedValueEncoder<E>,
 {
+    const CHECKS_EMPTY: bool = false;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut [T; N],
@@ -308,11 +314,7 @@ where
             // Too many values or trailing data
             Err(DecodeError::new(InvalidValue))
         } else {
-            Ok(if !ALLOW_EMPTY && EmptyState::is_empty(value) {
-                Canonicity::NotCanonical
-            } else {
-                canon
-            })
+            Ok(canon)
         }
     }
 }
@@ -388,9 +390,14 @@ where
         if wire_type == WireType::LengthDelimited {
             // We've encountered the expected length-delimited type: decode it in packed format.
             // Set ALLOW_EMPTY to false: empty collections are not canonical
-            DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
+            let canon = DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
                 value, buf, ctx,
-            )
+            )?;
+            Ok(if /* !<[T; N]>::CHECKS_EMPTY && /* it never checks */ */ value.is_empty() {
+                Canonicity::NotCanonical
+            } else {
+                canon
+            })
         } else {
             // Otherwise, try decoding it in the unpacked representation
             unpacked::decode_array_unpacked_only::<T, N, E>(wire_type, value, buf, ctx)?;

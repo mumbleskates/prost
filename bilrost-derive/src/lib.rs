@@ -1090,16 +1090,6 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
         }
     };
 
-    let check_empty = if zero_variant_ident.is_some() {
-        quote! {
-            if !ALLOW_EMPTY && ::bilrost::encoding::EmptyState::is_empty(value) {
-                return ::core::result::Result::Ok(::bilrost::Canonicity::NotCanonical);
-            }
-        }
-    } else {
-        quote!()
-    };
-
     let expanded = quote! {
         impl #impl_generics ::bilrost::Enumeration for #ident #ty_generics #where_clause {
             #[inline]
@@ -1181,6 +1171,8 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
         impl #impl_generics
         ::bilrost::encoding::DistinguishedValueEncoder<::bilrost::encoding::General>
         for #ident #ty_generics #where_clause {
+            const CHECKS_EMPTY: bool = false;
+
             #[inline]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut Self,
@@ -1192,7 +1184,6 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
                     buf,
                     ctx,
                 )?;
-                #check_empty
                 ::core::result::Result::Ok(::bilrost::Canonicity::Canonical)
             }
         }

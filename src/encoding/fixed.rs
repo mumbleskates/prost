@@ -3,7 +3,6 @@ use alloc::vec::Vec;
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::EmptyState;
 use crate::encoding::{
     delegate_encoding, encoder_where_value_encoder, Canonicity, Capped, DecodeContext,
     DistinguishedValueEncoder, Encoder, ValueEncoder, WireType, Wiretyped,
@@ -75,6 +74,8 @@ macro_rules! fixed_width_int {
         fixed_width_common!($ty, $wire_type, $put, $prepend, $get);
 
         impl DistinguishedValueEncoder<Fixed> for $ty {
+            const CHECKS_EMPTY: bool = false;
+
             #[inline(always)]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $ty,
@@ -82,11 +83,7 @@ macro_rules! fixed_width_int {
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError> {
                 ValueEncoder::<Fixed>::decode_value(value, buf, ctx)?;
-                Ok(if !ALLOW_EMPTY && value.is_empty() {
-                    Canonicity::NotCanonical
-                } else {
-                    Canonicity::Canonical
-                })
+                Ok(Canonicity::Canonical)
             }
         }
 
@@ -171,6 +168,8 @@ macro_rules! fixed_width_array {
         }
 
         impl DistinguishedValueEncoder<Fixed> for [u8; $N] {
+            const CHECKS_EMPTY: bool = false;
+
             #[inline(always)]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut [u8; $N],
@@ -178,11 +177,7 @@ macro_rules! fixed_width_array {
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError> {
                 ValueEncoder::<Fixed>::decode_value(value, buf, ctx)?;
-                Ok(if !ALLOW_EMPTY && value.is_empty() {
-                    Canonicity::NotCanonical
-                } else {
-                    Canonicity::Canonical
-                })
+                Ok(Canonicity::Canonical)
             }
         }
 

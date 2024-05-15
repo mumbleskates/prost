@@ -111,15 +111,14 @@ where
     K: NewForOverwrite + Eq + DistinguishedValueEncoder<KE>,
     V: NewForOverwrite + Eq + DistinguishedValueEncoder<VE>,
 {
+    const CHECKS_EMPTY: bool = false;
+
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut M,
         mut buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut capped = buf.take_length_delimited()?;
-        if !ALLOW_EMPTY && capped.remaining_before_cap() == 0 {
-            return Ok(Canonicity::NotCanonical);
-        }
         // MSRV: this could be .is_some_and(..)
         if matches!(
             combined_fixed_size(

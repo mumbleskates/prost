@@ -127,6 +127,8 @@ macro_rules! impl_tuple {
             Self: Eq,
             $($letters: Eq + EmptyState + DistinguishedEncoder<$encodings>,)*
         {
+            const CHECKS_EMPTY: bool = true; // Message types are always zero-length when empty
+
             #[inline]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut Self,

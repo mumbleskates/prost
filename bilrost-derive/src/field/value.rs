@@ -290,7 +290,7 @@ impl Field {
         if self.in_oneof {
             vec![
                 quote!(#ty: ::bilrost::encoding::DistinguishedValueEncoder<#encoder>),
-                quote!(#ty: ::bilrost::encoding::NewForOverwrite),
+                quote!(#ty: ::bilrost::encoding::EmptyState),
                 quote!(#ty: ::core::cmp::Eq),
             ]
         } else {

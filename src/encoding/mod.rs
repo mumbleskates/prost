@@ -1411,6 +1411,13 @@ pub trait DistinguishedValueEncoder<E>: Wiretyped<E>
 where
     Self: Eq,
 {
+    /// Indicates whether the `ALLOW_EMPTY` argument in decode_value_distinguished has any effect.
+    /// Some decoder implementations can more cheaply determine whether they were empty during
+    /// decoding, and will return `NotCanonical` if `ALLOW_EMPTY` was false; for these
+    /// implementations, `CHECKS_EMPTY` will be set to `true`. When `CHECKS_EMPTY` is `false`, the
+    /// caller may need to invoke `EmptyState::is_empty` after the call.
+    const CHECKS_EMPTY: bool;
+
     /// Decodes a field assuming the encoder's wire type directly from the buffer, also performing
     /// any additional validation required to guarantee that the value would be re-encoded into the
     /// exact same bytes.
@@ -1496,7 +1503,7 @@ pub trait DistinguishedFieldEncoder<E> {
 
 impl<T, E> DistinguishedFieldEncoder<E> for T
 where
-    Self: DistinguishedValueEncoder<E> + Eq,
+    Self: DistinguishedValueEncoder<E> + EmptyState,
 {
     #[inline]
     fn decode_field_distinguished<const ALLOW_EMPTY: bool>(
@@ -1506,7 +1513,12 @@ where
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         check_wire_type(Self::WIRE_TYPE, wire_type)?;
-        Self::decode_value_distinguished::<ALLOW_EMPTY>(value, buf, ctx)
+        let canon = Self::decode_value_distinguished::<ALLOW_EMPTY>(value, buf, ctx)?;
+        Ok(if !T::CHECKS_EMPTY && !ALLOW_EMPTY && value.is_empty() {
+            Canonicity::NotCanonical
+        } else {
+            canon
+        })
     }
 }
 
@@ -1588,9 +1600,8 @@ where
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
         }
-        // Decoding an option, empty values are meaningful
-        <T as DistinguishedFieldEncoder<E>>::decode_field_distinguished::<true>(
-            wire_type,
+        check_wire_type(T::WIRE_TYPE, wire_type)?;
+        T::decode_value_distinguished::<true>(
             value.get_or_insert_with(T::new_for_overwrite),
             buf,
             ctx,
@@ -1960,6 +1971,9 @@ macro_rules! delegate_value_encoding {
             $($($expedient_where)+ ,)?
             $($($distinguished_where)+ ,)?
         {
+            const CHECKS_EMPTY: bool =
+                <$value_ty as $crate::encoding::DistinguishedValueEncoder<$to_ty>>::CHECKS_EMPTY;
+
             #[inline(always)]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $value_ty,
@@ -2447,6 +2461,8 @@ mod test {
         present_empty_not_canon::<Vec<String>, Packed<General>>();
         present_empty_not_canon::<Vec<Blob>, Packed<General>>();
         present_empty_not_canon::<Vec<Vec<u8>>, Packed<PlainBytes>>();
+        present_empty_not_canon::<[u32; 5], Packed<General>>();
+        present_empty_not_canon::<[(u32, String); 5], Packed<General>>();
 
         present_empty_not_canon::<BTreeSet<u32>, Packed<General>>();
         present_empty_not_canon::<BTreeSet<u64>, Packed<General>>();

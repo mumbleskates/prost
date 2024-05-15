@@ -8,7 +8,7 @@ use bytes::{Buf, BufMut};
 use crate::encoding::{
     const_varint, delegate_encoding, encode_varint, encoded_len_varint,
     encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
-    DistinguishedValueEncoder, EmptyState, Encoder, ValueEncoder, WireType, Wiretyped,
+    DistinguishedValueEncoder, Encoder, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeErrorKind::InvalidValue;
 
@@ -57,17 +57,15 @@ impl ValueEncoder<PlainBytes> for Vec<u8> {
 }
 
 impl DistinguishedValueEncoder<PlainBytes> for Vec<u8> {
+    const CHECKS_EMPTY: bool = false;
+
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Vec<u8>,
         buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
-        Ok(if !ALLOW_EMPTY && value.is_empty() {
-            Canonicity::NotCanonical
-        } else {
-            Canonicity::Canonical
-        })
+        Ok(Canonicity::Canonical)
     }
 }
 
@@ -122,6 +120,8 @@ impl ValueEncoder<PlainBytes> for Cow<'_, [u8]> {
 }
 
 impl DistinguishedValueEncoder<PlainBytes> for Cow<'_, [u8]> {
+    const CHECKS_EMPTY: bool = <Vec<u8> as DistinguishedValueEncoder<PlainBytes>>::CHECKS_EMPTY;
+
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Cow<[u8]>,
@@ -195,17 +195,15 @@ impl<const N: usize> ValueEncoder<PlainBytes> for [u8; N] {
 }
 
 impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
+    const CHECKS_EMPTY: bool = false;
+
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut [u8; N],
         buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
-        Ok(if !ALLOW_EMPTY && value.is_empty() {
-            Canonicity::NotCanonical
-        } else {
-            Canonicity::Canonical
-        })
+        Ok(Canonicity::Canonical)
     }
 }
 
@@ -306,17 +304,15 @@ macro_rules! plain_bytes_vec_impl {
         }
 
         impl$(<$($generics)*>)? DistinguishedValueEncoder<PlainBytes> for $ty {
+            const CHECKS_EMPTY: bool = false;
+
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $ty,
                 buf: Capped<impl Buf + ?Sized>,
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError> {
                 ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
-                Ok(if !ALLOW_EMPTY && value.is_empty() {
-                    Canonicity::NotCanonical
-                } else {
-                    Canonicity::Canonical
-                })
+                Ok(Canonicity::Canonical)
             }
         }
     }
