@@ -1411,11 +1411,11 @@ pub trait DistinguishedValueEncoder<E>: Wiretyped<E>
 where
     Self: Eq,
 {
-    /// Indicates whether the `ALLOW_EMPTY` argument in decode_value_distinguished has any effect.
+    /// Indicates whether the `ALLOW_EMPTY` argument in `decode_value_distinguished` has any effect.
     /// Some decoder implementations can more cheaply determine whether they were empty during
     /// decoding, and will return `NotCanonical` if `ALLOW_EMPTY` was false; for these
-    /// implementations, `CHECKS_EMPTY` will be set to `true`. When `CHECKS_EMPTY` is `false`, the
-    /// caller may need to invoke `EmptyState::is_empty` after the call.
+    /// implementations, `CHECKS_EMPTY` should be set to `true`. When `CHECKS_EMPTY` is `false`, the
+    /// caller must invoke `EmptyState::is_empty` after the call if empty states are non-canonical.
     const CHECKS_EMPTY: bool;
 
     /// Decodes a field assuming the encoder's wire type directly from the buffer, also performing
