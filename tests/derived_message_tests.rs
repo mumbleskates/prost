@@ -2948,6 +2948,26 @@ fn nonempty_enumeration_nesting() {
 
     #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
     struct Foo(#[bilrost(encoding(packed<packed>))] Vec<[DefaultButNoZero; 5]>);
+
+    assert::decodes_distinguished(
+        [(
+            0,
+            OV::packed([
+                OV::packed([
+                    OV::u32(5),
+                    OV::u32(10),
+                    OV::u32(15),
+                    OV::u32(10),
+                    OV::u32(5),
+                ]),
+                OV::packed([OV::u32(5), OV::u32(5), OV::u32(5), OV::u32(5), OV::u32(5)]),
+            ]),
+        )],
+        Foo(vec![
+            [Five, Ten, Fifteen, Ten, Five],
+            [Five, Five, Five, Five, Five],
+        ]),
+    );
 }
 
 #[test]
