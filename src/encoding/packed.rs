@@ -270,67 +270,52 @@ where
     }
 }
 
-/// Decodes a packed array value in distinguished mode without checking whether the result is empty
-/// or not.
-#[inline]
-fn decode_array_value_distinguished<T, const N: usize, E>(
-    value: &mut [T; N],
-    mut buf: Capped<impl Buf + ?Sized>,
-    ctx: DecodeContext,
-) -> Result<Canonicity, DecodeError>
-where
-    T: Eq + DistinguishedValueEncoder<E>,
-{
-    let mut capped = buf.take_length_delimited()?;
-    // MSRV: this could be .is_some_and(..)
-    if matches!(
-        <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
-        Some(fixed_size) if capped.remaining_before_cap() != fixed_size * N
-    ) {
-        // We know the exact size of a valid value and this isn't it.
-        return Err(DecodeError::new(InvalidValue));
-    }
-
-    let mut canon = Canonicity::Canonical;
-    for dest in value.iter_mut() {
-        // If the value's size was already checked, we don't need to check again
-        if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
-            // Not enough values
-            return Err(DecodeError::new(InvalidValue));
-        }
-        canon.update(
-            // Empty values are allowed because they are nested
-            DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
-                dest,
-                capped.lend(),
-                ctx.clone(),
-            )?,
-        );
-    }
-
-    // If the value's size was already checked, we don't need to check again
-    if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && capped.has_remaining()? {
-        // Too many values or trailing data
-        Err(DecodeError::new(InvalidValue))
-    } else {
-        Ok(canon)
-    }
-}
-
 impl<T, const N: usize, E> DistinguishedValueEncoder<Packed<E>> for [T; N]
 where
-    T: Eq + DistinguishedValueEncoder<E>,
+    T: DistinguishedValueEncoder<E>,
 {
     const CHECKS_EMPTY: bool = false;
 
     #[inline]
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut [T; N],
-        buf: Capped<impl Buf + ?Sized>,
+        mut buf: Capped<impl Buf + ?Sized>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        let canon = decode_array_value_distinguished::<T, N, E>(value, buf, ctx)?;
-        Ok(canon)
+        let mut capped = buf.take_length_delimited()?;
+        // MSRV: this could be .is_some_and(..)
+        if matches!(
+            <T as Wiretyped<E>>::WIRE_TYPE.fixed_size(),
+            Some(fixed_size) if capped.remaining_before_cap() != fixed_size * N
+        ) {
+            // We know the exact size of a valid value and this isn't it.
+            return Err(DecodeError::new(InvalidValue));
+        }
+
+        let mut canon = Canonicity::Canonical;
+        for dest in value.iter_mut() {
+            // If the value's size was already checked, we don't need to check again
+            if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
+                // Not enough values
+                return Err(DecodeError::new(InvalidValue));
+            }
+            canon.update(
+                // Empty values are allowed because they are nested
+                DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
+                    dest,
+                    capped.lend(),
+                    ctx.clone(),
+                )?,
+            );
+        }
+
+        // If the value's size was already checked, we don't need to check again
+        if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && capped.has_remaining()? {
+            // Too many values or trailing data
+            Err(DecodeError::new(InvalidValue))
+        } else {
+            Ok(canon)
+        }
     }
 }
 
