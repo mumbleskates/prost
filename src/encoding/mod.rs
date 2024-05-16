@@ -1505,7 +1505,7 @@ impl<T, E> DistinguishedFieldEncoder<E> for T
 where
     Self: DistinguishedValueEncoder<E> + EmptyState,
 {
-    #[inline]
+    #[inline(always)]
     fn decode_field_distinguished<const ALLOW_EMPTY: bool>(
         wire_type: WireType,
         value: &mut T,
