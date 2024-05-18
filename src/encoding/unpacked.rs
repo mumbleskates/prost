@@ -1,5 +1,3 @@
-use core::array;
-
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
@@ -437,7 +435,7 @@ where
         }
         decode_array_either_repr(
             wire_type,
-            value.get_or_insert_with(|| array::from_fn(|_| T::for_overwrite())),
+            value.get_or_insert_with(ForOverwrite::for_overwrite),
             buf,
             ctx,
         )
@@ -463,7 +461,7 @@ where
         }
         decode_distinguished_array_either_repr(
             wire_type,
-            value.get_or_insert_with(|| array::from_fn(|_| T::for_overwrite())),
+            value.get_or_insert_with(ForOverwrite::for_overwrite),
             buf,
             ctx,
         )
