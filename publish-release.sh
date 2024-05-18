@@ -25,8 +25,5 @@ for CRATE in "${CRATES[@]}"; do
 
   cargo publish
 
-  echo "Sleeping 5 seconds...for the release to be visible"
-  sleep 5
-
   popd
 done
