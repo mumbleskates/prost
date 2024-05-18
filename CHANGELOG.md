@@ -9,8 +9,6 @@
   specify whether it takes responsibility for checking emptiness enables new
   type support like better nesting of never-empty types as described below.
 
-### New features
-
 ### Fixes
 
 * Enumerations that do not have a defined zero value (and therefore do not have
