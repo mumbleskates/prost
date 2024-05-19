@@ -4,6 +4,13 @@
 
 ### New features
 
+* Added `encode_contiguous` and `encode_length_delimited_contiguous` APIs to the
+  `Message` trait which use the `encode_fast` prepend-encoding code path but
+  measure the size first to always produce a contiguous buffer.
+* Added `into_vec(self)` to `ReverseBuffer` complete with a non-copying
+  optimization when the buffer is full and contiguous, such as when it is
+  produced by `Message::encode_contiguous`.
+
 ### Fixes
 
 ### Cleanups

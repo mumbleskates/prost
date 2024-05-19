@@ -926,6 +926,12 @@ of a normal Bilrost varint.)
   encodes the message into a new vec or bytes and returns that container. This
   is not always as efficient as `encode_fast`, but always produces an encoding
   that is contiguous in memory.
+* `encode_contiguous` and `encode_length_delimited_contiguous` work exactly the
+  same as `encode_fast`, but pre-measure first and reserve the exact size needed
+  to store the finished encoding. This guarantees that the resulting buffer will
+  be contiguous even if its size is not known ahead of time, and allows direct
+  conversion from the resulting `ReverseBuffer` into a `Vec` (see
+  `ReverseBuffer::into_vec`).
 * `encode`, `encode_length_delimited`: encodes the message into a
   `&mut bytes::BufMut`, appending it after any data that is already there.
 * `prepend`: encodes the message into a `&mut bilrost::buf::ReverseBuf`,
@@ -1061,9 +1067,15 @@ through that trait.
 `ReverseBuffer` allocates lazily, grows exponentially, and stores its data in
 multiple allocations of increasing size. It is often the most efficient type
 to encode a `bilrost` message into, and it can be efficiently read and copied
-out as a `bytes::Buf` the same as the other options (`Vec` and `Bytes`). Both
-classes also provide a `slices` method which allows iterating over the slices in
-the buffer for vectored writing.
+out as a `bytes::Buf` the same as the other options (`Vec` and `Bytes`).
+
+`ReverseBuffer` can be converted directly into a `Vec<u8>` with the `into_vec`
+method; this method will copy the content if necessary, although if possible (if
+the buffer is one fully-initialized slice) the buffer will be directly converted
+without copying the data.
+
+Both `ReverseBuffer` and `ReverseBufReader` also provide a `slices` method which
+allows iterating over the slices in the buffer for vectored writing.
 
 ### Encoding and decoding example
 

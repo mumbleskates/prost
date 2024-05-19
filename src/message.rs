@@ -8,7 +8,7 @@ use crate::encoding::{
     encode_varint, encoded_len_varint, prepend_varint, Canonicity, Capped, DecodeContext,
     EmptyState, TagReader, WireType,
 };
-use crate::{DecodeError, EncodeError};
+use crate::{length_delimiter_len, DecodeError, EncodeError};
 
 /// Merges fields from the given buffer, to its cap, into the given `TaggedDecodable` value.
 /// Implemented as a private standalone method to discourage "merging" as a usage pattern.
@@ -126,8 +126,16 @@ pub trait Message: EmptyState {
     /// Encodes the message to a `ReverseBuffer`.
     fn encode_fast(&self) -> ReverseBuffer;
 
-    /// Encodes the message witha length-delimiter to a `ReverseBuffer`.
+    /// Encodes the message with a length-delimiter to a `ReverseBuffer`.
     fn encode_length_delimited_fast(&self) -> ReverseBuffer;
+
+    /// Encodes the message to a new `RevserseBuffer` which will have exactly the required capacity
+    /// in one contiguous slice.
+    fn encode_contiguous(&self) -> ReverseBuffer;
+
+    /// Encodes the message with a length-delimiter to a new `RevserseBuffer` which will have
+    /// exactly the required capacity in one contiguous slice.
+    fn encode_length_delimited_contiguous(&self) -> ReverseBuffer;
 
     /// Encodes the message to a `Bytes` buffer.
     fn encode_dyn(&self, buf: &mut dyn BufMut) -> Result<(), EncodeError>;
@@ -353,6 +361,24 @@ where
     fn encode_length_delimited_fast(&self) -> ReverseBuffer {
         let mut buf = self.encode_fast();
         prepend_varint(buf.remaining() as u64, &mut buf);
+        buf
+    }
+
+    fn encode_contiguous(&self) -> ReverseBuffer {
+        let mut buf = ReverseBuffer::with_capacity(self.encoded_len());
+        self.raw_prepend(&mut buf);
+        debug_assert!(buf.contiguous().is_some());
+        debug_assert!(buf.capacity() == buf.len());
+        buf
+    }
+
+    fn encode_length_delimited_contiguous(&self) -> ReverseBuffer {
+        let len = self.encoded_len();
+        let mut buf = ReverseBuffer::with_capacity(len + length_delimiter_len(len));
+        self.raw_prepend(&mut buf);
+        prepend_varint(len as u64, &mut buf);
+        debug_assert!(buf.contiguous().is_some());
+        debug_assert!(buf.capacity() == buf.len());
         buf
     }
 

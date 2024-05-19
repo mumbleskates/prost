@@ -265,6 +265,20 @@ impl ReverseBuffer {
         }
     }
 
+    /// Converts this buffer into a single Vec. If this buffer is contiguous and has no spare
+    /// capacity, the conversion will be performed without copying data.
+    pub fn into_vec(mut self) -> Vec<u8> {
+        if self.chunks.len() == 1 && self.front == 0 {
+            // SAFETY: the whole buffer is initialized.
+            let whole_buffer: Box<[u8]> = unsafe { transmute(self.chunks.pop().unwrap()) };
+            // CORRECTNESS: the whole buffer is only one chunk.
+            return whole_buffer.to_vec();
+        }
+        let mut res = Vec::with_capacity(self.len());
+        bytes::BufMut::put(&mut res, self);
+        res
+    }
+
     /// Ensures that the buffer will, upon its next allocation, reserve at least enough space to fit
     /// this many more bytes than are currently in the buffer.
     #[inline(always)]
