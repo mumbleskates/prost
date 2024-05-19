@@ -172,6 +172,7 @@ mod assert {
             encoded, prepend_round_trip,
             "distinguished encoding does not round trip with prepend",
         );
+        assert_eq!(encoded, into.encode_contiguous().into_vec());
     }
 
     pub(super) fn decodes_non_canonically<'a, M>(
@@ -269,6 +270,7 @@ mod assert {
         let mut prepend_encoded = Vec::new();
         prepend_encoded.put(prepended);
         assert_eq!(forward_encoded, prepend_encoded);
+        assert_eq!(forward_encoded, value.encode_contiguous().into_vec());
     }
 
     pub(super) fn is_invalid<M>(value: impl AsRef<[u8]>, err: DecodeErrorKind, err_path: &str)
