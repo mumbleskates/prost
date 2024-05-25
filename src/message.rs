@@ -272,7 +272,7 @@ pub trait DistinguishedMessage: Message {
 //  runtime.
 impl<T> Message for T
 where
-    T: RawMessage,
+    T: RawMessage + Sized,
 {
     fn encode<B: BufMut + ?Sized>(&self, buf: &mut B) -> Result<(), EncodeError> {
         let required = self.encoded_len();
@@ -285,10 +285,7 @@ where
         Ok(())
     }
 
-    fn prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B)
-    where
-        Self: Sized,
-    {
+    fn prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B) {
         self.raw_prepend(buf);
     }
 
@@ -623,8 +620,12 @@ mod tests {
         safe.encoded_len();
         safe.encode_dyn(&mut vec).unwrap();
         assert_eq!(vec, safe.encode_to_vec());
+        assert_eq!(vec, safe.encode_contiguous().into_vec());
         safe.replace_from_length_delimited_dyn(&mut [0u8].as_slice())
             .unwrap();
+        assert!(safe.is_empty());
+        safe.replace_from_slice(&[]).unwrap();
+        assert!(safe.is_empty());
 
         msg.encoded_len();
         msg = M::decode_length_delimited(&mut [0u8].as_slice()).unwrap();
