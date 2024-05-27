@@ -484,7 +484,7 @@ We can now import and use its traits and derive macros. The main three are:
   must have one field, and each variant must have a unique field tag assigned to
   it, *both* within the oneof and within the message of which it is a part.
   Types with `Oneof` derived do not have `bilrost` APIs useful to library users
-  except when they are included in a `Message` struct (or [have `Message` 
+  except when they are included in a `Message` struct (or [have `Message`
   derived themselves](#deriving-message-for-enums)).
 
 #### Deriving `Message`
@@ -712,8 +712,8 @@ enum Maybe {
 /// impl; deriving `Message` on the enum just saves some work.
 #[derive(Message)]
 struct WrappedMaybe {
-  #[bilrost(oneof(1, 2))]
-  maybe: Maybe,
+    #[bilrost(oneof(1, 2))]
+    maybe: Maybe,
 }
 ```
 
