@@ -659,6 +659,12 @@ impl Buf for ReverseBuffer {
     }
 }
 
+impl From<ReverseBuffer> for Vec<u8> {
+    fn from(value: ReverseBuffer) -> Self {
+        value.into_vec()
+    }
+}
+
 /// Non-draining reader-by-reference for `ReverseBuf`, implementing `bytes::Buf`.
 pub struct ReverseBufferReader<'a> {
     /// Buffer being read
