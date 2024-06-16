@@ -1,7 +1,5 @@
 ## v0.1009.0-dev
 
-### Breaking changes
-
 ### New features
 
 * Added `encode_contiguous` and `encode_length_delimited_contiguous` APIs to the
@@ -10,10 +8,6 @@
 * Added `into_vec(self)` to `ReverseBuffer` complete with a non-copying
   optimization when the buffer is full and contiguous, such as when it is
   produced by `Message::encode_contiguous`.
-
-### Fixes
-
-### Cleanups
 
 ## v0.1008.0
 
