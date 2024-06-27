@@ -443,6 +443,10 @@ The `bilrost` crate has several optional features:
   have more information on the path to the exact field in the decoded data that
   encountered an error. With this disabled errors are more opaque, but may be
   smaller and faster.
+* "auto-optimize" (default): makes some automatic choices about some
+  performance-related implementation details. The related features can be useful
+  controls for profiling and experimentation, and are documented in
+  `Cargo.toml`. Most use cases should leave this feature enabled.
 * "no-recursion-limit": removes the recursion limit designed to keep data from
   nesting too deeply.
 * "extended-diagnostics": with a small added dependency, attempts to provide
