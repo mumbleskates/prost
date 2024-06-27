@@ -262,14 +262,14 @@ message is successfully and canonically decoded from a byte string in
 distinguished mode, is not modified, and is then re-encoded, it will emit the
 exact same byte string.
 
-For this reason, `bilrost` will refuse to derive `DistinguishedMessage` if there
-are any ignored fields, as they may also participate in the type's equality.
-
 The best proxy of this expectation of an [equivalence relation][equiv] in Rust
 is the [`Eq`][eq] trait, which denotes that there is an equivalence relation
 between all values of any type that implements it. Therefore, this trait is
 required of all field and message types in order to implement distinguished
 decoding in `bilrost`.
+
+For this reason, `bilrost` will refuse to derive `DistinguishedMessage` if there
+are any ignored fields, as they may also participate in the type's equality.
 
 `bilrost` distinguishes between canonical values of the type in a way that
 matches the automatically derived implementation of `Eq` (that is, it matches
