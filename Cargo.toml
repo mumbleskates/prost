@@ -94,8 +94,10 @@ auto-optimize = [
 # worse.
 #
 # The "auto" feature here enables this optimization when on platforms that seem to benefit from it,
-# and the regular feature enables it unconditionally.
+# the "prefer-no" prevents the "auto" feature from taking effect, and the regular feature enables
+# the feature unconditionally.
 auto-self-copy-optimization = []
+prefer-no-self-copy-optimization = []
 self-copy-optimization = []
 
 # Unroll varint encoding: This changes the spelling of the functions that encode varint values to
@@ -109,8 +111,10 @@ self-copy-optimization = []
 # likely to be far less prevalent.
 #
 # As in other features, the "auto" feature enables the optimization when it seems like a good idea
-# (currently always) and the regular feature enables it unconditionally.
-auto-unroll-varint-encoding = ["unroll-varint-encoding"]
+# (currently always), the "prefer-no" feature prevents the "auto" feature from taking effect, and
+# the regular feature enables the optimization unconditionally.
+auto-unroll-varint-encoding = []
+prefer-no-unroll-varint-encoding = []
 unroll-varint-encoding = []
 
 full-test-suite = [

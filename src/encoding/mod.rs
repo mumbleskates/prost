@@ -63,7 +63,13 @@ const VARINT_LIMIT: [u64; 9] = [
 
 /// Encodes an integer value into LEB128-bijective variable length format, and writes it to the
 /// buffer. The buffer must have enough remaining space (maximum 9 bytes).
-#[cfg(feature = "unroll-varint-encoding")]
+#[cfg(any(
+    all(
+        feature = "auto-unroll-varint-encoding",
+        not(feature = "prefer-no-unroll-varint-encoding")
+    ),
+    feature = "unroll-varint-encoding",
+))]
 #[inline(always)]
 pub fn encode_varint<B: BufMut + ?Sized>(value: u64, buf: &mut B) {
     #[inline(always)]
@@ -106,7 +112,13 @@ pub fn encode_varint<B: BufMut + ?Sized>(value: u64, buf: &mut B) {
 
 /// Encodes an integer value into LEB128-bijective variable length format, and writes it to the
 /// buffer. The buffer must have enough remaining space (maximum 9 bytes).
-#[cfg(not(feature = "unroll-varint-encoding"))]
+#[cfg(not(any(
+    all(
+        feature = "auto-unroll-varint-encoding",
+        not(feature = "prefer-no-unroll-varint-encoding")
+    ),
+    feature = "unroll-varint-encoding",
+)))]
 #[inline(always)]
 pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
     for _ in 0..9 {
@@ -121,7 +133,13 @@ pub fn encode_varint<B: BufMut + ?Sized>(mut value: u64, buf: &mut B) {
 }
 
 /// Prepends an integer value in LEB128-bijective format to the given buffer.
-#[cfg(feature = "unroll-varint-encoding")]
+#[cfg(any(
+    all(
+        feature = "auto-unroll-varint-encoding",
+        not(feature = "prefer-no-unroll-varint-encoding")
+    ),
+    feature = "unroll-varint-encoding",
+))]
 #[inline(always)]
 pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
     #[inline(always)]
@@ -166,7 +184,13 @@ pub fn prepend_varint<B: ReverseBuf + ?Sized>(value: u64, buf: &mut B) {
 }
 
 /// Prepends an integer value in LEB128-bijective format to the given buffer.
-#[cfg(not(feature = "unroll-varint-encoding"))]
+#[cfg(not(any(
+    all(
+        feature = "auto-unroll-varint-encoding",
+        not(feature = "prefer-no-unroll-varint-encoding")
+    ),
+    feature = "unroll-varint-encoding",
+)))]
 #[inline(always)]
 pub fn prepend_varint<B: ReverseBuf + ?Sized>(mut value: u64, buf: &mut B) {
     if value < 0x80 {

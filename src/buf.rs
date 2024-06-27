@@ -13,6 +13,7 @@ use bytes::Buf;
 const ENABLE_SELF_COPY_OPTIMIZATION: bool = cfg!(any(
     all(
         feature = "auto-self-copy-optimization",
+        not(feature = "prefer-no-self-copy-optimization"),
         target_arch = "x86_64"
     ),
     feature = "self-copy-optimization"
