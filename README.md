@@ -417,7 +417,7 @@ struct BucketFile {
 }
 
 let new_file = BucketFile::decode(
-    &b"\x05\x07foo.txt\x04\x01\x05\x0epublic/foo.txt"[..],
+    b"\x05\x07foo.txt\x04\x01\x05\x0epublic/foo.txt".as_slice(),
 )
 .unwrap();
 assert_eq!(
