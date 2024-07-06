@@ -27,10 +27,10 @@ pub fn test_parse_date(data: &[u8]) {
 enum RoundtripResult {
     /// The roundtrip succeeded.
     Ok(Vec<u8>),
-    /// The data could not be decoded. This could indicate a bug in prost,
+    /// The data could not be decoded. This could indicate a bug in bilrost,
     /// or it could indicate that the input was bogus.
     DecodeError(DecodeError),
-    /// Re-encoding or validating the data failed.  This indicates a bug in `prost`.
+    /// Re-encoding or validating the data failed.  This indicates a bug in `bilrost`.
     Error(anyhow::Error),
 }
 
