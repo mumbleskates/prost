@@ -585,6 +585,7 @@ impl TryFrom<DateTime> for Timestamp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::format;
     use proptest::prelude::*;
 
     #[test]
