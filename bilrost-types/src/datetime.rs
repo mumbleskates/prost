@@ -329,7 +329,9 @@ fn parse_offset(s: &str) -> Option<(i8, i8, &str)> {
 /// string.
 fn parse_two_digit_numeric(s: &str) -> Option<(u8, &str)> {
     debug_assert!(s.is_ascii());
-
+    if s.len() < 2 {
+        return None;
+    }
     let (digits, s) = s.split_at(2);
     Some((digits.parse().ok()?, s))
 }
