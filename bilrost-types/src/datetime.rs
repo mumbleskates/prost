@@ -499,9 +499,7 @@ pub(crate) fn parse_timestamp(s: &str) -> Option<Timestamp> {
             ..DateTime::default()
         };
 
-        ensure!(date_time.is_valid());
-
-        return Some(Timestamp::from(date_time));
+        return Timestamp::try_from(date_time).ok();
     }
 
     // Accept either 'T' or ' ' as delimiter between date and time.
@@ -531,9 +529,7 @@ pub(crate) fn parse_timestamp(s: &str) -> Option<Timestamp> {
         nanos,
     };
 
-    ensure!(date_time.is_valid());
-
-    let Timestamp { seconds, nanos } = Timestamp::from(date_time);
+    let Timestamp { seconds, nanos } = Timestamp::try_from(date_time).ok()?;
 
     let seconds =
         seconds.checked_sub(i64::from(offset_hour) * 3600 + i64::from(offset_minute) * 60)?;
@@ -572,22 +568,17 @@ pub(crate) fn parse_duration(s: &str) -> Option<Duration> {
     Some(Duration { seconds, nanos })
 }
 
-impl From<DateTime> for Timestamp {
-    fn from(date_time: DateTime) -> Timestamp {
-        const TOO_LOW_YEAR: i64 = DateTime::MIN.year - 1;
-        const TOO_HIGH_YEAR: i64 = DateTime::MAX.year + 1;
-        match date_time.year {
-            i64::MIN..=TOO_LOW_YEAR => Timestamp::MIN,
-            TOO_HIGH_YEAR..=i64::MAX => Timestamp::MAX,
-            _ => {
-                let seconds = date_time_to_seconds(&date_time);
-                let nanos = date_time.nanos;
-                Timestamp {
-                    seconds,
-                    nanos: nanos as i32,
-                }
-            }
+impl TryFrom<DateTime> for Timestamp {
+    type Error = ();
+
+    fn try_from(date_time: DateTime) -> Result<Timestamp, ()> {
+        if !date_time.is_valid() {
+            return Err(());
         }
+        Ok(Timestamp {
+            seconds: date_time_to_seconds(&date_time),
+            nanos: date_time.nanos as i32,
+        })
     }
 }
 
@@ -752,7 +743,7 @@ mod tests {
         // Leap day
         assert_eq!(
             "2020-02-29T01:02:03.00Z".parse::<Timestamp>().unwrap(),
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: 2020,
                 month: 2,
                 day: 29,
@@ -760,7 +751,8 @@ mod tests {
                 minute: 2,
                 second: 3,
                 nanos: 0,
-            }),
+            })
+            .unwrap(),
         );
 
         // Test extensions to RFC 3339.
@@ -855,7 +847,7 @@ mod tests {
         #[cfg(feature = "std")]
         #[test]
         fn check_timestamp_parse_to_string_roundtrip(
-            system_time in std::time::SystemTime::arbitrary(),
+            system_time: std::time::SystemTime,
         ) {
 
             let ts = Timestamp::from(system_time);
@@ -869,7 +861,7 @@ mod tests {
         #[cfg(feature = "std")]
         #[test]
         fn check_duration_parse_to_string_roundtrip(
-            duration in core::time::Duration::arbitrary(),
+            duration: core::time::Duration,
         ) {
             let duration = match Duration::try_from(duration) {
                 Ok(duration) => duration,
@@ -881,6 +873,51 @@ mod tests {
                 &duration.to_string().parse::<Duration>().unwrap(),
                 "{}", duration.to_string()
             );
+        }
+
+        #[test]
+        fn check_timestamp_roundtrip_with_date_time(
+            seconds: i64,
+            nanos: i32,
+        ) {
+            let timestamp = Timestamp { seconds, nanos };
+            let date_time = DateTime::from(timestamp.clone());
+            let roundtrip = Timestamp::try_from(date_time).unwrap();
+
+            let mut normalized_timestamp = timestamp;
+            normalized_timestamp.normalize();
+
+            prop_assert_eq!(normalized_timestamp, roundtrip);
+        }
+
+        #[test]
+        fn check_date_time_roundtrip_with_timestamp(
+            year: i64,
+            month: u8,
+            day: u8,
+            hour: u8,
+            minute: u8,
+            second: u8,
+            nanos: u32,
+        ) {
+            let date_time = DateTime {
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                nanos
+            };
+
+            if date_time.is_valid() {
+                let timestamp = Timestamp::try_from(date_time).unwrap();
+                let roundtrip = DateTime::from(timestamp);
+
+                prop_assert_eq!(date_time, roundtrip);
+            } else {
+                prop_assert_eq!(Timestamp::try_from(date_time), Err(()));
+            }
         }
     }
 }

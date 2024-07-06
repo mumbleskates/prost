@@ -309,11 +309,7 @@ impl Timestamp {
             nanos,
         };
 
-        if date_time.is_valid() {
-            Ok(Timestamp::from(date_time))
-        } else {
-            Err(TimestampError::InvalidDateTime)
-        }
+        Timestamp::try_from(date_time).map_err(|_| TimestampError::InvalidDateTime)
     }
 }
 
@@ -503,7 +499,7 @@ mod tests {
     fn check_overflowing_datetimes() {
         // These DateTimes cause overflows and crashes in the prost crate.
         assert_eq!(
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: i64::from_le_bytes([178, 2, 0, 0, 0, 0, 0, 128]),
                 month: 2,
                 day: 2,
@@ -512,10 +508,10 @@ mod tests {
                 second: 8,
                 nanos: u32::from_le_bytes([0, 0, 0, 50]),
             }),
-            Timestamp::MIN
+            Err(())
         );
         assert_eq!(
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: i64::from_le_bytes([132, 7, 0, 0, 0, 0, 0, 128]),
                 month: 2,
                 day: 2,
@@ -524,10 +520,10 @@ mod tests {
                 second: 8,
                 nanos: u32::from_le_bytes([0, 0, 0, 50]),
             }),
-            Timestamp::MIN
+            Err(())
         );
         assert_eq!(
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: i64::from_le_bytes([80, 96, 32, 240, 99, 0, 32, 180]),
                 month: 1,
                 day: 18,
@@ -536,10 +532,10 @@ mod tests {
                 second: 8,
                 nanos: u32::from_le_bytes([0, 0, 0, 50]),
             }),
-            Timestamp::MIN
+            Err(())
         );
         assert_eq!(
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: DateTime::MIN.year - 1,
                 month: 0,
                 day: 0,
@@ -548,10 +544,10 @@ mod tests {
                 second: 0,
                 nanos: 0,
             }),
-            Timestamp::MIN
+            Err(())
         );
         assert_eq!(
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: i64::MIN,
                 month: 0,
                 day: 0,
@@ -560,10 +556,10 @@ mod tests {
                 second: 0,
                 nanos: 0,
             }),
-            Timestamp::MIN
+            Err(())
         );
         assert_eq!(
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: DateTime::MAX.year + 1,
                 month: u8::MAX,
                 day: u8::MAX,
@@ -572,10 +568,10 @@ mod tests {
                 second: u8::MAX,
                 nanos: u32::MAX,
             }),
-            Timestamp::MAX
+            Err(())
         );
         assert_eq!(
-            Timestamp::from(DateTime {
+            Timestamp::try_from(DateTime {
                 year: i64::MAX,
                 month: u8::MAX,
                 day: u8::MAX,
@@ -584,10 +580,22 @@ mod tests {
                 second: u8::MAX,
                 nanos: u32::MAX,
             }),
-            Timestamp::MAX
+            Err(())
         );
-        assert_eq!(Timestamp::from(DateTime::MIN), Timestamp::MIN);
-        assert_eq!(Timestamp::from(DateTime::MAX), Timestamp::MAX);
+        assert_eq!(
+            Timestamp::try_from(DateTime {
+                year: 2001,
+                month: u8::MAX,
+                day: u8::MAX,
+                hour: u8::MAX,
+                minute: u8::MAX,
+                second: u8::MAX,
+                nanos: u32::MAX,
+            }),
+            Err(())
+        );
+        assert_eq!(Timestamp::try_from(DateTime::MIN), Ok(Timestamp::MIN));
+        assert_eq!(Timestamp::try_from(DateTime::MAX), Ok(Timestamp::MAX));
         assert_eq!(DateTime::from(Timestamp::MIN), DateTime::MIN);
         assert_eq!(DateTime::from(Timestamp::MAX), DateTime::MAX);
     }
@@ -596,15 +604,15 @@ mod tests {
     proptest! {
         #[test]
         fn check_system_time_roundtrip(
-            system_time in SystemTime::arbitrary(),
+            system_time: SystemTime,
         ) {
             prop_assert_eq!(SystemTime::try_from(Timestamp::from(system_time)).unwrap(), system_time);
         }
 
         #[test]
         fn check_timestamp_roundtrip_via_system_time(
-            seconds in i64::arbitrary(),
-            nanos in i32::arbitrary(),
+            seconds: i64,
+            nanos: i32,
         ) {
             let mut timestamp = Timestamp { seconds, nanos };
             let is_canonical = timestamp.is_canonical();
@@ -623,12 +631,12 @@ mod tests {
             prop_assert_eq!(is_canonical, timestamp == Timestamp{ seconds, nanos });
             let timestamp = timestamp;
             let datetime: DateTime = timestamp.clone().into();
-            prop_assert_eq!(Timestamp::from(datetime), timestamp);
+            prop_assert_eq!(Timestamp::try_from(datetime), Ok(timestamp));
         }
 
         #[test]
         fn check_duration_roundtrip(
-            seconds in u64::arbitrary(),
+            seconds: u64,
             nanos in 0u32..1_000_000_000u32,
         ) {
             let std_duration = time::Duration::new(seconds, nanos);
@@ -655,7 +663,7 @@ mod tests {
 
         #[test]
         fn check_duration_roundtrip_nanos(
-            nanos in u32::arbitrary(),
+            nanos: u32,
         ) {
             let seconds = 0;
             let std_duration = std::time::Duration::new(seconds, nanos);
