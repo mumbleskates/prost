@@ -11,7 +11,11 @@ common = { path = "../common" }
 
 [[bin]]
 name = "bilrost_afl"
-path = "src/main.rs"
+path = "src/message.rs"
+
+[[bin]]
+name = "parse_date_afl"
+path = "src/parse_date.rs"
 
 [[bin]]
 name = "create-testmessage"

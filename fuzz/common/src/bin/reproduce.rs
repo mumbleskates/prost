@@ -18,7 +18,7 @@ fn main() {
             "TestDistinguished: {:#?}",
             TestDistinguished::decode_distinguished(data.as_slice())
         );
-        common::test_input(&data);
+        common::test_message(&data);
     }
     if !ran {
         println!("Usage: {program_name} <path-to-input> [...]");

@@ -1,8 +1,8 @@
 use afl::fuzz;
-use common::test_input;
+use common::test_parse_date;
 
 fn main() {
     fuzz!(|data: &[u8]| {
-        test_input(data);
+        test_parse_date(data);
     });
 }

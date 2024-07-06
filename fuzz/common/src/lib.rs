@@ -1,14 +1,27 @@
 use anyhow::anyhow;
 use bytes::BufMut;
+use std::str::{from_utf8, FromStr};
 
 use bilrost::Canonicity::Canonical;
 use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
 
 pub mod test_messages;
 
-pub fn test_input(data: &[u8]) {
+pub fn test_message(data: &[u8]) {
     let _ = roundtrip::<test_messages::TestAllTypes>(data).unwrap_error();
     let _ = roundtrip_distinguished::<test_messages::TestDistinguished>(data).unwrap_error();
+}
+
+pub fn test_parse_date(data: &[u8]) {
+    let Ok(s) = from_utf8(data) else {
+        return;
+    };
+    let Ok(t) = bilrost_types::Timestamp::from_str(s) else {
+        return;
+    };
+    let s2 = format!("{t}");
+    let t2 = bilrost_types::Timestamp::from_str(&s2).unwrap();
+    assert_eq!(t, t2);
 }
 
 enum RoundtripResult {
