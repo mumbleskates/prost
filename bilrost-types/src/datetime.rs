@@ -332,6 +332,9 @@ fn parse_two_digit_numeric(s: &str) -> Option<(u8, &str)> {
     if s.len() < 2 {
         return None;
     }
+    if s.starts_with("+") {
+        return None;
+    }
     let (digits, s) = s.split_at(2);
     Some((digits.parse().ok()?, s))
 }
@@ -798,6 +801,11 @@ mod tests {
         // Leap year bug
         check_timestamp("1900-01-10", Timestamp::date(1900, 1, 10));
         check_timestamp("1900-01-10", Ok(Timestamp{seconds: -2208211200, nanos: 0}));
+        // Leading '+' in two-digit numbers
+        assert_eq!(
+            "19+1-+2-+3T+4:+5:+6Z".parse::<Timestamp>(),
+            Err(crate::TimestampError::ParseFailure),
+        )
     }
 
     #[test]
