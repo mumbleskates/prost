@@ -6,6 +6,9 @@
 
 ### Fixes
 
+* Fixed a crash, wrong results for dates in early year 1900, and tolerance of
+  some incorrect inputs in `bilrost_types::Timestamp`'s conversion from strings.
+
 ### Cleanups
 
 ## v0.1009.0
