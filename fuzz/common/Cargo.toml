@@ -18,6 +18,7 @@ anyhow = "1"
 bilrost = { path = "../..", default-features = false, features = ["derive", "auto-optimize", "no-recursion-limit", "tinyvec"] }
 bilrost-types = { path = "../../bilrost-types" }
 bytes = "1"
+chrono = "0.4.38"
 tinyvec = "1"
 
 [[bin]]

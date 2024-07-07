@@ -13,15 +13,29 @@ pub fn test_message(data: &[u8]) {
 }
 
 pub fn test_parse_date(data: &[u8]) {
+    // input must be text
     let Ok(s) = from_utf8(data) else {
         return;
     };
+    // parse input as a datetime
     let Ok(t) = bilrost_types::Timestamp::from_str(s) else {
         return;
     };
+    // round trip from string again
     let s2 = format!("{t}");
-    let t2 = bilrost_types::Timestamp::from_str(&s2).unwrap();
-    assert_eq!(t, t2);
+    assert_eq!(Ok(&t), s2.parse().as_ref());
+    // check that chrono has basically the same iso8601/rfc3339 date
+    let Some(chrono_delta) = chrono::TimeDelta::new(t.seconds, t.nanos as u32) else {
+        return;
+    };
+    let Some(chrono_time) =
+        chrono::DateTime::<chrono::Utc>::UNIX_EPOCH.checked_add_signed(chrono_delta)
+    else {
+        return;
+    };
+    let s3 = chrono_time.to_rfc3339();
+    assert_eq!(s2.strip_suffix("Z"), s3.strip_suffix("+00:00"));
+    assert_eq!(Ok(&t), s3.parse().as_ref());
 }
 
 enum RoundtripResult {
