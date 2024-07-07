@@ -424,8 +424,8 @@ pub(crate) fn year_to_seconds(year: i64) -> (i128, bool) {
     let is_leap;
     let year = year - 1900;
 
-    // Fast path for years 1900 - 2038.
-    if year as u64 <= 138 {
+    // Fast path for years 1901 - 2038.
+    if (1..=138).contains(&year) {
         let mut leaps: i64 = (year - 68) >> 2;
         if (year - 68).trailing_zeros() >= 2 {
             leaps -= 1;
