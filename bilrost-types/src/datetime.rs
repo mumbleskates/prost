@@ -800,7 +800,13 @@ mod tests {
         );
         // Leap year bug
         check_timestamp("1900-01-10", Timestamp::date(1900, 1, 10));
-        check_timestamp("1900-01-10", Ok(Timestamp{seconds: -2208211200, nanos: 0}));
+        check_timestamp(
+            "1900-01-10",
+            Ok(Timestamp {
+                seconds: -2208211200,
+                nanos: 0,
+            }),
+        );
         // Leading '+' in two-digit numbers
         assert_eq!(
             "19+1-+2-+3T+4:+5:+6Z".parse::<Timestamp>(),
