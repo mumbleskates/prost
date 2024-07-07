@@ -789,7 +789,13 @@ mod tests {
             Timestamp::date_time_nanos(2020, 6, 14, 16, 1, 2, 123_000_000),
         );
 
-        // Fuzzing regression for leap year bug
+        // Fuzzing regression tests
+        // Panic in parse_two_digit_numeric
+        assert_eq!(
+            "-11111111-z".parse::<Timestamp>(),
+            Err(crate::TimestampError::ParseFailure),
+        );
+        // Leap year bug
         check_timestamp("1900-01-10", Timestamp::date(1900, 1, 10));
         check_timestamp("1900-01-10", Ok(Timestamp{seconds: -2208211200, nanos: 0}));
     }
