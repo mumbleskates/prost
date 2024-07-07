@@ -4,6 +4,12 @@
 
 ### New features
 
+* Changed optimization-controlling crate features so that there are now three
+  features for each: from lowest to highest priority, "auto-feature",
+  "prefer-no-feature", and "feature". This gives downstream crates the ability
+  to turn a given optimization either on or off even if a library enables the
+  "auto" feature. Only the "prefer-no-*" crate features are new.
+
 ### Fixes
 
 * Fixed a crash, wrong results for dates in early year 1900, and tolerance of
