@@ -1,10 +1,8 @@
 ## v0.1010.0-dev
 
-### Breaking changes
-
 ### New features
 
-* Changed optimization-controlling crate features so that there are now three
+* The optimization-controlling crate features have changed. There are now three
   features for each: from lowest to highest priority, "auto-feature",
   "prefer-no-feature", and "feature". This gives downstream crates the ability
   to turn a given optimization either on or off even if a library enables the
@@ -14,8 +12,6 @@
 
 * Fixed a crash, wrong results for dates in early year 1900, and tolerance of
   some incorrect inputs in `bilrost_types::Timestamp`'s conversion from strings.
-
-### Cleanups
 
 ## v0.1009.0
 
