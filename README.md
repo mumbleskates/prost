@@ -2105,8 +2105,7 @@ described in the wild. Quite a few people have, as the saying goes, tried and
 died.
 
 tl;dr: I had the conceit that I could make the protobuf encoding better. For my
-personal purposes, this is true. Perhaps the same will be even true for you as
-well.
+personal purposes, this is true. Perhaps the same will be true for you as well.
 
 2. **Could the Bilrost encoding be implemented as a serializer for
    [Serde][se]?**
