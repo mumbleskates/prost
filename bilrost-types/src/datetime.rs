@@ -330,7 +330,7 @@ fn parse_two_digit_numeric(s: &str) -> Option<(u8, &str)> {
     if s.len() < 2 {
         return None;
     }
-    if s.starts_with("+") {
+    if s.starts_with('+') {
         return None;
     }
     let (digits, s) = s.split_at(2);
