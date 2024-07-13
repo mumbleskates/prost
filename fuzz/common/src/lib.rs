@@ -3,8 +3,8 @@ use bilrost::Canonicity::Canonical;
 use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
 use bytes::BufMut;
 use regex::Regex;
-use std::cell::LazyCell;
 use std::str::{from_utf8, FromStr};
+use std::sync::LazyLock;
 
 pub mod test_messages;
 
@@ -14,7 +14,7 @@ pub fn test_message(data: &[u8]) {
 }
 
 pub fn test_parse_date(data: &[u8]) {
-    static DATE_RE: LazyCell<Regex> = LazyCell::new(|| {
+    static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
             r"^(\d{4}|[+-]\d+)-\d\d-\d\d([T ]\d\d:\d\d:\d\d(\.(\d\d\d){1,3})?( ?[+-]\d\d(:?\d\d)?)?)?$",
         )
