@@ -15,10 +15,19 @@ pub fn test_message(data: &[u8]) {
 
 pub fn test_parse_date(data: &[u8]) {
     static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"^(\d{4}|[+-]\d+)-\d\d-\d\d([tT ]\d\d:\d\d:\d\d(\.\d{1,9})?( ?([+-]\d\d(:?\d\d)?)?|[zZ]))?$",
-        )
-        .unwrap()
+        let year = r"(\d{4}|[+-]\d+)";
+        let month = r"(0[1-9]|1[0-2])";
+        let day_of_month = r"([0-2]\d|3[01])";
+        let date = format!("{year}-{month}-{day_of_month}");
+        let hour = r"([01]\d|2[0-3])";
+        let minute = r"[0-5]\d";
+        let second = r"([0-5]\d|60)";
+        let fraction = r"\.\d{1-9}";
+        let time = format!("{hour}:{minute}:{second}({fraction})?");
+        let offset = r"[+-]\d\d(:?\d\d)?";
+        let offset_or_zulu = format!("({offset}|[Zz])");
+
+        Regex::new(&format!("^{date}[ Tt]{time}( ?{offset_or_zulu})?$")).unwrap()
     });
     // input must be text
     let Ok(s) = from_utf8(data) else {
