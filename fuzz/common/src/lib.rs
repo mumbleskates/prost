@@ -65,7 +65,7 @@ pub fn test_parse_date(data: &[u8]) {
         return;
     };
     let s3 = chrono_time.to_rfc3339();
-    assert_eq!(s2.strip_suffix("Z"), s3.strip_suffix("+00:00"));
+    assert_eq!(s2.strip_suffix("Z").unwrap(), s3.strip_suffix("+00:00").unwrap());
     assert_eq!(Ok(&t), s3.parse().as_ref());
 }
 
