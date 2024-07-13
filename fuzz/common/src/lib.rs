@@ -16,7 +16,7 @@ pub fn test_message(data: &[u8]) {
 pub fn test_parse_date(data: &[u8]) {
     static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
-            r"^(\d{4}|[+-]\d+)-\d\d-\d\d([T ]\d\d:\d\d:\d\d(\.\d{1,9})?( ?[+-]\d\d(:?\d\d)?)?)?$",
+            r"^(\d{4}|[+-]\d+)-\d\d-\d\d([tT ]\d\d:\d\d:\d\d(\.\d{1,9})?( ?([+-]\d\d(:?\d\d)?)?|[zZ]))?$",
         )
         .unwrap()
     });
