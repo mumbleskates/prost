@@ -13,22 +13,23 @@ pub fn test_message(data: &[u8]) {
     let _ = roundtrip_distinguished::<test_messages::TestDistinguished>(data).unwrap_error();
 }
 
-pub fn test_parse_date(data: &[u8]) {
-    static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
-        let year = r"(\d{4}|[+-]\d+)";
-        let month = r"(0[1-9]|1[0-2])";
-        let day_of_month = r"([0-2]\d|3[01])";
-        let date = format!("{year}-{month}-{day_of_month}");
-        let hour = r"([01]\d|2[0-3])";
-        let minute = r"[0-5]\d";
-        let second = r"([0-5]\d|60)";
-        let fraction = r"\.\d{1-9}";
-        let time = format!("{hour}:{minute}:{second}({fraction})?");
-        let offset = r"[+-]\d\d(:?\d\d)?";
-        let offset_or_zulu = format!("({offset}|[Zz])");
+static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    let year = r"(\d{4}|[+-]\d+)";
+    let month = r"(0[1-9]|1[0-2])";
+    let day_of_month = r"([0-2]\d|3[01])";
+    let date = format!("{year}-{month}-{day_of_month}");
+    let hour = r"([01]\d|2[0-3])";
+    let minute = r"[0-5]\d";
+    let second = r"([0-5]\d|60)";
+    let fraction = r"\.\d{1,9}";
+    let time = format!("{hour}:{minute}:{second}({fraction})?");
+    let offset = r"[+-]\d\d(:?\d\d)?";
+    let offset_or_zulu = format!("({offset}|[Zz])");
 
-        Regex::new(&format!("^{date}[ Tt]{time}( ?{offset_or_zulu})?$")).unwrap()
-    });
+    Regex::new(&format!("^{date}[ Tt]{time}( ?{offset_or_zulu})?$")).unwrap()
+});
+
+pub fn test_parse_date(data: &[u8]) {
     // input must be text
     let Ok(s) = from_utf8(data) else {
         return;
