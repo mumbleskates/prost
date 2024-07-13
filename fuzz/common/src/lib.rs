@@ -1,9 +1,10 @@
 use anyhow::anyhow;
-use bytes::BufMut;
-use std::str::{from_utf8, FromStr};
-
 use bilrost::Canonicity::Canonical;
 use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
+use bytes::BufMut;
+use regex::Regex;
+use std::cell::LazyCell;
+use std::str::{from_utf8, FromStr};
 
 pub mod test_messages;
 
@@ -13,6 +14,12 @@ pub fn test_message(data: &[u8]) {
 }
 
 pub fn test_parse_date(data: &[u8]) {
+    static DATE_RE: LazyCell<Regex> = LazyCell::new(|| {
+        Regex::new(
+            r"^(\d{4}|[+-]\d+)-\d\d-\d\d([T ]\d\d:\d\d:\d\d(\.(\d\d\d){1,3})?( ?[+-]\d\d(:?\d\d)?)?)?$",
+        )
+        .unwrap()
+    });
     // input must be text
     let Ok(s) = from_utf8(data) else {
         return;
@@ -21,6 +28,8 @@ pub fn test_parse_date(data: &[u8]) {
     let Ok(t) = bilrost_types::Timestamp::from_str(s) else {
         return;
     };
+    // check that it matches our regex pattern
+    assert!(DATE_RE.is_match(s));
     // round trip from string again
     let s2 = format!("{t}");
     assert_eq!(Ok(&t), s2.parse().as_ref());

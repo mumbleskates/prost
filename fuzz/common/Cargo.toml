@@ -19,6 +19,7 @@ bilrost = { path = "../..", default-features = false, features = ["derive", "aut
 bilrost-types = { path = "../../bilrost-types" }
 bytes = "1"
 chrono = "0.4.38"
+regex = "1.10.5"
 tinyvec = "1"
 
 [[bin]]
