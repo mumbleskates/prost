@@ -14,18 +14,30 @@ pub fn test_message(data: &[u8]) {
 }
 
 static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // exactly four digits, or +/- followed by any number
     let year = r"(\d{4}|[+-]\d+)";
+    // 01-12
     let month = r"(0[1-9]|1[0-2])";
-    let day_of_month = r"([0-2]\d|3[01])";
+    // 01-31
+    let day_of_month = r"(0[1-9]|[1-2]\d|3[01])";
+    // date components are always separated by '-'
     let date = format!("{year}-{month}-{day_of_month}");
+    // 00-23
     let hour = r"([01]\d|2[0-3])";
+    // 00-59
     let minute = r"[0-5]\d";
+    // 00-60
     let second = r"([0-5]\d|60)";
+    // decimal point with 1-9 digits following
     let fraction = r"\.\d{1,9}";
+    // time always contains hour, minute, and second; fraction is optional
     let time = format!("{hour}:{minute}:{second}({fraction})?");
+    // offset is +/- 00-99 hours and (optionally) 00-99 minutes, with an optional ':' separating
     let offset = r"[+-]\d\d(:?\d\d)?";
+    // the letter Z is also an acceptable offset, indicating no offset (UTC)
     let offset_or_zulu = format!("({offset}|[Zz])");
-
+    // may contain date, date & time, or date & time & offset. time is separated by a space or the
+    // letter T, and timezone offset may be separated from the time by an optional space.
     Regex::new(&format!("^{date}([ Tt]{time}( ?{offset_or_zulu})?)?$")).unwrap()
 });
 
