@@ -26,7 +26,7 @@ static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
     let offset = r"[+-]\d\d(:?\d\d)?";
     let offset_or_zulu = format!("({offset}|[Zz])");
 
-    Regex::new(&format!("^{date}[ Tt]{time}( ?{offset_or_zulu})?$")).unwrap()
+    Regex::new(&format!("^{date}([ Tt]{time}( ?{offset_or_zulu})?)?$")).unwrap()
 });
 
 pub fn test_parse_date(data: &[u8]) {
