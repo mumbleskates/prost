@@ -29,7 +29,7 @@ static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
     // 00-60
     let second = r"([0-5]\d|60)";
     // decimal point with 1-9 digits following
-    let fraction = r"\.\d{1,9}";
+    let fraction = r"\.\d+";
     // time always contains hour, minute, and second; fraction is optional
     let time = format!("{hour}:{minute}:{second}({fraction})?");
     // offset is +/- 00-99 hours and (optionally) 00-99 minutes, with an optional ':' separating
