@@ -323,6 +323,7 @@ fn derived_trait_bounds() {
     #[allow(dead_code)]
     struct X; // Not encodable
 
+    #[allow(dead_code)]
     #[derive(PartialEq, Eq, Oneof, DistinguishedOneof)]
     enum A<T> {
         Empty,
@@ -336,6 +337,7 @@ fn derived_trait_bounds() {
     static_assertions::assert_not_impl_any!(A<f32>: DistinguishedOneof);
     static_assertions::assert_not_impl_any!(A<X>: Oneof, DistinguishedOneof);
 
+    #[allow(dead_code)]
     #[derive(PartialEq, Eq, Message, DistinguishedMessage)]
     struct Inner<U>(U);
     static_assertions::assert_impl_all!(Inner<bool>: Message, DistinguishedMessage);
@@ -343,6 +345,7 @@ fn derived_trait_bounds() {
     static_assertions::assert_not_impl_any!(Inner<f32>: DistinguishedMessage);
     static_assertions::assert_not_impl_any!(Inner<X>: Message, DistinguishedMessage);
 
+    #[allow(dead_code)]
     #[derive(PartialEq, Eq, Message, DistinguishedMessage)]
     struct Foo<T, U, V>(#[bilrost(oneof(1, 2))] A<T>, Inner<U>, V);
     static_assertions::assert_impl_all!(Foo<bool, bool, bool>: Message, DistinguishedMessage);
@@ -359,6 +362,7 @@ fn derived_trait_bounds() {
 
 #[test]
 fn recursive_messages() {
+    #[allow(dead_code)]
     #[derive(PartialEq, Eq, Message, DistinguishedMessage)]
     struct Tree {
         #[bilrost(recurses)]
@@ -911,6 +915,7 @@ fn field_clearing() {
 fn generic_encodings() {
     // It's possible to provide the encoding that a field uses generically to the struct type, too!
     // This works perfectly because all usages of that name appear in-scope with the generic.
+    #[allow(dead_code)]
     #[derive(Message)]
     struct Foo<T, E>(#[bilrost(encoding(E))] T, #[bilrost(ignore)] PhantomData<E>);
 
@@ -2851,6 +2856,7 @@ fn oneof_as_message() {
 
 #[test]
 fn oneof_as_message_unqualified() {
+    #[allow(dead_code)]
     #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof, Message, DistinguishedMessage)]
     enum Maybe<T> {
         Nothing,
@@ -2904,8 +2910,10 @@ fn enumeration_decoding() {
     assert::decodes_distinguished([(1, OV::u32(1_000))], Foo(None, Big));
     assert::decodes_distinguished([(1, OV::u32(1_000_000))], Foo(None, Bigger));
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
     struct Packed<T>(#[bilrost(encoding(packed))] T);
+    #[allow(dead_code)]
     #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
     struct Unpacked<T>(#[bilrost(encoding(unpacked))] T);
 
