@@ -484,8 +484,8 @@ impl TryFrom<Value> for serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::ToString;
     use super::*;
+    use alloc::string::ToString;
 
     #[cfg(feature = "std")]
     use ::{
