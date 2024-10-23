@@ -1,10 +1,11 @@
 use anyhow::anyhow;
-use bilrost::Canonicity::Canonical;
-use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
 use bytes::BufMut;
 use regex::Regex;
 use std::str::{from_utf8, FromStr};
 use std::sync::LazyLock;
+
+use bilrost::Canonicity::Canonical;
+use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
 
 pub mod test_messages;
 
