@@ -131,9 +131,8 @@ fn assert_all_sized(
     vals: impl IntoIterator<Item = u64>,
     varint_len: usize,
 ) -> impl Iterator<Item = u64> {
-    vals.into_iter().map(move |val| {
+    vals.into_iter().inspect(move |&val| {
         assert_eq!(const_varint(val).len(), varint_len);
-        val
     })
 }
 
