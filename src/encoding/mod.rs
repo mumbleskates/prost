@@ -770,7 +770,7 @@ impl<'a, B: 'a + Buf + ?Sized> Capped<'a, B> {
     }
 }
 
-impl<'a, B: Buf + ?Sized> Deref for Capped<'a, B> {
+impl<B: Buf + ?Sized> Deref for Capped<'_, B> {
     type Target = B;
 
     fn deref(&self) -> &B {
@@ -778,7 +778,7 @@ impl<'a, B: Buf + ?Sized> Deref for Capped<'a, B> {
     }
 }
 
-impl<'a, B: Buf + ?Sized> DerefMut for Capped<'a, B> {
+impl<B: Buf + ?Sized> DerefMut for Capped<'_, B> {
     fn deref_mut(&mut self) -> &mut B {
         self.buf
     }
