@@ -1,21 +1,5 @@
 ## v0.1010.1
 
-### Breaking changes
-
-### New features
-
-### Fixes
-
-### Cleanups
-
-## v0.1011.0-dev
-
-### Breaking changes
-
-### New features
-
-### Fixes
-
 ### Cleanups
 
 * `bilrost-types`: parsing fractional seconds with more than 9 digits now
