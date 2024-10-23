@@ -485,11 +485,11 @@ impl TryFrom<Value> for serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::string::ToString;
 
     #[cfg(feature = "std")]
     use ::{
         alloc::format,
+        alloc::string::ToString,
         proptest::prelude::*,
         std::time::{self, SystemTime, UNIX_EPOCH},
     };
