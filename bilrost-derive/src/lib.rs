@@ -16,7 +16,7 @@ use alloc::format;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::iter;
+use core::iter::repeat;
 use core::mem::take;
 use core::ops::{Deref, RangeInclusive};
 
@@ -198,7 +198,7 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
     // Index all fields by their tag(s) and check them against the forbidden tag ranges
     let all_tags: BTreeMap<u32, &TokenStream> = unsorted_fields
         .iter()
-        .flat_map(|(ident, field)| field.tags().into_iter().zip(iter::repeat(ident)))
+        .flat_map(|(ident, field)| field.tags().into_iter().zip(repeat(ident)))
         .collect();
     for reserved_range in reserved_tags.iter_tag_ranges() {
         if let Some((forbidden_tag, field_ident)) = all_tags.range(reserved_range).next() {
@@ -353,10 +353,11 @@ fn sort_fields(unsorted_fields: Vec<(TokenStream, Field)>) -> Vec<FieldChunk> {
 fn impl_append_wheres(
     where_clause: Option<&WhereClause>,
     self_where: Option<TokenStream>,
-    field_wheres: impl Iterator<Item = TokenStream>,
+    field_wheres: impl IntoIterator<Item = TokenStream>,
 ) -> TokenStream {
     // dedup the where clauses by their String values
     let encoder_wheres: BTreeMap<_, _> = field_wheres
+        .into_iter()
         .map(|where_| (where_.to_string(), where_))
         .collect();
     let appended_wheres: Vec<_> = self_where.iter().chain(encoder_wheres.values()).collect();
@@ -777,7 +778,7 @@ fn message_via_oneof(input: DeriveInput) -> Result<TokenStream, Error> {
     let where_clause = impl_append_wheres(
         where_clause,
         Some(quote!(Self: ::bilrost::encoding::Oneof)),
-        iter::empty(),
+        None,
     );
 
     Ok(quote! {
@@ -959,7 +960,7 @@ fn distinguished_message_via_oneof(input: DeriveInput) -> Result<TokenStream, Er
     let where_clause = impl_append_wheres(
         where_clause,
         Some(quote!(Self: ::bilrost::encoding::DistinguishedOneof + ::core::cmp::Eq)),
-        iter::empty(),
+        None,
     );
 
     Ok(quote! {
