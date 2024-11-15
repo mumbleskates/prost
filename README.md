@@ -1931,10 +1931,10 @@ of key changes.
   one possible representation per value) and have a shorter maximum length, as
   it doesn't make sense to extend the encoding beyond 64 bit integers.
 
-  Despite Protobuf varints being nominally simpler, since they directly
-  transpose the bits of the encoding into the final value, it is difficult to
-  impossible to realize this simplicity as improved performance in reality;
-  almost all of the cost on modern computing hardware is consumed by the
+  Despite Protobuf varints being nominally simpler (since they directly
+  transpose the bits of the encoding into the final value), it is difficult to
+  impossible to realize this simplicity as improved performance in reality.
+  Almost all of the cost on modern computing hardware is consumed by the
   fact that the values are a variable number of bytes in size.
 
   Protobuf varints are also subject to zero-extension, because they are not
@@ -1987,15 +1987,15 @@ informed by experience with Protobuf:
 * Bilrost representations of signed integers are always zig-zag encoded. In
   Protobuf there are two different modes for signed integers: "int32" is always
   encoded like two's complement, and "sint32" is zig-zag encoded. In practice
-  this is a tremendous footgun, because any negative integer always becomes
-  *ten bytes* on the wire. Yes, even the 32 bit ones, because they are
-  sign-extended all the way to 64 bits in case the field is to be widened in the
-  future.
+  the plain two's complement encoding is a tremendous footgun, because any
+  negative integer always becomes *ten bytes* on the wire. Yes, even the 32 bit
+  ones, because they are sign-extended all the way to 64 bits in case the field
+  is to be widened in the future.
 * Learning again from the footguns and mistakes of Protobuf (and C/C++ in
   general), Bilrost also enforces errors when values are out of range. Protobuf
-  values will coerce to smaller types by truncation, and any nonzero varint will
-  silently convert to the boolean value `true`. This is often surprising,
-  bug-prone, and undesirable.
+  values will silently coerce to smaller types by truncation during decoding,
+  and any nonzero varint will silently convert to the boolean value `true`. This
+  is often surprising, bug-prone, and undesirable.
 * `bilrost` makes special effort to preserve every bit of floating-point numbers
   when they are encoded and decoded. Whenever possible this should be matched by
   Bilrost libraries for other languages.
