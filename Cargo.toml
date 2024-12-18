@@ -54,7 +54,7 @@ pprof = { version = ">=0.13,<0.15", features = ["flamegraph"], optional = true }
 [dev-dependencies]
 bilrost = { path = ".", default-features = false, features = ["derive"] } # always enable proc-macro use for integration tests
 criterion = { version = "0.5", default-features = false }
-hashbrown = { version = ">=0.1.0", default-features = false, features = ["ahash"] }
+hashbrown = { version = ">=0.15.2", default-features = false, features = ["default-hasher"] }
 itertools = { version = "0.13", default-features = false, features = ["use_alloc"] }
 proptest = "1"
 rand = "0.8"

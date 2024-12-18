@@ -1674,7 +1674,16 @@ fn custom_hashers_hashbrown() {
     use core::hash::{BuildHasher, Hasher};
 
     #[derive(Default)]
-    struct CustomHasher(<hashbrown::hash_map::DefaultHashBuilder as BuildHasher>::Hasher);
+    struct CustomHashBuilder(hashbrown::DefaultHashBuilder);
+    struct CustomHasher(<hashbrown::DefaultHashBuilder as BuildHasher>::Hasher);
+
+    impl BuildHasher for CustomHashBuilder {
+        type Hasher = CustomHasher;
+
+        fn build_hasher(&self) -> Self::Hasher {
+            CustomHasher(self.0.build_hasher())
+        }
+    }
 
     impl Hasher for CustomHasher {
         fn finish(&self) -> u64 {
@@ -1686,8 +1695,8 @@ fn custom_hashers_hashbrown() {
         }
     }
 
-    type MapType = hashbrown::HashMap<i32, i32, core::hash::BuildHasherDefault<CustomHasher>>;
-    type SetType = hashbrown::HashSet<i32, core::hash::BuildHasherDefault<CustomHasher>>;
+    type MapType = hashbrown::HashMap<i32, i32, CustomHashBuilder>;
+    type SetType = hashbrown::HashSet<i32, CustomHashBuilder>;
 
     #[derive(Debug, PartialEq, Message)]
     struct Foo {
