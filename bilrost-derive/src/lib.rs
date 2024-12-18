@@ -20,7 +20,7 @@ use core::iter::repeat;
 use core::mem::take;
 use core::ops::{Deref, RangeInclusive};
 
-use anyhow::{anyhow, bail, Error};
+use eyre::{bail, eyre as err, Error};
 use itertools::Itertools;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -189,7 +189,7 @@ fn preprocess_message(input: &DeriveInput) -> Result<PreprocessedMessage, Error>
                     None
                 }
                 Err(err) => Some(Err(
-                    err.context(format!("invalid message field {}.{}", ident, field_ident))
+                    err.wrap_err(format!("invalid message field {}.{}", ident, field_ident))
                 )),
             }
         })
@@ -1034,7 +1034,7 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
         let expr = variant_attr(&attrs)?
             .or(discriminant.map(|(_, expr)| expr))
             .ok_or_else(|| {
-                anyhow!(
+                err!(
                     "Enumeration variants must have a discriminant or a #[bilrost(..)] \
                     attribute with a constant value"
                 )

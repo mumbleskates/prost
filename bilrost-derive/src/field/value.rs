@@ -3,7 +3,7 @@ use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use anyhow::{bail, Error};
+use eyre::{bail, Error};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{parse_str, Index, Meta, Type};

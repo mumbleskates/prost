@@ -14,11 +14,11 @@ default-run = "reproduce"
 cargo-fuzz = true
 
 [dependencies]
-anyhow = "1"
 bilrost = { path = "../..", default-features = false, features = ["derive", "auto-optimize", "no-recursion-limit", "tinyvec"] }
 bilrost-types = { path = "../../bilrost-types" }
 bytes = "1"
 chrono = "0.4.38"
+eyre = "0.6.12"
 regex = "1.10.5"
 tinyvec = "1"
 

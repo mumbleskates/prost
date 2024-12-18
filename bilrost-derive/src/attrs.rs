@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use core::any::type_name;
 use core::ops::RangeInclusive;
 
-use anyhow::{anyhow, bail, Error};
+use eyre::{bail, eyre as err, Error};
 use itertools::Itertools;
 use quote::quote;
 use syn::parse::ParseStream;
@@ -158,7 +158,7 @@ pub fn named_attr<T: parse::Parse>(attr: &Meta, attr_name: &str) -> Result<Optio
     }
     .map(Some)
     .map_err(|_| {
-        anyhow!(
+        err!(
             "invalid {attr_name} attribute does not look like a(n) {}: {}",
             type_name::<T>(),
             quote!(#attr),
