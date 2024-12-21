@@ -453,6 +453,7 @@ The `bilrost` crate has several optional features:
   better compile-time diagnostics when derives and derived implementations don't
   work. Somewhat experimental.
 * "arrayvec": provides first-party support for `arrayvec::ArrayVec`
+* "bstr": provides first-party support for `bstr::BString`
 * "bytestring": provides first-party support for `bytestring::Bytestring`
 * "hashbrown": provides first-party support for `hashbrown::{HashMap, HashSet}`
 * "smallvec": provides first-party support for `smallvec::SmallVec`
@@ -1237,15 +1238,25 @@ considered empty when each of their values is empty.
 
 Many alternative types are also available for both scalar values and containers!
 
-| Value type   | Alternative                               | Supporting encoding | Distinguished | Feature to enable |
-|--------------|-------------------------------------------|---------------------|---------------|-------------------|
-| `Vec<u8>`    | `Blob`[^blob]                             | `general`           | yes           | (none)            |
-| `Vec<u8>`    | [`Cow<[u8]>`][cow]                        | `plainbytes`        | yes           | (none)            |
-| `Vec<u8>`    | [`bytes::Bytes`][bytes][^bzcopy]          | `general`           | yes           | (none)            |
-| `Vec<u8>`    | [`[u8; N]`][prim][^plainbytearr]          | `plainbytes`        | yes           | (none)            |
-| `u32`, `u64` | [`[u8; 4]`][prim], [`[u8; 8]`][prim]      | `fixed`             | yes           | (none)            |
-| `String`     | [`Cow<str>`][cow]                         | `general`           | yes           | (none)            |
-| `String`     | [`bytestring::ByteString`][bstr][^bzcopy] | `general`           | yes           | "bytestring"      |
+| Value type          | Alternative                                     | Supporting encoding | Distinguished | Feature to enable |
+|---------------------|-------------------------------------------------|---------------------|---------------|-------------------|
+| `u32`, `u64`        | [`[u8; 4]`][prim], [`[u8; 8]`][prim]            | `fixed`             | yes           | (none)            |
+| `Vec<u8>`           | `Blob`[^blob]                                   | `general`           | yes           | (none)            |
+| `Vec<u8>`           | [`Cow<[u8]>`][cow]                              | `plainbytes`        | yes           | (none)            |
+| `Vec<u8>`           | [`bytes::Bytes`][bytes][^bzcopy]                | `general`           | yes           | (none)            |
+| `Vec<u8>`           | [`[u8; N]`][prim][^plainbytearr]                | `plainbytes`        | yes           | (none)            |
+| `String`/`Vec<u8>`* | [`bstr::BString`][bstr][^bstrnote]              | `general`           | yes           | "bstr"            |
+| `String`            | [`Cow<str>`][cow]                               | `general`           | yes           | (none)            |
+| `String`            | [`bytestring::ByteString`][bytestring][^bzcopy] | `general`           | yes           | "bytestring"      |
+
+[^bstrnote]: [`bstr::BString`][bstr] is like `String` in that it has many useful
+features for working with text, yet it is also like `Vec<u8>` in that it can
+hold any unvalidated bytes content (it can work with UTF-8 text, but it doesn't
+*necessarily* contain valid UTF-8 text). This can be useful for both speed and
+for semi-valid data that is mostly textual, and its third-party support is
+included here for those use cases. If it's not immediately convenient as a value
+type, the crate also provides [`bstr::BStr`][bstrref] as a reference type (analogous to
+`str`) which can be used with any `&[u8]`.
 
 [^bzcopy]: When decoding from a `bytes::Bytes` object, both `bytes::Bytes` and
 `bytes::ByteString` have a zero-copy optimization and will reference the decoded
@@ -1280,7 +1291,11 @@ value.
 
 [box]: https://doc.rust-lang.org/std/boxed/struct.Box.html
 
-[bstr]: https://docs.rs/bytestring/latest/bytestring/struct.ByteString.html
+[bstr]: https://docs.rs/bstr/latest/bstr/struct.BString.html
+
+[bstrref]: https://docs.rs/bstr/latest/bstr/struct.BStr.html
+
+[bytestring]: https://docs.rs/bytestring/latest/bytestring/struct.ByteString.html
 
 [btmap]: https://doc.rust-lang.org/std/collections/btree_map/struct.BTreeMap.html
 
