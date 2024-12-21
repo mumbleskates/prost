@@ -18,6 +18,9 @@
   ("-00:00") is now tolerated, since the timezone information is discarded
   anyway.
 * `bilrost-types`: improved fuzzing binaries for datetime parsing.
+* New keywords and categories have been added to the crate metadata.
+* Various small cleanups to the readme and to the code as `rustfmt` and `clippy`
+  develop more and stronger opinions.
 
 ## v0.1010.0
 
