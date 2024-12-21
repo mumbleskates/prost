@@ -3,7 +3,6 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem;
-use core::ops::{Deref, DerefMut};
 use core::str;
 
 use bytes::{Buf, BufMut, Bytes};
@@ -325,17 +324,17 @@ impl Wiretyped<General> for bstr::BString {
 impl ValueEncoder<General> for bstr::BString {
     #[inline(always)]
     fn encode_value<B: BufMut + ?Sized>(value: &bstr::BString, buf: &mut B) {
-        ValueEncoder::<PlainBytes>::encode_value(value.deref(), buf);
+        ValueEncoder::<PlainBytes>::encode_value(&**value, buf);
     }
 
     #[inline(always)]
     fn prepend_value<B: ReverseBuf + ?Sized>(value: &bstr::BString, buf: &mut B) {
-        ValueEncoder::<PlainBytes>::prepend_value(value.deref(), buf);
+        ValueEncoder::<PlainBytes>::prepend_value(&**value, buf);
     }
 
     #[inline(always)]
     fn value_encoded_len(value: &bstr::BString) -> usize {
-        ValueEncoder::<PlainBytes>::value_encoded_len(value.deref())
+        ValueEncoder::<PlainBytes>::value_encoded_len(&**value)
     }
 
     #[inline(always)]
@@ -344,7 +343,7 @@ impl ValueEncoder<General> for bstr::BString {
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
-        ValueEncoder::<PlainBytes>::decode_value(value.deref_mut(), buf, ctx)
+        ValueEncoder::<PlainBytes>::decode_value(&mut **value, buf, ctx)
     }
 }
 
@@ -359,7 +358,7 @@ impl DistinguishedValueEncoder<General> for bstr::BString {
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished::<ALLOW_EMPTY>(
-            value.deref_mut(),
+            &mut **value,
             buf,
             ctx,
         )
