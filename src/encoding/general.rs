@@ -371,8 +371,10 @@ impl DistinguishedValueEncoder<General> for bstr::BString {
 mod bstr_string {
     use super::{General, Vec};
     use crate::encoding::test::check_type_test;
-    check_type_test!(General, expedient, from Vec<u8>, into bstr::BString, WireType::LengthDelimited);
-    check_type_test!(General, distinguished, from Vec<u8>, into bstr::BString, WireType::LengthDelimited);
+    check_type_test!(General, expedient, from Vec<u8>, into bstr::BString,
+        WireType::LengthDelimited);
+    check_type_test!(General, distinguished, from Vec<u8>, into bstr::BString,
+        WireType::LengthDelimited);
 }
 
 impl Wiretyped<General> for Bytes {
