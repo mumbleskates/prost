@@ -3,6 +3,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem;
+use core::ops::{Deref, DerefMut};
 use core::str;
 
 use bytes::{Buf, BufMut, Bytes};
@@ -313,6 +314,65 @@ mod bytestring_string {
         into bytestring::ByteString, WireType::LengthDelimited);
     check_type_test!(General, distinguished, from String, into bytestring::ByteString,
         WireType::LengthDelimited);
+}
+
+#[cfg(feature = "bstr")]
+impl Wiretyped<General> for bstr::BString {
+    const WIRE_TYPE: WireType = WireType::LengthDelimited;
+}
+
+#[cfg(feature = "bstr")]
+impl ValueEncoder<General> for bstr::BString {
+    #[inline(always)]
+    fn encode_value<B: BufMut + ?Sized>(value: &bstr::BString, buf: &mut B) {
+        ValueEncoder::<PlainBytes>::encode_value(value.deref(), buf);
+    }
+
+    #[inline(always)]
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &bstr::BString, buf: &mut B) {
+        ValueEncoder::<PlainBytes>::prepend_value(value.deref(), buf);
+    }
+
+    #[inline(always)]
+    fn value_encoded_len(value: &bstr::BString) -> usize {
+        ValueEncoder::<PlainBytes>::value_encoded_len(value.deref())
+    }
+
+    #[inline(always)]
+    fn decode_value<B: Buf + ?Sized>(
+        value: &mut bstr::BString,
+        buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<(), DecodeError> {
+        ValueEncoder::<PlainBytes>::decode_value(value.deref_mut(), buf, ctx)
+    }
+}
+
+#[cfg(feature = "bstr")]
+impl DistinguishedValueEncoder<General> for bstr::BString {
+    const CHECKS_EMPTY: bool = <Vec<u8> as DistinguishedValueEncoder<PlainBytes>>::CHECKS_EMPTY;
+
+    #[inline(always)]
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
+        value: &mut Self,
+        buf: Capped<impl Buf + ?Sized>,
+        ctx: DecodeContext,
+    ) -> Result<Canonicity, DecodeError> {
+        DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished::<ALLOW_EMPTY>(
+            value.deref_mut(),
+            buf,
+            ctx,
+        )
+    }
+}
+
+#[cfg(feature = "bstr")]
+#[cfg(test)]
+mod bstr_string {
+    use super::{General, Vec};
+    use crate::encoding::test::check_type_test;
+    check_type_test!(General, expedient, from Vec<u8>, into bstr::BString, WireType::LengthDelimited);
+    check_type_test!(General, distinguished, from Vec<u8>, into bstr::BString, WireType::LengthDelimited);
 }
 
 impl Wiretyped<General> for Bytes {

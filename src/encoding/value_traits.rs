@@ -194,6 +194,22 @@ impl EmptyState for Blob {
     }
 }
 
+#[cfg(feature = "bstr")]
+for_overwrite_via_default!(bstr::BString);
+
+#[cfg(feature = "bstr")]
+impl EmptyState for bstr::BString {
+    #[inline]
+    fn is_empty(&self) -> bool {
+        Vec::is_empty(self)
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        Vec::clear(self)
+    }
+}
+
 #[cfg(feature = "bytestring")]
 for_overwrite_via_default!(bytestring::ByteString);
 

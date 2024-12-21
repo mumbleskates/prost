@@ -4,6 +4,10 @@
 
 ### New features
 
+* Add 3rd party type support for the `bstr` crate and its `BString` type, which
+  is a wrapper around `Vec<u8>` that acts like text but does not guarantee UTF-8
+  and does not require any validation.
+
 ### Fixes
 
 ### Cleanups

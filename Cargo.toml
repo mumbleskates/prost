@@ -39,6 +39,7 @@ harness = false
 [dependencies]
 arrayvec = { version = ">=0.6", default-features = false, optional = true }
 bilrost-derive = { version = "=0.1011.0-dev", path = "bilrost-derive", optional = true }
+bstr = { version = ">=1", default-features = false, features = ["alloc"], optional = true }
 bytes = { version = "1", default-features = false }
 bytestring = { version = ">=1", default-features = false, optional = true }
 const_panic = { version = "0.2", default-features = false, features = ["non_basic"], optional = true }
@@ -70,6 +71,7 @@ std = []
 
 third-party-type-support = [
     "arrayvec",
+    "bstr",
     "bytestring",
     "hashbrown",
     "smallvec",
@@ -77,6 +79,7 @@ third-party-type-support = [
     "tinyvec",
 ]
 arrayvec = ["dep:arrayvec"]
+bstr = ["dep:bstr"]
 bytestring = ["dep:bytestring"]
 hashbrown = ["dep:hashbrown"]
 smallvec = ["dep:smallvec"]
