@@ -1578,9 +1578,8 @@ impl ToTokens for DecoderForOneof<'_> {
                     let mut new_value =
                         ::bilrost::encoding::ForOverwrite::for_overwrite();
                     let new_value_ref = &mut new_value;
-                    #decode.map(|res| {
+                    #decode.inspect(|_| {
                         *value = #some(#ident::#variant_ident #with_new_value);
-                        res
                     })
                 }
                 #some(#ident::#variant_ident #with_whatever) => ::core::result::Result::Err(
