@@ -1482,7 +1482,9 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     };
 
     let decode = match empty_variant {
-        None => decode,
+        None => quote!{
+            ::core::result::Result::Ok(#decode)
+        },
         Some(empty_ident) => quote! {
             // Guards against colliding oneof field decoding are only evaluated by the Oneof trait,
             // when `oneof_decode_field` is called and the oneof value is already populated.
@@ -1690,7 +1692,9 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     };
 
     let decode = match empty_variant {
-        None => decode,
+        None => quote!{
+            ::core::result::Result::Ok(#decode)
+        },
         Some(empty_ident) => quote! {
             // See the note in `try_oneof` above for details about the colliding field guard.
             if let #ident::#empty_ident = value {
