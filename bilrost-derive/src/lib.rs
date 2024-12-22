@@ -1622,13 +1622,23 @@ impl ToTokens for DecoderForOneof<'_> {
             field.decode_expedient(quote!(&mut new_value))
         };
 
-        tokens.append_all(quote! {
-            #tag => {
-                let mut new_value = ::bilrost::encoding::ForOverwrite::for_overwrite();
-                #decode?;
-                #ident::#variant_ident #with_new_value
-            }
-        })
+        if self.distinguished {
+            tokens.append_all(quote! {
+                #tag => {
+                    let mut new_value = ::bilrost::encoding::ForOverwrite::for_overwrite();
+                    let canon = #decode?;
+                    (#ident::#variant_ident #with_new_value, canon)
+                }
+            })
+        } else {
+            tokens.append_all(quote! {
+                #tag => {
+                    let mut new_value = ::bilrost::encoding::ForOverwrite::for_overwrite();
+                    #decode?;
+                    #ident::#variant_ident #with_new_value
+                }
+            })
+        }
     }
 }
 
