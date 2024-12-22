@@ -701,7 +701,7 @@ enum Big {
     #[bilrost(tag(1), encoding(packed))]
     Six([String; 6]),
     #[bilrost(tag(2), encoding(packed))]
-    HalfADozen([Vec<Blob>; 6]),
+    HalfADozen([Blob; 6]),
 }
 
 #[derive(Message)]
