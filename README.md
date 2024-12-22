@@ -685,8 +685,33 @@ struct Widget {
 </details>
 
 When a oneof enum type has the empty variant, it can only be included in a
-message directly; when it has none, it can only be included nested within an
-`Option`.
+message directly; when it has none, it can only be included when it's nested
+within an `Option` so that `None` stands for the empty state.
+
+#### Boxing Oneof fields
+
+It's possible to store oneof enums out-of-line from your struct by indirecting
+them with `Box`, which is transparent to all oneof traits:
+
+```rust
+use bilrost::{Blob, Message, Oneof};
+
+#[derive(Oneof)]
+enum Big {
+    #[bilrost(tag(1), encoding(packed))]
+    Six([String; 6]),
+    #[bilrost(tag(2), encoding(packed))]
+    HalfADozen([Vec<Blob>; 6]),
+}
+
+#[derive(Message)]
+struct Tiny {
+  #[bilrost(oneof(1, 2))]
+  big_fields: Option<Box<Big>>,
+  #[bilrost(3)]
+  small_field: i16,
+}
+```
 
 #### Deriving `Message` for enums
 
