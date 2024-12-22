@@ -1878,6 +1878,22 @@ pub trait DistinguishedOneof: Oneof {
     ) -> Result<Canonicity, DecodeError>;
 }
 
+impl<T> DistinguishedOneof for Box<T>
+where
+    T: DistinguishedOneof,
+{
+    #[inline]
+    fn oneof_decode_field_distinguished<B: Buf + ?Sized>(
+        value: &mut Self,
+        tag: u32,
+        wire_type: WireType,
+        buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<Canonicity, DecodeError> {
+        DistinguishedOneof::oneof_decode_field_distinguished(&mut **value, tag, wire_type, buf, ctx)
+    }
+}
+
 /// Underlying trait for a oneof that has no inherent "empty" variant, opting instead to be wrapped
 /// in an `Option`.
 pub trait NonEmptyDistinguishedOneof: Sized {

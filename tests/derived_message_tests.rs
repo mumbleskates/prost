@@ -2677,58 +2677,81 @@ fn truncated_packed_collection() {
 
 // Oneof tests
 
+// Oneofs can be nested in Box, whether or not they are non-empty typed.
 #[test]
 fn oneof_field_decoding() {
-    #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
-    enum AB {
-        #[bilrost(1)]
-        A(bool),
-        #[bilrost(2)]
-        B(bool),
+    fn do_oneof_field_decoding<T>(expected_a: T, expected_b: T)
+    where
+        T: Debug + Eq + DistinguishedOneof,
+    {
+        #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+        struct Foo<T>(#[bilrost(oneof = "1, 2")] T);
+
+        assert::decodes_distinguished([(1, OV::bool(true))], Foo(expected_a));
+        assert::decodes_distinguished([(2, OV::bool(false))], Foo(expected_b));
+        assert::never_decodes::<Foo<T>>(
+            [(1, OV::bool(false)), (2, OV::bool(true))],
+            ConflictingFields,
+            "Foo.0/AB.B",
+        );
+        assert::never_decodes::<Foo<T>>(
+            [(1, OV::bool(true)), (1, OV::bool(false))],
+            UnexpectedlyRepeated,
+            "Foo.0/AB.A",
+        );
     }
-    use AB::*;
 
-    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-    struct Foo(#[bilrost(oneof = "1, 2")] Option<AB>);
+    // tests for non-empty oneof
+    let _: () = {
+        #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
+        enum AB {
+            #[bilrost(1)]
+            A(bool),
+            #[bilrost(2)]
+            B(bool),
+        }
 
-    assert::decodes_distinguished([(1, OV::bool(true))], Foo(Some(A(true))));
-    assert::decodes_distinguished([(2, OV::bool(false))], Foo(Some(B(false))));
-    assert::never_decodes::<Foo>(
-        [(1, OV::bool(false)), (2, OV::bool(true))],
-        ConflictingFields,
-        "Foo.0/AB.B",
-    );
-    assert::never_decodes::<Foo>(
-        [(1, OV::bool(true)), (1, OV::bool(false))],
-        UnexpectedlyRepeated,
-        "Foo.0/AB.A",
-    );
+        do_oneof_field_decoding::<Option<AB>>(Some(AB::A(true)), Some(AB::B(false)));
+        do_oneof_field_decoding::<Option<Box<AB>>>(
+            Some(Box::new(AB::A(true))),
+            Some(Box::new(AB::B(false))),
+        );
+        do_oneof_field_decoding::<Option<Box<Box<AB>>>>(
+            Some(Box::new(Box::new(AB::A(true)))),
+            Some(Box::new(Box::new(AB::B(false)))),
+        );
+        do_oneof_field_decoding::<Box<Option<Box<AB>>>>(
+            Box::new(Some(Box::new(AB::A(true)))),
+            Box::new(Some(Box::new(AB::B(false)))),
+        );
+        do_oneof_field_decoding::<Box<Option<Box<AB>>>>(
+            Box::new(Some(Box::new(AB::A(true)))),
+            Box::new(Some(Box::new(AB::B(false)))),
+        );
+    };
 
-    #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
-    enum CD {
-        None,
-        #[bilrost(1)]
-        C(bool),
-        #[bilrost(2)]
-        D(bool),
-    }
-    use CD::*;
+    // tests for oneof with natural empty state
+    let _: () = {
+        #[derive(Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
+        enum AB {
+            None,
+            #[bilrost(1)]
+            A(bool),
+            #[bilrost(2)]
+            B(bool),
+        }
 
-    #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-    struct Bar(#[bilrost(oneof = "1, 2")] CD);
-
-    assert::decodes_distinguished([(1, OV::bool(true))], Bar(C(true)));
-    assert::decodes_distinguished([(2, OV::bool(false))], Bar(D(false)));
-    assert::never_decodes::<Bar>(
-        [(1, OV::bool(false)), (2, OV::bool(true))],
-        ConflictingFields,
-        "Bar.0/CD.D",
-    );
-    assert::never_decodes::<Bar>(
-        [(1, OV::bool(true)), (1, OV::bool(false))],
-        UnexpectedlyRepeated,
-        "Bar.0/CD.C",
-    );
+        do_oneof_field_decoding::<AB>(AB::A(true), AB::B(false));
+        do_oneof_field_decoding::<Box<AB>>(Box::new(AB::A(true)), Box::new(AB::B(false)));
+        do_oneof_field_decoding::<Box<Box<AB>>>(
+            Box::new(Box::new(AB::A(true))),
+            Box::new(Box::new(AB::B(false))),
+        );
+        do_oneof_field_decoding::<Box<Box<Box<AB>>>>(
+            Box::new(Box::new(Box::new(AB::A(true)))),
+            Box::new(Box::new(Box::new(AB::B(false)))),
+        );
+    };
 }
 
 #[test]
@@ -2741,29 +2764,38 @@ fn oneof_with_errors_inside() {
     }
     #[derive(Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
     enum Optioned {
-        #[bilrost(2)]
+        #[bilrost(1)]
         B(String),
     }
-    #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-    struct Foo {
-        #[bilrost(oneof(1))]
-        a: Natural,
-        #[bilrost(oneof(2))]
-        b: Option<Optioned>,
+
+    fn do_test_oneof_with_errors_inside<OneofType>(child_field: &str)
+    where
+        OneofType: Debug + Eq + DistinguishedOneof,
+    {
+        #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+        struct Foo<O> {
+            #[bilrost(oneof(1))]
+            a: O,
+        }
+        assert::never_decodes::<Foo<OneofType>>(
+            [(1, OV::bytes(b"\xff"))],
+            InvalidValue,
+            &format!("Foo.a/{child_field}"),
+        );
+        assert::never_decodes::<Foo<OneofType>>(
+            [(1, OV::str("abc")), (1, OV::str("def"))],
+            UnexpectedlyRepeated,
+            &format!("Foo.a/{child_field}"),
+        );
     }
 
-    assert::never_decodes::<Foo>([(1, OV::bytes(b"\xff"))], InvalidValue, "Foo.a/Natural.A");
-    assert::never_decodes::<Foo>(
-        [(1, OV::str("abc")), (1, OV::str("def"))],
-        UnexpectedlyRepeated,
-        "Foo.a/Natural.A",
-    );
-    assert::never_decodes::<Foo>([(2, OV::bytes(b"\xff"))], InvalidValue, "Foo.b/Optioned.B");
-    assert::never_decodes::<Foo>(
-        [(2, OV::str("abc")), (2, OV::str("def"))],
-        UnexpectedlyRepeated,
-        "Foo.b/Optioned.B",
-    );
+    do_test_oneof_with_errors_inside::<Natural>("Natural.A");
+    do_test_oneof_with_errors_inside::<Option<Optioned>>("Optioned.B");
+    do_test_oneof_with_errors_inside::<Box<Natural>>("Natural.A");
+    do_test_oneof_with_errors_inside::<Box<Box<Box<Natural>>>>("Natural.A");
+    do_test_oneof_with_errors_inside::<Box<Option<Optioned>>>("Optioned.B");
+    do_test_oneof_with_errors_inside::<Option<Box<Optioned>>>("Optioned.B");
+    do_test_oneof_with_errors_inside::<Box<Option<Box<Optioned>>>>("Optioned.B");
 }
 
 #[test]
