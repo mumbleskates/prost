@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use core::cmp::{min, Eq, Ordering, PartialEq};
 use core::default::Default;
 use core::fmt::Debug;
@@ -8,8 +9,8 @@ use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
 use crate::DecodeErrorKind::{
-    InvalidVarint, NotCanonical, Oversize, TagOverflowed, Truncated, UnexpectedlyRepeated,
-    UnknownField, WrongWireType,
+    ConflictingFields, InvalidVarint, NotCanonical, Oversize, TagOverflowed, Truncated,
+    UnexpectedlyRepeated, UnknownField, WrongWireType,
 };
 use crate::{decode_length_delimiter, DecodeError, DecodeErrorKind};
 
@@ -1656,6 +1657,44 @@ pub trait Oneof: EmptyState {
     ) -> Result<(), DecodeError>;
 }
 
+impl<T> Oneof for Box<T>
+where
+    T: Oneof,
+{
+    const FIELD_TAGS: &'static [u32] = <T as Oneof>::FIELD_TAGS;
+
+    #[inline]
+    fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter) {
+        Oneof::oneof_encode(&**self, buf, tw)
+    }
+
+    #[inline]
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter) {
+        Oneof::oneof_prepend(&**self, buf, tw)
+    }
+
+    #[inline]
+    fn oneof_encoded_len(&self, tm: &mut impl TagMeasurer) -> usize {
+        Oneof::oneof_encoded_len(&**self, tm)
+    }
+
+    #[inline]
+    fn oneof_current_tag(&self) -> Option<u32> {
+        Oneof::oneof_current_tag(&**self)
+    }
+
+    #[inline]
+    fn oneof_decode_field<B: Buf + ?Sized>(
+        value: &mut Self,
+        tag: u32,
+        wire_type: WireType,
+        buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<(), DecodeError> {
+        Oneof::oneof_decode_field(&mut **value, tag, wire_type, buf, ctx)
+    }
+}
+
 /// Underlying trait for a oneof that has no inherent "empty" variant, opting instead to be wrapped
 /// in an `Option`.
 pub trait NonEmptyOneof: Sized {
@@ -1673,14 +1712,63 @@ pub trait NonEmptyOneof: Sized {
     /// Returns the current tag of the oneof, if any.
     fn oneof_current_tag(&self) -> u32;
 
+    /// Returns the diagnostic name of the currently populated variant. The first returned value is
+    /// the name of the oneof enum, and the second is the name of the field.
+    // TODO(widders): should this be based on static tag rather than current value? would that
+    //  better maintain current behavior? is it better to have the error complain about the first,
+    //  already-present value or about the second value that conflicts with it? do we care? i think
+    //  perhaps at the very least it would be easier to write and look at the match against tag vals
+    fn oneof_current_variant_name(&self) -> (&'static str, &'static str);
+
     /// Decodes from the given buffer.
     fn oneof_decode_field<B: Buf + ?Sized>(
-        value: &mut Option<Self>,
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
         ctx: DecodeContext,
-    ) -> Result<(), DecodeError>;
+    ) -> Result<Self, DecodeError>;
+}
+
+impl<T> NonEmptyOneof for Box<T>
+where
+    T: NonEmptyOneof,
+{
+    const FIELD_TAGS: &'static [u32] = <T as NonEmptyOneof>::FIELD_TAGS;
+
+    #[inline]
+    fn oneof_encode<B: BufMut + ?Sized>(&self, buf: &mut B, tw: &mut TagWriter) {
+        NonEmptyOneof::oneof_encode(&**self, buf, tw)
+    }
+
+    #[inline]
+    fn oneof_prepend<B: ReverseBuf + ?Sized>(&self, buf: &mut B, tw: &mut TagRevWriter) {
+        NonEmptyOneof::oneof_prepend(&**self, buf, tw)
+    }
+
+    #[inline]
+    fn oneof_encoded_len(&self, tm: &mut impl TagMeasurer) -> usize {
+        NonEmptyOneof::oneof_encoded_len(&**self, tm)
+    }
+
+    #[inline]
+    fn oneof_current_tag(&self) -> u32 {
+        NonEmptyOneof::oneof_current_tag(&**self)
+    }
+
+    #[inline]
+    fn oneof_current_variant_name(&self) -> (&'static str, &'static str) {
+        NonEmptyOneof::oneof_current_variant_name(&**self)
+    }
+
+    #[inline]
+    fn oneof_decode_field<B: Buf + ?Sized>(
+        tag: u32,
+        wire_type: WireType,
+        buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<Self, DecodeError> {
+        Ok(Box::new(T::oneof_decode_field(tag, wire_type, buf, ctx)?))
+    }
 }
 
 impl<T> Oneof for Option<T>
@@ -1725,7 +1813,18 @@ where
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
-        T::oneof_decode_field(value, tag, wire_type, buf, ctx)
+        if let Some(already) = value {
+            let mut err = DecodeError::new(if already.oneof_current_tag() == tag {
+                UnexpectedlyRepeated
+            } else {
+                ConflictingFields
+            });
+            let (msg, field) = already.oneof_current_variant_name();
+            err.push(msg, field);
+            return Err(err);
+        }
+        *value = Some(T::oneof_decode_field(tag, wire_type, buf, ctx)?);
+        Ok(())
     }
 }
 
@@ -1747,17 +1846,32 @@ pub trait DistinguishedOneof: Oneof {
 pub trait NonEmptyDistinguishedOneof: Sized {
     /// Decodes from the given buffer.
     fn oneof_decode_field_distinguished<B: Buf + ?Sized>(
-        value: &mut Option<Self>,
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
         ctx: DecodeContext,
-    ) -> Result<Canonicity, DecodeError>;
+    ) -> Result<(Self, Canonicity), DecodeError>;
+}
+
+impl<T> NonEmptyDistinguishedOneof for Box<T>
+where
+    T: NonEmptyDistinguishedOneof,
+{
+    #[inline]
+    fn oneof_decode_field_distinguished<B: Buf + ?Sized>(
+        tag: u32,
+        wire_type: WireType,
+        buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<(Self, Canonicity), DecodeError> {
+        NonEmptyDistinguishedOneof::oneof_decode_field_distinguished(tag, wire_type, buf, ctx)
+            .map(|(val, canon)| (Box::new(val), canon))
+    }
 }
 
 impl<T> DistinguishedOneof for Option<T>
 where
-    T: NonEmptyDistinguishedOneof,
+    T: NonEmptyDistinguishedOneof + NonEmptyOneof,
     Self: Oneof,
 {
     #[inline]
@@ -1768,7 +1882,19 @@ where
         buf: Capped<B>,
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        T::oneof_decode_field_distinguished(value, tag, wire_type, buf, ctx)
+        if let Some(already) = value {
+            let mut err = DecodeError::new(if already.oneof_current_tag() == tag {
+                UnexpectedlyRepeated
+            } else {
+                ConflictingFields
+            });
+            let (msg, field) = already.oneof_current_variant_name();
+            err.push(msg, field);
+            return Err(err);
+        }
+        let (decoded, canon) = T::oneof_decode_field_distinguished(tag, wire_type, buf, ctx)?;
+        *value = Some(decoded);
+        Ok(canon)
     }
 }
 

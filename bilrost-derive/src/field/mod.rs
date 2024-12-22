@@ -117,7 +117,7 @@ impl Field {
             Field::Oneof(_) => {
                 panic!(
                     "trying to spell a field's value within a oneof variant, but the field is a \
-                oneof, not part of a oneof"
+                    oneof, not part of a oneof"
                 );
             }
         }

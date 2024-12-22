@@ -1389,14 +1389,16 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         .collect();
 
     let appropriate_oneof_trait;
-    let decode_field_self_ty;
+    let decode_field_self_arg;
+    let decode_field_return_ty;
     let current_tag_ty;
     let current_tag: Vec<TokenStream>;
     let empty_state_impl;
 
     if let Some(empty_ident) = &empty_variant {
         appropriate_oneof_trait = quote!(Oneof);
-        decode_field_self_ty = quote!(Self);
+        decode_field_self_arg = Some(quote!(value: &mut Self,));
+        decode_field_return_ty = quote!(());
 
         current_tag_ty = quote!(::core::option::Option<u32>);
         current_tag = fields
@@ -1436,7 +1438,8 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         });
     } else {
         appropriate_oneof_trait = quote!(NonEmptyOneof);
-        decode_field_self_ty = quote!(::core::option::Option<Self>);
+        decode_field_self_arg = None;
+        decode_field_return_ty = quote!(Self);
 
         // The oneof enum has no "empty" unit variant, so we implement the "non-empty" trait.
         current_tag_ty = quote!(u32);
@@ -1502,12 +1505,12 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
             }
 
             fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
-                value: &mut #decode_field_self_ty,
+                #decode_field_self_arg
                 tag: u32,
                 wire_type: ::bilrost::encoding::WireType,
                 buf: ::bilrost::encoding::Capped<__B>,
                 ctx: ::bilrost::encoding::DecodeContext,
-            ) -> ::core::result::Result<(), ::bilrost::DecodeError> {
+            ) -> ::core::result::Result<#decode_field_return_ty, ::bilrost::DecodeError> {
                 match tag {
                     #(#decode,)*
                     _ => unreachable!(
@@ -1552,46 +1555,21 @@ impl ToTokens for DecoderForOneof<'_> {
         let variant_ident = self.variant_ident;
         let field = self.field;
 
-        let match_empty_variant;
-        let some;
-        if let Some(empty_ident) = self.empty_variant {
-            match_empty_variant = quote!(#ident::#empty_ident);
-            some = None;
-        } else {
-            match_empty_variant = quote!(::core::option::Option::None);
-            some = Some(quote!(::core::option::Option::Some));
-        }
-
         let tag = field.first_tag();
         let with_new_value = field.with_value(quote!(new_value));
-        let with_whatever = field.with_value(quote!(_));
 
         let decode = if self.distinguished {
-            field.decode_distinguished(quote!(new_value_ref))
+            field.decode_distinguished(quote!(&mut new_value))
         } else {
-            field.decode_expedient(quote!(new_value_ref))
+            field.decode_expedient(quote!(&mut new_value))
         };
 
         tokens.append_all(quote! {
-            #tag => match value {
-                #match_empty_variant => {
-                    let mut new_value =
-                        ::bilrost::encoding::ForOverwrite::for_overwrite();
-                    let new_value_ref = &mut new_value;
-                    #decode.inspect(|_| {
-                        *value = #some(#ident::#variant_ident #with_new_value);
-                    })
-                }
-                #some(#ident::#variant_ident #with_whatever) => ::core::result::Result::Err(
-                    ::bilrost::DecodeError::new(::bilrost::DecodeErrorKind::UnexpectedlyRepeated)
-                ),
-                _ => ::core::result::Result::Err(
-                    ::bilrost::DecodeError::new(::bilrost::DecodeErrorKind::ConflictingFields)
-                ),
-            }.map_err(|mut error| {
-                error.push(stringify!(#ident), stringify!(#variant_ident));
-                error
-            })
+            #tag => {
+                let mut new_value = ::bilrost::encoding::ForOverwrite::for_overwrite();
+                #decode?;
+                #ident::#variant_ident #with_new_value
+            }
         })
     }
 }
