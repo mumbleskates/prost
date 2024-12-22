@@ -1482,7 +1482,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     };
 
     let decode = match empty_variant {
-        None => quote!{
+        None => quote! {
             #decode
         },
         Some(empty_ident) => quote! {
@@ -1711,7 +1711,7 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     };
 
     let decode = match empty_variant {
-        None => quote!{
+        None => quote! {
             #decode
         },
         Some(empty_ident) => quote! {
