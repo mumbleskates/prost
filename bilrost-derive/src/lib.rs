@@ -1455,13 +1455,63 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         empty_state_impl = None;
     };
 
-    let decode = fields.iter().map(|(variant_ident, field)| DecoderForOneof {
+    let variant_name_arms = fields.iter().map(|(variant_ident, field)| {
+        let tag = field.first_tag();
+        quote! {
+            #tag => (stringify!(#ident), stringify!(#variant_ident)),
+        }
+    });
+
+    let decode_arms = fields.iter().map(|(variant_ident, field)| DecoderForOneof {
         ident: &ident,
         variant_ident,
         field,
-        empty_variant: &empty_variant,
         distinguished: false,
     });
+
+    let decode = quote! {
+        match tag {
+            #(#decode_arms,)*
+            _ => unreachable!(
+                concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
+            ),
+        }
+    };
+
+    let decode = match empty_variant {
+        None => decode,
+        Some(empty_ident) => quote! {
+            // Guards against colliding oneof field decoding are only evaluated by the Oneof trait,
+            // when `oneof_decode_field` is called and the oneof value is already populated.
+            // Whichever implementer is responsible for the oneof having an empty state is also
+            // responsible for checking for this conflict and returning an error with the
+            // appropriate decode error kind and augmenting it with the correct variant name, which
+            // can be gotten from `oneof_variant_name` via the trait.
+            //
+            // In this case we are implementing a Oneof that has an intrinsic empty state via a unit
+            // variant, so we insert this guard right into our trait impl. The signature for this
+            // method in the `NonEmptyOneof` trait is slightly different to allow for easier nested
+            // value implementations, and returns the `Self` type directly in the result instead
+            // with no guard.
+            if let #ident::#empty_ident = value {
+                *value = #decode;
+                ::core::result::Result::Ok(())
+            } else {
+                let mut err = ::bilrost::DecodeError::new(
+                    if ::bilrost::encoding::NonEmptyOneof::oneof_current_tag(value) == tag {
+                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                    } else {
+                        ::bilrost::DecodeErrorKind::ConflictingFields
+                    }
+                );
+                let (msg, field) = <
+                    Self as ::bilrost::encoding::NonEmptyOneof
+                >::oneof_variant_name(tag);
+                err.push(msg, field);
+                ::core::result::Result::Err(err)
+            }
+        },
+    };
 
     let expanded = quote! {
         impl #impl_generics ::bilrost::encoding::#appropriate_oneof_trait
@@ -1504,6 +1554,13 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                 }
             }
 
+            fn oneof_variant_name(tag: u32) -> (&'static str, &'static str) {
+                match tag {
+                    #(#variant_name_arms)*
+                    _ => ("", ""),
+                }
+            }
+
             fn oneof_decode_field<__B: ::bilrost::bytes::Buf + ?Sized>(
                 #decode_field_self_arg
                 tag: u32,
@@ -1511,12 +1568,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                 buf: ::bilrost::encoding::Capped<__B>,
                 ctx: ::bilrost::encoding::DecodeContext,
             ) -> ::core::result::Result<#decode_field_return_ty, ::bilrost::DecodeError> {
-                match tag {
-                    #(#decode,)*
-                    _ => unreachable!(
-                        concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                    ),
-                }
+                #decode
             }
         }
 
@@ -1543,8 +1595,6 @@ struct DecoderForOneof<'a> {
     variant_ident: &'a Ident,
     /// The Field struct for this variant
     field: &'a Field,
-    /// The "empty" variant of this enum, if it exists
-    empty_variant: &'a Option<Ident>,
     /// True to generate a distinguished impl, false for expedient
     distinguished: bool,
 }
@@ -1592,47 +1642,78 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     } = preprocess_oneof(&input)?;
 
     let appropriate_oneof_trait;
+    let decode_field_self_arg;
+    let decode_field_return_ty;
     let full_where_clause;
-    let decode_field_self_ty;
     if empty_variant.is_some() {
         appropriate_oneof_trait = quote!(DistinguishedOneof);
+        decode_field_self_arg = Some(quote!(value: &mut Self,));
+        decode_field_return_ty = quote!(::bilrost::Canonicity);
         full_where_clause = append_distinguished_encoder_wheres(
             where_clause,
             Some(quote!(Self: ::bilrost::encoding::Oneof)),
             &fields,
         );
-        decode_field_self_ty = quote!(Self);
     } else {
         appropriate_oneof_trait = quote!(NonEmptyDistinguishedOneof);
+        decode_field_self_arg = None;
+        decode_field_return_ty = quote!((Self, ::bilrost::Canonicity));
         full_where_clause = append_distinguished_encoder_wheres(where_clause, None, &fields);
-        decode_field_self_ty = quote!(::core::option::Option<Self>);
     };
 
-    let decode = fields.iter().map(|(variant_ident, field)| DecoderForOneof {
+    let decode_arms = fields.iter().map(|(variant_ident, field)| DecoderForOneof {
         ident: &ident,
         variant_ident,
         field,
-        empty_variant: &empty_variant,
         distinguished: true,
     });
+
+    let decode = quote! {
+        match tag {
+            #(#decode_arms,)*
+            _ => unreachable!(
+                concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
+            ),
+        }
+    };
+
+    let decode = match empty_variant {
+        None => decode,
+        Some(empty_ident) => quote! {
+            // See the note in `try_oneof` above for details about the colliding field guard.
+            if let #ident::#empty_ident = value {
+                let canon;
+                (*value, canon) = #decode;
+                ::core::result::Result::Ok(canon)
+            } else {
+                let mut err = ::bilrost::DecodeError::new(
+                    if ::bilrost::encoding::NonEmptyOneof::oneof_current_tag(value) == tag {
+                        ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
+                    } else {
+                        ::bilrost::DecodeErrorKind::ConflictingFields
+                    }
+                );
+                let (msg, field) = <
+                    Self as ::bilrost::encoding::NonEmptyOneof
+                >::oneof_variant_name(tag);
+                err.push(msg, field);
+                ::core::result::Result::Err(err)
+            }
+        },
+    };
 
     let expanded = quote! {
         impl #impl_generics ::bilrost::encoding::#appropriate_oneof_trait
         for #ident #ty_generics #full_where_clause
         {
             fn oneof_decode_field_distinguished<__B: ::bilrost::bytes::Buf + ?Sized>(
-                value: &mut #decode_field_self_ty,
+                #decode_field_self_arg
                 tag: u32,
                 wire_type: ::bilrost::encoding::WireType,
                 buf: ::bilrost::encoding::Capped<__B>,
                 ctx: ::bilrost::encoding::DecodeContext,
-            ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
-                match tag {
-                    #(#decode,)*
-                    _ => unreachable!(
-                        concat!("invalid ", stringify!(#ident), " tag: {}"), tag,
-                    ),
-                }
+            ) -> ::core::result::Result<#decode_field_return_ty, ::bilrost::DecodeError> {
+                #decode
             }
         }
     };

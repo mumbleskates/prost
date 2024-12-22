@@ -1647,6 +1647,10 @@ pub trait Oneof: EmptyState {
     /// Returns the current tag of the oneof, if any.
     fn oneof_current_tag(&self) -> Option<u32>;
 
+    /// Returns the diagnostic name of the variant with the given tag. The first returned value is
+    /// the name of the oneof enum, and the second is the name of the field.
+    fn oneof_variant_name(tag: u32) -> (&'static str, &'static str);
+
     /// Decodes from the given buffer.
     fn oneof_decode_field<B: Buf + ?Sized>(
         value: &mut Self,
@@ -1684,6 +1688,11 @@ where
     }
 
     #[inline]
+    fn oneof_variant_name(tag: u32) -> (&'static str, &'static str) {
+        T::oneof_variant_name(tag)
+    }
+
+    #[inline]
     fn oneof_decode_field<B: Buf + ?Sized>(
         value: &mut Self,
         tag: u32,
@@ -1709,16 +1718,12 @@ pub trait NonEmptyOneof: Sized {
     /// Measures the number of bytes that would encode this oneof.
     fn oneof_encoded_len(&self, tm: &mut impl TagMeasurer) -> usize;
 
-    /// Returns the current tag of the oneof, if any.
+    /// Returns the current tag of the oneof.
     fn oneof_current_tag(&self) -> u32;
 
-    /// Returns the diagnostic name of the currently populated variant. The first returned value is
+    /// Returns the diagnostic name of the variant with the given tag. The first returned value is
     /// the name of the oneof enum, and the second is the name of the field.
-    // TODO(widders): should this be based on static tag rather than current value? would that
-    //  better maintain current behavior? is it better to have the error complain about the first,
-    //  already-present value or about the second value that conflicts with it? do we care? i think
-    //  perhaps at the very least it would be easier to write and look at the match against tag vals
-    fn oneof_current_variant_name(&self) -> (&'static str, &'static str);
+    fn oneof_variant_name(tag: u32) -> (&'static str, &'static str);
 
     /// Decodes from the given buffer.
     fn oneof_decode_field<B: Buf + ?Sized>(
@@ -1756,8 +1761,8 @@ where
     }
 
     #[inline]
-    fn oneof_current_variant_name(&self) -> (&'static str, &'static str) {
-        NonEmptyOneof::oneof_current_variant_name(&**self)
+    fn oneof_variant_name(tag: u32) -> (&'static str, &'static str) {
+        T::oneof_variant_name(tag)
     }
 
     #[inline]
@@ -1806,6 +1811,11 @@ where
     }
 
     #[inline]
+    fn oneof_variant_name(tag: u32) -> (&'static str, &'static str) {
+        T::oneof_variant_name(tag)
+    }
+
+    #[inline]
     fn oneof_decode_field<B: Buf + ?Sized>(
         value: &mut Self,
         tag: u32,
@@ -1819,7 +1829,7 @@ where
             } else {
                 ConflictingFields
             });
-            let (msg, field) = already.oneof_current_variant_name();
+            let (msg, field) = T::oneof_variant_name(tag);
             err.push(msg, field);
             return Err(err);
         }
@@ -1888,7 +1898,7 @@ where
             } else {
                 ConflictingFields
             });
-            let (msg, field) = already.oneof_current_variant_name();
+            let (msg, field) = T::oneof_variant_name(tag);
             err.push(msg, field);
             return Err(err);
         }
