@@ -2732,6 +2732,41 @@ fn oneof_field_decoding() {
 }
 
 #[test]
+fn oneof_with_errors_inside() {
+    #[derive(Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
+    enum Natural {
+        None,
+        #[bilrost(1)]
+        A(String),
+    }
+    #[derive(Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
+    enum Optioned {
+        #[bilrost(2)]
+        B(String),
+    }
+    #[derive(Clone, Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+    struct Foo {
+        #[bilrost(oneof(1))]
+        a: Natural,
+        #[bilrost(oneof(2))]
+        b: Option<Optioned>,
+    }
+
+    assert::never_decodes::<Foo>([(1, OV::bytes(b"\xff"))], InvalidValue, "Foo.a/Natural.A");
+    assert::never_decodes::<Foo>(
+        [(1, OV::str("abc")), (1, OV::str("def"))],
+        UnexpectedlyRepeated,
+        "Foo.a/Natural.A",
+    );
+    assert::never_decodes::<Foo>([(2, OV::bytes(b"\xff"))], InvalidValue, "Foo.b/Optioned.B");
+    assert::never_decodes::<Foo>(
+        [(2, OV::str("abc")), (2, OV::str("def"))],
+        UnexpectedlyRepeated,
+        "Foo.b/Optioned.B",
+    );
+}
+
+#[test]
 fn oneof_optioned_fields_encode_empty() {
     #[derive(Clone, Debug, PartialEq, Eq, Oneof, DistinguishedOneof)]
     enum Abc {
