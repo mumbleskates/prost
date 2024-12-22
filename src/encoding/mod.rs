@@ -1632,6 +1632,31 @@ where
 
 /// Trait to be implemented by (or more commonly derived for) oneofs, which have knowledge of their
 /// variants' tags and encoding.
+///
+/// `Oneof` (and `DistinguishedOneof`) can be represented in messages because they have an "empty"
+/// state (typically a dedicated empty enum variant or Option::None). When `Oneof` is derived for an
+/// enum that does not have a unit variant, the trait that is actually derived is `NonEmptyOneof`,
+/// which has no empty states and must be wrapped in `Option` at some point to be used.
+///
+/// In addition to decoding into the variants of the oneof, implementations of the maybe-empty
+/// `Oneof` traits need to be able to return and attach useful details to the appropriate errors for
+/// collisions (when they decode a field but they already contain values) or when decoding a value
+/// for the oneof otherwise encounters an error. For this reason there are the following differences
+/// between `Oneof` and `NonEmptyOneof`:
+///
+/// * `Oneof::oneof_current_tag` returns `Option<u32>` instead of `u32`
+/// * `Oneof::oneof_decode_field` accepts a `value: &mut Self` argument, while `NonEmptyOneof` does
+///   not; the `Oneof` version of this function returns `Result<(), DecodeError>`, and the
+///   `NonEmptyOneof` version returns `Result<Self, DecodeError>` directly.
+/// * `Oneof::oneof_decode_field` is responsible for attaching error detail information when a
+///   decoding error occurs, while `NonEmptyOneof` does not need to do that.
+///
+/// There are implementations provided, like `impl<T> Oneof for Option<T> where T: NonEmptyOneof`
+/// for both `Oneof` and `DistinguishedOneof`. These implementations take care of the above
+/// contract boundary as well.
+///
+/// Other than that: Both empty and non-empty oneofs can be `Box`ed, as there are also wrapper impls
+/// to cover that.
 pub trait Oneof: EmptyState {
     const FIELD_TAGS: &'static [u32];
 
@@ -1824,17 +1849,19 @@ where
         ctx: DecodeContext,
     ) -> Result<(), DecodeError> {
         if let Some(already) = value {
-            let mut err = DecodeError::new(if already.oneof_current_tag() == tag {
+            Err(DecodeError::new(if already.oneof_current_tag() == tag {
                 UnexpectedlyRepeated
             } else {
                 ConflictingFields
-            });
+            }))
+        } else {
+            T::oneof_decode_field(tag, wire_type, buf, ctx).map(|decoded| *value = Some(decoded))
+        }
+        .map_err(|mut err| {
             let (msg, field) = T::oneof_variant_name(tag);
             err.push(msg, field);
-            return Err(err);
-        }
-        *value = Some(T::oneof_decode_field(tag, wire_type, buf, ctx)?);
-        Ok(())
+            err
+        })
     }
 }
 
@@ -1893,18 +1920,22 @@ where
         ctx: DecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if let Some(already) = value {
-            let mut err = DecodeError::new(if already.oneof_current_tag() == tag {
+            Err(DecodeError::new(if already.oneof_current_tag() == tag {
                 UnexpectedlyRepeated
             } else {
                 ConflictingFields
-            });
+            }))
+        } else {
+            T::oneof_decode_field_distinguished(tag, wire_type, buf, ctx).map(|(decoded, canon)| {
+                *value = Some(decoded);
+                canon
+            })
+        }
+        .map_err(|mut err| {
             let (msg, field) = T::oneof_variant_name(tag);
             err.push(msg, field);
-            return Err(err);
-        }
-        let (decoded, canon) = T::oneof_decode_field_distinguished(tag, wire_type, buf, ctx)?;
-        *value = Some(decoded);
-        Ok(canon)
+            err
+        })
     }
 }
 
