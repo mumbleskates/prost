@@ -2778,7 +2778,7 @@ fn oneof_with_errors_inside() {
             a: O,
         }
         assert::never_decodes::<Foo<OneofType>>(
-            [(1, OV::bytes(b"\xff"))],
+            [(1, OV::bytes(*b"\xff"))],
             InvalidValue,
             &format!("Foo.a/{child_field}"),
         );
