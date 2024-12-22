@@ -1394,11 +1394,13 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     let current_tag_ty;
     let current_tag: Vec<TokenStream>;
     let empty_state_impl;
+    let some;
 
     if let Some(empty_ident) = &empty_variant {
         appropriate_oneof_trait = quote!(Oneof);
         decode_field_self_arg = Some(quote!(value: &mut Self,));
         decode_field_return_ty = quote!(());
+        some = Some(quote!(::core::option::Option::Some));
 
         current_tag_ty = quote!(::core::option::Option<u32>);
         current_tag = fields
@@ -1440,6 +1442,7 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         appropriate_oneof_trait = quote!(NonEmptyOneof);
         decode_field_self_arg = None;
         decode_field_return_ty = quote!(Self);
+        some = None;
 
         // The oneof enum has no "empty" unit variant, so we implement the "non-empty" trait.
         current_tag_ty = quote!(u32);
@@ -1498,15 +1501,18 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                 ::core::result::Result::Ok(())
             } else {
                 let mut err = ::bilrost::DecodeError::new(
-                    if ::bilrost::encoding::NonEmptyOneof::oneof_current_tag(value) == tag {
+                    if ::bilrost::encoding::#appropriate_oneof_trait::oneof_current_tag(value)
+                        == #some(tag)
+                    {
                         ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
                     } else {
                         ::bilrost::DecodeErrorKind::ConflictingFields
                     }
                 );
-                let (msg, field) = <
-                    Self as ::bilrost::encoding::NonEmptyOneof
-                >::oneof_variant_name(tag);
+                let (msg, field) =
+                    <Self as ::bilrost::encoding::#appropriate_oneof_trait>::oneof_variant_name(
+                        tag
+                    );
                 err.push(msg, field);
                 ::core::result::Result::Err(err)
             }
@@ -1642,13 +1648,17 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     } = preprocess_oneof(&input)?;
 
     let appropriate_oneof_trait;
+    let expedient_oneof_trait; // we must reference the parent trait for `oneof_current_tag`
     let decode_field_self_arg;
     let decode_field_return_ty;
+    let some; // oneofs that have empty states return Option<u32> from `oneof_current_tag`
     let full_where_clause;
     if empty_variant.is_some() {
         appropriate_oneof_trait = quote!(DistinguishedOneof);
+        expedient_oneof_trait = quote!(Oneof);
         decode_field_self_arg = Some(quote!(value: &mut Self,));
         decode_field_return_ty = quote!(::bilrost::Canonicity);
+        some = Some(quote!(::core::option::Option::Some));
         full_where_clause = append_distinguished_encoder_wheres(
             where_clause,
             Some(quote!(Self: ::bilrost::encoding::Oneof)),
@@ -1656,8 +1666,10 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
         );
     } else {
         appropriate_oneof_trait = quote!(NonEmptyDistinguishedOneof);
+        expedient_oneof_trait = quote!(NonEmptyOneof);
         decode_field_self_arg = None;
         decode_field_return_ty = quote!((Self, ::bilrost::Canonicity));
+        some = None;
         full_where_clause = append_distinguished_encoder_wheres(where_clause, None, &fields);
     };
 
@@ -1687,15 +1699,16 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                 ::core::result::Result::Ok(canon)
             } else {
                 let mut err = ::bilrost::DecodeError::new(
-                    if ::bilrost::encoding::NonEmptyOneof::oneof_current_tag(value) == tag {
+                    if ::bilrost::encoding::#expedient_oneof_trait::oneof_current_tag(value)
+                        == #some(tag)
+                    {
                         ::bilrost::DecodeErrorKind::UnexpectedlyRepeated
                     } else {
                         ::bilrost::DecodeErrorKind::ConflictingFields
                     }
                 );
-                let (msg, field) = <
-                    Self as ::bilrost::encoding::NonEmptyOneof
-                >::oneof_variant_name(tag);
+                let (msg, field) =
+                    <Self as ::bilrost::encoding::#expedient_oneof_trait>::oneof_variant_name(tag);
                 err.push(msg, field);
                 ::core::result::Result::Err(err)
             }
