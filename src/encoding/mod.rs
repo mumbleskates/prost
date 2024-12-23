@@ -395,6 +395,16 @@ pub struct DecodeContext {
     recurse_count: u32,
 }
 
+// TODO(widders): consider a distinguished decode context which specifies the minimum tolerated
+//  canonicity that should not produce an error, allowing distinguished decoding methods to set a
+//  requirement ahead of time and get error location details (and early exit behavior) when that
+//  requirement is violated. setting NotCanonical would be the same as now; setting HasExtensions or
+//  Canonical would give new and potentially useful behavior.
+//
+//  potential downsides are that this might involve a lot of extra checks of the canonicity. maybe
+//  it would be fine since we already do that whenever we update it, and we have the option to make
+//  that operation a three-way update.
+
 impl Default for DecodeContext {
     #[inline]
     fn default() -> DecodeContext {
