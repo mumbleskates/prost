@@ -1337,6 +1337,9 @@ fn preprocess_oneof(input: &DeriveInput) -> Result<PreprocessedOneof, Error> {
 fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
     let input: DeriveInput = parse2(input)?;
 
+    // TODO(widders): support a "message" word attr that converts an enum variant, with possibly
+    //  more than one field, to be interpreted as a non-nested message value with its own set of
+    //  fields.
     let PreprocessedOneof {
         ident,
         impl_generics,
