@@ -490,6 +490,52 @@ mod blob {
 }
 
 // TODO(widders): time, chrono, std::time support
+//
+// crate time:
+//  * struct Date
+//      * store as [year, ordinal-zero] (packed<varint>)
+//  * struct Time
+//      * store as [hour, minute, second, nanos] (packed<varint> with trailing zeros removed)
+//  * struct PrimitiveDateTime
+//      * aggregate of (Date, Time)
+//      * store as [year, ordinal, hour, minute, second, nanos]
+//        (packed<varint> with trailing zeros removed)
+//  * struct UtcOffset
+//      * store as [hour, minute, second] (packed<varint>)
+//  * struct OffsetDateTime
+//      * aggregate of (PrimitiveDateTime, UtcOffset)
+//      * store as tuple
+//  * struct Duration
+//      * matches bilrost_types::Duration
+//
+// crate chrono:
+//  * struct NaiveDate
+//      * store as [year, ordinal-zero] (packed<varint>)
+//  * struct NaiveTime
+//      * store as [hour, minute, second, nanos] (packed<varint> with trailing zeros removed)
+//  * struct NaiveDateTime
+//      * aggregate of (NaiveDate, NaiveTime)
+//      * store as [year, ordinal, hour, minute, second, nanos]
+//        (packed<varint> with trailing zeros removed)
+//  * trait TimeZone
+//      * has an Offset trait associated type that's stored with aware times. we need to be able to
+//        encode these
+//      * Utc: ()
+//      * FixedOffset: [hour, minute, second] (packed<varint>)
+//      * Local: maybe don't support this one
+//      * there is also crate chrono-tz, but it doesn't make sense to support that. concerns
+//        involving the shifting sands of timezone definitions are outside the responsibilities of
+//        an encoding library
+//  * struct Date<impl TimeZone>
+//      * aggregate of (NaiveDate, offset)
+//      * store as tuple
+//  * struct DateTime<impl TimeZone>
+//      * aggreagate of (NaiveDateTime, offset)
+//      * store as tuple
+//  * struct TimeDelta
+//      * matches bilrost_types::Duration, but nanos is always positive
+//
+// std::time: todo
 
 impl<T> Wiretyped<General> for T
 where
