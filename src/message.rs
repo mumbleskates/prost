@@ -112,7 +112,7 @@ pub trait Message: EmptyState {
     where
         Self: Sized;
 
-    // ------------ Object-safe methods follow ------------
+    // ------------ Dyn-compatible methods follow ------------
 
     /// Returns the encoded length of the message without a length delimiter.
     fn encoded_len(&self) -> usize;
@@ -225,7 +225,7 @@ pub trait DistinguishedMessage: Message {
     where
         Self: Sized;
 
-    // ------------ Object-safe methods follow ------------
+    // ------------ Dyn-compatible methods follow ------------
 
     /// Decodes a length-delimited instance of the message from the buffer in distinguished mode.
     fn replace_distinguished_from_slice(&mut self, buf: &[u8]) -> Result<Canonicity, DecodeError>;
@@ -611,8 +611,8 @@ mod tests {
     use super::{DistinguishedMessage, Message, Vec};
     use crate::WithCanonicity;
 
-    const _MESSAGE_DYN_IS_OBJECT_SAFE: Option<&dyn Message> = None;
-    const _DISTINGUISHED_MESSAGE_DYN_IS_OBJECT_SAFE: Option<&dyn DistinguishedMessage> = None;
+    const _MESSAGE_IS_DYN_COMPATIBLE: Option<&dyn Message> = None;
+    const _DISTINGUISHED_MESSAGE_IS_DYN_COMPATIBLE: Option<&dyn DistinguishedMessage> = None;
 
     fn use_dyn_messages<M: Message>(safe: &mut dyn Message, mut msg: M) {
         let mut vec = Vec::<u8>::new();

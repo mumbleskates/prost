@@ -1006,14 +1006,15 @@ before the canonicity error.
 
 [resref]: https://doc.rust-lang.org/std/result/enum.Result.html#method.as_ref
 
-#### Using `dyn` with object-safe message traits
+#### Using `dyn` with message traits
 
-The `Message` and `DistinguishedMessage` traits are object-safe and can be used
-via [trait objects][traitobj]. All of their functionality (except the `decode`
+The `Message` and `DistinguishedMessage` traits are [dyn-compatible][dyncompat]
+(a term formerly phrased ["object-safe"][objsafe]) and can be used via
+[trait objects][traitobj]. All of their functionality (except the `decode`
 methods for creating a message value from data *ex nihilo*) is available via
-object-safe alternatives. Messages can be cleared (reset to empty values);
-measured for their encoded byte length; encoded to [`ReverseBuffer`](
-#reversebuffer), [`Vec<u8>`][vec], [`Bytes`][bytes], or into a
+dyn-compatible alternatives. Messages can be cleared (reset to empty values);
+measured for their encoded byte length; encoded to
+[`ReverseBuffer`](#reversebuffer), [`Vec<u8>`][vec], [`Bytes`][bytes], or into a
 [`&mut dyn BufMut`][bufmut]; or decoded (replacing the value) from
 [`&[u8]` slice][slice] or a [`&mut dyn Buf`][buf].
 
@@ -1023,14 +1024,18 @@ measured for their encoded byte length; encoded to [`ReverseBuffer`](
 
 [slice]: https://doc.rust-lang.org/std/primitive.slice.html
 
+[dyncompat]: https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility
+
+[objsafe]: https://doc.rust-lang.org/reference/items/traits.html#object-safety
+
 [traitobj]: https://doc.rust-lang.org/reference/types/trait-object.html
 
 Methods that decode to or from trait object buffers are likely to be less
-efficient than their generic, non-object-safe counterparts; it is preferable to
-use `encode(..)` rather than `encode_dyn(..)`, and likewise for any other
+efficient than their generic, non-dyn-compatible counterparts; it is preferable
+to use `encode(..)` rather than `encode_dyn(..)`, and likewise for any other
 "`_dyn`" method. Likewise, `replace_from_slice(..)` is equivalent to
-`replace_from(..)`, just object safe; the same goes for other "`_slice`"
-methods.
+`replace_from(..)`, just compatible with `dyn`; the same goes for other
+"`_slice`" methods.
 
 ### Supporting types and traits
 
@@ -1948,11 +1953,12 @@ but it might be a significant API break.)
 * message fields can be [ignored via attribute](#ignoring-fields)
 * implementations are available for `no_std`-compatible hash maps, vecs that
   inline short values, `ByteString`, etc.
-* `Message` and `DistinguishedMessage` traits are object-safe and provide [full
-  functionality as trait objects](#using-dyn-with-object-safe-message-traits).
-  At time of writing, `prost 0.12.3` has very little functionality exposed in an
-  object-safe way; the only object-safe methods compute the encoded length of
-  the message and clear its fields.
+* `Message` and `DistinguishedMessage` traits are dyn-compatible and provide
+  [full functionality as trait objects](
+  #using-dyn-with-message-traits). At time of writing, `prost 0.13.4` has very
+  little functionality exposed in a dyn-compatible way; the only methods usable
+  via a `&dyn Trait` object compute the encoded length of the message and clear
+  its fields.
 
 ## Differences from Protobuf
 

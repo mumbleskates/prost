@@ -276,8 +276,8 @@ This release changes nothing, just fixes the link to the logo in the docs :)
   canonical, but there are unknown fields), and "NotCanonical" (known fields
   have non-canonically represented values).
 * As part of fixes and expansions to traits and requirements to allow `Message`
-  and `DistinguishedMessage` to be object-safe with full functionality,
-  `MessageDyn` and `DistinguishedMessageDyn` have been removed.
+  and `DistinguishedMessage` to be object-safe (dyn compatible) with full
+  functionality, `MessageDyn` and `DistinguishedMessageDyn` have been removed.
 
 ### New features
 
@@ -290,8 +290,8 @@ This release changes nothing, just fixes the link to the logo in the docs :)
 
 ### Fixes
 
-* Object-safe traits were broken and unfun to use. They've been implemented in a
-  much more correct way now.
+* Object-safe (dyn compatible) traits were broken and unfun to use. They've been
+  implemented in a much more correct way now.
 * Derived Enumeration types now convert via `TryFrom<u32, Error = u32>` instead
   of `Error = DecodeError`. The old implementation wasn't really helping anyone
   by discarding the untranslated value.
