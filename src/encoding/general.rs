@@ -489,6 +489,8 @@ mod blob {
     check_type_test!(General, distinguished, Blob, WireType::LengthDelimited);
 }
 
+// TODO(widders): time, chrono, std::time support
+
 impl<T> Wiretyped<General> for T
 where
     T: RawMessage,
