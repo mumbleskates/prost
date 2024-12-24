@@ -491,37 +491,44 @@ mod blob {
 
 // TODO(widders): time, chrono, std::time support
 //
-// crate time:
+// deps this may create:
+//  * tinyvec, for tinyvec's array vec
+//      * change tinyvec dependency to not have the alloc feature by default
+//      * the tinyvec support feature should enable this feature as well instead
+//  * derive
+//
+// crate time: (deps: tinyvec)
 //  * struct Date
-//      * store as [year, ordinal-zero] (packed<varint>)
+//      * store as [year, ordinal-zero] (packed<varint> with trailing zeros removed)
 //  * struct Time
 //      * store as [hour, minute, second, nanos] (packed<varint> with trailing zeros removed)
 //  * struct PrimitiveDateTime
 //      * aggregate of (Date, Time)
-//      * store as [year, ordinal, hour, minute, second, nanos]
+//      * store as [year, ordinal-zero, hour, minute, second, nanos]
 //        (packed<varint> with trailing zeros removed)
 //  * struct UtcOffset
-//      * store as [hour, minute, second] (packed<varint>)
+//      * store as [hour, minute, second] (packed<varint> with trailing zeros removed)
 //  * struct OffsetDateTime
 //      * aggregate of (PrimitiveDateTime, UtcOffset)
 //      * store as tuple
 //  * struct Duration
 //      * matches bilrost_types::Duration
+//      * use derived storage
 //
-// crate chrono:
+// crate chrono: (deps: tinyvec)
 //  * struct NaiveDate
-//      * store as [year, ordinal-zero] (packed<varint>)
+//      * store as [year, ordinal-zero] (packed<varint> with trailing zeros removed)
 //  * struct NaiveTime
 //      * store as [hour, minute, second, nanos] (packed<varint> with trailing zeros removed)
 //  * struct NaiveDateTime
 //      * aggregate of (NaiveDate, NaiveTime)
-//      * store as [year, ordinal, hour, minute, second, nanos]
+//      * store as [year, ordinal-zero, hour, minute, second, nanos]
 //        (packed<varint> with trailing zeros removed)
 //  * trait TimeZone
 //      * has an Offset trait associated type that's stored with aware times. we need to be able to
 //        encode these
 //      * Utc: ()
-//      * FixedOffset: [hour, minute, second] (packed<varint>)
+//      * FixedOffset: [hour, minute, second] (packed<varint> with trailing zeros removed)
 //      * Local: maybe don't support this one
 //      * there is also crate chrono-tz, but it doesn't make sense to support that. concerns
 //        involving the shifting sands of timezone definitions are outside the responsibilities of
@@ -534,8 +541,21 @@ mod blob {
 //      * store as tuple
 //  * struct TimeDelta
 //      * matches bilrost_types::Duration, but nanos is always positive
+//      * use derived storage
 //
-// std::time: todo
+// std::time: (deps: tinyvec, derive)
+//  * struct Duration
+//      * unsigned duration type of u64 seconds plus nanos, available via .as_secs() and
+//        .subsec_nanos()
+//      * store as [seconds, nanos] (packed<varint> with trailing zeros removed)
+//  * struct SystemTime
+//      * we must measure this via Ord against std::time::UNIX_EPOCH and subtract the greater to
+//        get a Duration of the magnitude
+//      * the seconds portion is effectively up a 65 bit one's complement value, which is difficult
+//      * store as:
+//          * epoch: empty
+//          * greater: ['+' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
+//          * lesser: ['-' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
 
 impl<T> Wiretyped<General> for T
 where
