@@ -1339,7 +1339,8 @@ fn try_oneof(input: TokenStream) -> Result<TokenStream, Error> {
 
     // TODO(widders): support a "message" word attr that converts an enum variant, with possibly
     //  more than one field, to be interpreted as a non-nested message value with its own set of
-    //  fields.
+    //  fields. this still shouldn't support zero fields: the blessed way to encode a zero-field
+    //  message enum variant would be to use a variant with a single field with the type ().
     let PreprocessedOneof {
         ident,
         impl_generics,
