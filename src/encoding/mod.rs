@@ -16,6 +16,7 @@ use crate::{decode_length_delimiter, DecodeError, DecodeErrorKind};
 
 mod fixed;
 mod general;
+mod local_proxy;
 mod map;
 /// Tools for opaque encoding and decoding of any valid bilrost data.
 pub mod opaque;

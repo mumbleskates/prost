@@ -413,7 +413,7 @@ pub trait DistinguishedCollection: Collection + Eq {
     fn insert_distinguished(&mut self, item: Self::Item) -> Result<Canonicity, DecodeErrorKind>;
 }
 
-trait TriviallyDistinguishedCollection {}
+pub(crate) trait TriviallyDistinguishedCollection {}
 
 impl<T> DistinguishedCollection for T
 where
