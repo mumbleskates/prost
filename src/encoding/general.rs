@@ -497,7 +497,7 @@ mod blob {
 //      * the tinyvec support feature should enable this feature as well instead
 //  * derive
 //
-// crate time: (deps: tinyvec)
+// crate time: (other deps: derive)
 //  * struct Date
 //      * store as [year, ordinal-zero] (packed<varint> with trailing zeros removed)
 //  * struct Time
@@ -515,7 +515,7 @@ mod blob {
 //      * matches bilrost_types::Duration
 //      * use derived storage
 //
-// crate chrono: (deps: tinyvec)
+// crate chrono: (other deps: derive)
 //  * struct NaiveDate
 //      * store as [year, ordinal-zero] (packed<varint> with trailing zeros removed)
 //  * struct NaiveTime
@@ -543,8 +543,8 @@ mod blob {
 //      * matches bilrost_types::Duration, but nanos is always positive
 //      * use derived storage
 //
-// std::time: (deps: tinyvec, derive)
-//  * struct Duration
+// std::time: (deps: none)
+//  * struct Duration (this is actually in core)
 //      * unsigned duration type of u64 seconds plus nanos, available via .as_secs() and
 //        .subsec_nanos()
 //      * store as [seconds, nanos] (packed<varint> with trailing zeros removed)
@@ -557,27 +557,22 @@ mod blob {
 //          * greater: ['+' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
 //          * lesser: ['-' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
 
-#[cfg(feature = "std")]
-mod impl_std_time_duration {
+mod impl_core_time_duration {
     use super::*;
     use crate::DecodeErrorKind;
 
-    type Proxy = tinyvec::ArrayVec<[u64; 2]>;
+    type Proxy = crate::encoding::local_proxy::LocalProxy<u64, 2>;
     type Encoder = crate::encoding::Packed<Varint>;
 
-    impl Wiretyped<General> for std::time::Duration {
+    impl Wiretyped<General> for core::time::Duration {
         const WIRE_TYPE: WireType = WireType::LengthDelimited;
     }
 
-    fn to_proxy(from: &std::time::Duration) -> Proxy {
-        match [from.as_secs(), from.subsec_nanos() as u64] {
-            [0, 0] => Proxy::new(),
-            arr @ [_, 0] => Proxy::from_array_len(arr, 1),
-            arr => arr.into(),
-        }
+    fn to_proxy(from: &core::time::Duration) -> Proxy {
+        Proxy::from_inner([from.as_secs(), from.subsec_nanos() as u64]).trim_empty_suffix()
     }
 
-    fn from_proxy(proxy: Proxy) -> Result<std::time::Duration, DecodeErrorKind> {
+    fn from_proxy(proxy: Proxy) -> Result<core::time::Duration, DecodeErrorKind> {
         let [secs, nanos] = proxy.into_inner();
         nanos
             .try_into()
@@ -586,27 +581,28 @@ mod impl_std_time_duration {
                 if nanos > 999_999_999 {
                     Err(DecodeErrorKind::OutOfDomainValue)
                 } else {
-                    Ok(std::time::Duration::new(secs, nanos))
+                    Ok(core::time::Duration::new(secs, nanos))
                 }
             })
     }
 
     fn from_proxy_distinguished(
         proxy: Proxy,
-    ) -> Result<(std::time::Duration, Canonicity), DecodeErrorKind> {
-        from_proxy(proxy).map(|duration| {
-            (
-                duration,
-                if proxy.last() == Some(&0) {
-                    Canonicity::NotCanonical
+    ) -> Result<(core::time::Duration, Canonicity), DecodeErrorKind> {
+        let ([secs, nanos], canon) = proxy.into_inner_distinguished();
+        nanos
+            .try_into()
+            .map_err(|_| DecodeErrorKind::OutOfDomainValue)
+            .and_then(|nanos| {
+                if nanos > 999_999_999 {
+                    Err(DecodeErrorKind::OutOfDomainValue)
                 } else {
-                    Canonicity::Canonical
-                },
-            )
-        })
+                    Ok((core::time::Duration::new(secs, nanos), canon))
+                }
+            })
     }
 
-    impl ValueEncoder<General> for std::time::Duration {
+    impl ValueEncoder<General> for core::time::Duration {
         fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
             <Proxy as ValueEncoder<Encoder>>::encode_value(&to_proxy(value), buf);
         }
@@ -631,7 +627,7 @@ mod impl_std_time_duration {
         }
     }
 
-    impl DistinguishedValueEncoder<General> for std::time::Duration {
+    impl DistinguishedValueEncoder<General> for core::time::Duration {
         const CHECKS_EMPTY: bool = <Proxy as DistinguishedValueEncoder<Encoder>>::CHECKS_EMPTY;
 
         fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
@@ -658,13 +654,110 @@ mod impl_std_time_duration {
         check_type_test!(
             General,
             expedient,
-            std::time::Duration,
+            core::time::Duration,
             WireType::LengthDelimited
         );
         check_type_test!(
             General,
             distinguished,
-            std::time::Duration,
+            core::time::Duration,
+            WireType::LengthDelimited
+        );
+    }
+}
+
+#[cfg(feature = "std")]
+mod impl_std_time_systemtime {
+    use super::*;
+    use crate::DecodeErrorKind;
+    use std::cmp::Ordering;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    type Proxy = crate::encoding::local_proxy::LocalProxy<u64, 3>;
+    type Encoder = crate::encoding::Packed<Varint>;
+
+    fn to_proxy(from: &SystemTime) -> Proxy {
+        let (symbol, small, big) = match from.cmp(&UNIX_EPOCH) {
+            Ordering::Equal => {
+                return Proxy::new();
+            }
+            Ordering::Greater => ('+', &UNIX_EPOCH, from),
+            Ordering::Less => ('-', from, &UNIX_EPOCH),
+        };
+        let magnitude = big
+            .duration_since(*small)
+            .expect("SystemTime dates ordered wrong");
+        Proxy::from_inner([
+            symbol as u64,
+            magnitude.as_secs(),
+            magnitude.subsec_nanos() as u64,
+        ])
+        .trim_empty_suffix()
+    }
+
+    fn from_proxy(proxy: Proxy) -> Result<SystemTime, DecodeErrorKind> {
+        let (operation, secs, nanos): (fn(_, _) -> _, u64, u64) = match proxy.into_inner() {
+            [0, 0, 0] => return Ok(UNIX_EPOCH),
+            [symbol, secs, nanos] if symbol == '+' as u64 => (SystemTime::checked_add, secs, nanos),
+            [symbol, secs, nanos] if symbol == '-' as u64 => (SystemTime::checked_sub, secs, nanos),
+            _ => return Err(InvalidValue),
+        };
+        let nanos = nanos
+            .try_into()
+            .map_err(|_| DecodeErrorKind::OutOfDomainValue)
+            .and_then(|nanos| {
+                if nanos > 999_999_999 {
+                    Err(DecodeErrorKind::OutOfDomainValue)
+                } else {
+                    Ok(nanos)
+                }
+            })?;
+        operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos))
+            .ok_or(DecodeErrorKind::OutOfDomainValue)
+    }
+
+    impl Wiretyped<General> for SystemTime {
+        const WIRE_TYPE: WireType = WireType::LengthDelimited;
+    }
+
+    impl ValueEncoder<General> for SystemTime {
+        fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
+            <Proxy as ValueEncoder<Encoder>>::encode_value(&to_proxy(value), buf);
+        }
+
+        fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
+            <Proxy as ValueEncoder<Encoder>>::prepend_value(&to_proxy(value), buf);
+        }
+
+        fn value_encoded_len(value: &Self) -> usize {
+            <Proxy as ValueEncoder<Encoder>>::value_encoded_len(&to_proxy(value))
+        }
+
+        fn decode_value<B: Buf + ?Sized>(
+            value: &mut Self,
+            buf: Capped<B>,
+            ctx: DecodeContext,
+        ) -> Result<(), DecodeError> {
+            let mut proxy = Proxy::new();
+            <Proxy as ValueEncoder<Encoder>>::decode_value(&mut proxy, buf, ctx)?;
+            *value = from_proxy(proxy)?;
+            Ok(())
+        }
+    }
+
+    // SystemTime does not have a distinguished decoding because the implementations vary enough
+    // from platform to platform, including by their accuracy, that it isn't worthwhile to validate
+    // its canonicity at the encoding level; if we did, values still might not even round trip. If
+    // that kind of guarantee is needed, a dedicated stable time struct type should be used.
+
+    #[cfg(test)]
+    mod test {
+        use super::General;
+        use crate::encoding::test::check_type_test;
+        check_type_test!(
+            General,
+            expedient,
+            std::time::SystemTime,
             WireType::LengthDelimited
         );
     }

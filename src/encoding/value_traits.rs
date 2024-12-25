@@ -194,6 +194,26 @@ impl EmptyState for Blob {
     }
 }
 
+empty_state_via_default!(core::time::Duration);
+
+#[cfg(feature = "std")]
+impl ForOverwrite for std::time::SystemTime {
+    fn for_overwrite() -> Self {
+        std::time::UNIX_EPOCH
+    }
+}
+
+#[cfg(feature = "std")]
+impl EmptyState for std::time::SystemTime {
+    fn is_empty(&self) -> bool {
+        *self == std::time::UNIX_EPOCH
+    }
+
+    fn clear(&mut self) {
+        *self = std::time::UNIX_EPOCH;
+    }
+}
+
 #[cfg(feature = "bstr")]
 for_overwrite_via_default!(bstr::BString);
 
@@ -1280,6 +1300,3 @@ where
         }
     }
 }
-
-#[cfg(feature = "std")]
-empty_state_via_default!(std::time::Duration);
