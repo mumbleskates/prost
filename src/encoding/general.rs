@@ -652,7 +652,7 @@ mod impl_std_time_duration {
     }
 
     #[cfg(test)]
-    mod std_time_duration {
+    mod test {
         use super::General;
         use crate::encoding::test::check_type_test;
         check_type_test!(
