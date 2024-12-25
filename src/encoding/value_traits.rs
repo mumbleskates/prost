@@ -1280,3 +1280,6 @@ where
         }
     }
 }
+
+#[cfg(feature = "std")]
+empty_state_via_default!(std::time::Duration);

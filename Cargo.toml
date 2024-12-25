@@ -67,7 +67,7 @@ derive = ["dep:bilrost-derive"]
 detailed-errors = ["dep:thin-vec"]
 extended-diagnostics = ["dep:const_panic"]
 no-recursion-limit = []
-std = []
+std = ["dep:tinyvec"]
 
 third-party-type-support = [
     "arrayvec",

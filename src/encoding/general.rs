@@ -557,6 +557,119 @@ mod blob {
 //          * greater: ['+' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
 //          * lesser: ['-' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
 
+#[cfg(feature = "std")]
+mod impl_std_time_duration {
+    use super::*;
+    use crate::DecodeErrorKind;
+
+    type Proxy = tinyvec::ArrayVec<[u64; 2]>;
+    type Encoder = crate::encoding::Packed<Varint>;
+
+    impl Wiretyped<General> for std::time::Duration {
+        const WIRE_TYPE: WireType = WireType::LengthDelimited;
+    }
+
+    fn to_proxy(from: &std::time::Duration) -> Proxy {
+        match [from.as_secs(), from.subsec_nanos() as u64] {
+            [0, 0] => Proxy::new(),
+            arr @ [_, 0] => Proxy::from_array_len(arr, 1),
+            arr => arr.into(),
+        }
+    }
+
+    fn from_proxy(proxy: Proxy) -> Result<std::time::Duration, DecodeErrorKind> {
+        let [secs, nanos] = proxy.into_inner();
+        nanos
+            .try_into()
+            .map_err(|_| DecodeErrorKind::OutOfDomainValue)
+            .and_then(|nanos| {
+                if nanos > 999_999_999 {
+                    Err(DecodeErrorKind::OutOfDomainValue)
+                } else {
+                    Ok(std::time::Duration::new(secs, nanos))
+                }
+            })
+    }
+
+    fn from_proxy_distinguished(
+        proxy: Proxy,
+    ) -> Result<(std::time::Duration, Canonicity), DecodeErrorKind> {
+        from_proxy(proxy).map(|duration| {
+            (
+                duration,
+                if proxy.last() == Some(&0) {
+                    Canonicity::NotCanonical
+                } else {
+                    Canonicity::Canonical
+                },
+            )
+        })
+    }
+
+    impl ValueEncoder<General> for std::time::Duration {
+        fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
+            <Proxy as ValueEncoder<Encoder>>::encode_value(&to_proxy(value), buf);
+        }
+
+        fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
+            <Proxy as ValueEncoder<Encoder>>::prepend_value(&to_proxy(value), buf);
+        }
+
+        fn value_encoded_len(value: &Self) -> usize {
+            <Proxy as ValueEncoder<Encoder>>::value_encoded_len(&to_proxy(value))
+        }
+
+        fn decode_value<B: Buf + ?Sized>(
+            value: &mut Self,
+            buf: Capped<B>,
+            ctx: DecodeContext,
+        ) -> Result<(), DecodeError> {
+            let mut proxy = Proxy::new();
+            <Proxy as ValueEncoder<Encoder>>::decode_value(&mut proxy, buf, ctx)?;
+            *value = from_proxy(proxy)?;
+            Ok(())
+        }
+    }
+
+    impl DistinguishedValueEncoder<General> for std::time::Duration {
+        const CHECKS_EMPTY: bool = <Proxy as DistinguishedValueEncoder<Encoder>>::CHECKS_EMPTY;
+
+        fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
+            value: &mut Self,
+            buf: Capped<impl Buf + ?Sized>,
+            ctx: DecodeContext,
+        ) -> Result<Canonicity, DecodeError> {
+            let mut proxy = Proxy::new();
+            let mut canon =
+                <Proxy as DistinguishedValueEncoder<Encoder>>::decode_value_distinguished::<
+                    ALLOW_EMPTY,
+                >(&mut proxy, buf, ctx)?;
+            let proxy_canon;
+            (*value, proxy_canon) = from_proxy_distinguished(proxy)?;
+            canon.update(proxy_canon);
+            Ok(canon)
+        }
+    }
+
+    #[cfg(test)]
+    mod std_time_duration {
+        use super::General;
+        use crate::encoding::test::check_type_test;
+        check_type_test!(
+            General,
+            expedient,
+            std::time::Duration,
+            WireType::LengthDelimited
+        );
+        check_type_test!(
+            General,
+            distinguished,
+            std::time::Duration,
+            WireType::LengthDelimited
+        );
+    }
+}
+
 impl<T> Wiretyped<General> for T
 where
     T: RawMessage,
