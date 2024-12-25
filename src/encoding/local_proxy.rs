@@ -37,7 +37,8 @@ impl<T: EmptyState, const N: usize> LocalProxy<T, N> {
     }
 
     pub fn into_inner_distinguished(self) -> ([T; N], Canonicity) {
-        let canon = if self.reversed().next().is_some_and(EmptyState::is_empty) {
+        // MSRV: this could be is_some_and(..)
+        let canon = if matches!(self.reversed().next(), Some(last_item) if last_item.is_empty()) {
             NotCanonical
         } else {
             Canonical
