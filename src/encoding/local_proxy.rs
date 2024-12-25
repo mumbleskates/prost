@@ -3,12 +3,25 @@ use crate::encoding::value_traits::{
 };
 use crate::Canonicity::{Canonical, NotCanonical};
 use crate::{Canonicity, DecodeErrorKind};
+use core::ops::Deref;
 
 /// This type is a locally implemented stand-in for types like tinyvec::ArrayVec with bare-minimum
 /// functionality to assist encoding some third party types.
 pub(crate) struct LocalProxy<T, const N: usize> {
     arr: [T; N],
     size: usize,
+}
+
+impl<T: EmptyState, const N: usize> Deref for LocalProxy<T, N> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: self.size is only ever initialized to zero or to N. it is only ever increased in
+        // Collection::insert, which always checks that it is not yet equal to N. Therefore there
+        // should be no way to create a LocalProxy value with an illegal size field, and we do not
+        // have to perform a bounds check here.
+        unsafe { self.arr.get_unchecked(..self.size) }
+    }
 }
 
 impl<T: EmptyState, const N: usize> LocalProxy<T, N> {
@@ -22,7 +35,9 @@ impl<T: EmptyState, const N: usize> LocalProxy<T, N> {
 
     /// Removes all empty items from the end of the inner array.
     pub fn trim_empty_suffix(mut self) -> Self {
-        for last_item in self.arr[..self.size].iter().rev() {
+        // SAFETY: this is the same slice as we get in Deref, but we want to perform a partial
+        // borrow so we can decrement self.size as we go.
+        for last_item in unsafe { self.arr.get_unchecked(..self.size) }.iter().rev() {
             if last_item.is_empty() {
                 self.size -= 1;
             } else {
@@ -49,7 +64,7 @@ impl<T: EmptyState, const N: usize> LocalProxy<T, N> {
 
 impl<T: EmptyState + PartialEq, const N: usize> PartialEq for LocalProxy<T, N> {
     fn eq(&self, other: &Self) -> bool {
-        self.arr[..self.size] == other.arr[..other.size]
+        **self == **other
     }
 }
 
@@ -92,11 +107,11 @@ impl<T: EmptyState, const N: usize> Collection for LocalProxy<T, N> {
     }
 
     fn iter(&self) -> Self::RefIter<'_> {
-        self.arr[..self.size].iter()
+        self.deref().iter()
     }
 
     fn reversed(&self) -> Self::ReverseIter<'_> {
-        self.arr[..self.size].iter().rev()
+        self.deref().iter().rev()
     }
 
     fn insert(&mut self, item: Self::Item) -> Result<(), DecodeErrorKind> {
