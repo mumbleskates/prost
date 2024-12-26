@@ -569,7 +569,7 @@ mod impl_core_time_duration {
     }
 
     fn to_proxy(from: &core::time::Duration) -> Proxy {
-        Proxy::from_inner([from.as_secs(), from.subsec_nanos() as u64]).trim_empty_suffix()
+        Proxy::new_without_empty_suffix([from.as_secs(), from.subsec_nanos() as u64])
     }
 
     fn from_proxy(proxy: Proxy) -> Result<core::time::Duration, DecodeErrorKind> {
@@ -620,7 +620,7 @@ mod impl_core_time_duration {
             buf: Capped<B>,
             ctx: DecodeContext,
         ) -> Result<(), DecodeError> {
-            let mut proxy = Proxy::new();
+            let mut proxy = Proxy::new_empty();
             <Proxy as ValueEncoder<Encoder>>::decode_value(&mut proxy, buf, ctx)?;
             *value = from_proxy(proxy)?;
             Ok(())
@@ -635,7 +635,7 @@ mod impl_core_time_duration {
             buf: Capped<impl Buf + ?Sized>,
             ctx: DecodeContext,
         ) -> Result<Canonicity, DecodeError> {
-            let mut proxy = Proxy::new();
+            let mut proxy = Proxy::new_empty();
             let mut canon =
                 <Proxy as DistinguishedValueEncoder<Encoder>>::decode_value_distinguished::<
                     ALLOW_EMPTY,
@@ -679,7 +679,7 @@ mod impl_std_time_systemtime {
     fn to_proxy(from: &SystemTime) -> Proxy {
         let (symbol, small, big) = match from.cmp(&UNIX_EPOCH) {
             Ordering::Equal => {
-                return Proxy::new();
+                return Proxy::new_empty();
             }
             Ordering::Greater => ('+', &UNIX_EPOCH, from),
             Ordering::Less => ('-', from, &UNIX_EPOCH),
@@ -687,12 +687,11 @@ mod impl_std_time_systemtime {
         let magnitude = big
             .duration_since(*small)
             .expect("SystemTime dates ordered wrong");
-        Proxy::from_inner([
+        Proxy::new_without_empty_suffix([
             symbol as u64,
             magnitude.as_secs(),
             magnitude.subsec_nanos() as u64,
         ])
-        .trim_empty_suffix()
     }
 
     fn from_proxy(proxy: Proxy) -> Result<SystemTime, DecodeErrorKind> {
@@ -738,7 +737,7 @@ mod impl_std_time_systemtime {
             buf: Capped<B>,
             ctx: DecodeContext,
         ) -> Result<(), DecodeError> {
-            let mut proxy = Proxy::new();
+            let mut proxy = Proxy::new_empty();
             <Proxy as ValueEncoder<Encoder>>::decode_value(&mut proxy, buf, ctx)?;
             *value = from_proxy(proxy)?;
             Ok(())

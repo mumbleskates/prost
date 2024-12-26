@@ -25,26 +25,25 @@ impl<T: EmptyState, const N: usize> Deref for LocalProxy<T, N> {
 }
 
 impl<T: EmptyState, const N: usize> LocalProxy<T, N> {
-    pub fn new() -> Self {
+    /// Creates a new, empty array-list proxy.
+    pub fn new_empty() -> Self {
         Self::empty()
     }
 
-    pub fn from_inner(arr: [T; N]) -> Self {
-        Self { arr, size: N }
-    }
-
-    /// Removes all empty items from the end of the inner array.
-    pub fn trim_empty_suffix(mut self) -> Self {
-        // SAFETY: this is the same slice as we get in Deref, but we want to perform a partial
-        // borrow so we can decrement self.size as we go.
-        for last_item in unsafe { self.arr.get_unchecked(..self.size) }.iter().rev() {
-            if last_item.is_empty() {
-                self.size -= 1;
+    /// Creates a new value that only contains the values in the given backing array that are not
+    /// contiguously empty at the end of the array. This is equivalent to creating a new empty proxy
+    /// and then inserting each value in order until all remaining values that would be inserted are
+    /// empty.
+    pub fn new_without_empty_suffix(arr: [T; N]) -> Self {
+        let mut size = N;
+        for item in arr.iter().rev() {
+            if item.is_empty() {
+                size -= 1;
             } else {
                 break;
             }
         }
-        self
+        Self { arr, size }
     }
 
     pub fn into_inner(self) -> [T; N] {
@@ -73,7 +72,7 @@ impl<T: EmptyState + Eq, const N: usize> Eq for LocalProxy<T, N> {}
 impl<T: EmptyState, const N: usize> ForOverwrite for LocalProxy<T, N> {
     fn for_overwrite() -> Self {
         Self {
-            arr: core::array::from_fn(|_| EmptyState::empty()),
+            arr: EmptyState::empty(),
             size: 0,
         }
     }
