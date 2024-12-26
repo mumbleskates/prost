@@ -46,10 +46,19 @@ impl<T: EmptyState, const N: usize> LocalProxy<T, N> {
         Self { arr, size }
     }
 
+    /// Returns the backing array for this proxy.
     pub fn into_inner(self) -> [T; N] {
         self.arr
     }
 
+    /// Returns the backing array for this proxy, returning NotCanonical if values that were decoded
+    /// or inserted contained extraneous empty items at the end.
+    ///
+    /// For example: when decoding into an empty LocalProxy<i64, 3> value, the backing array will
+    /// always be an [i64; 3]. If a single value "5" is decoded, then the inner value will be
+    /// [5, 0, 0] and the encoding was canonical. If the value was decoded as two values "5" and "0"
+    /// then the backing array still contains [5, 0, 0] but the latter decoded value wouldn't have
+    /// been encoded if we were using new_without_empty_suffix, and thus isn't canonical.
     pub fn into_inner_distinguished(self) -> ([T; N], Canonicity) {
         // MSRV: this could be is_some_and(..)
         let canon = if matches!(self.reversed().next(), Some(last_item) if last_item.is_empty()) {
