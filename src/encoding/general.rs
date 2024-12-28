@@ -30,28 +30,6 @@ delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (Cow<'a, [T]>) including distinguished
     with where clause (T: Clone)
     with generics ('a, T));
-#[cfg(feature = "arrayvec")]
-delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (arrayvec::ArrayVec<T, N>) including distinguished
-    with generics (T, const N: usize));
-#[cfg(feature = "smallvec")]
-delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (smallvec::SmallVec<A>) including distinguished
-    with where clause (A: smallvec::Array<Item = T>)
-    with generics (T, A));
-#[cfg(feature = "thin-vec")]
-delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (thin_vec::ThinVec<T>) including distinguished with generics (T));
-#[cfg(feature = "tinyvec")]
-delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (tinyvec::ArrayVec<A>) including distinguished
-    with where clause (A: tinyvec::Array<Item = T>)
-    with generics (T, A));
-#[cfg(feature = "tinyvec")]
-delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (tinyvec::TinyVec<A>) including distinguished
-    with where clause (A: tinyvec::Array<Item = T>)
-    with generics (T, A));
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (BTreeSet<T>) including distinguished with generics (T));
 delegate_value_encoding!(delegate from (General) to (Map<General, General>)
@@ -59,26 +37,6 @@ delegate_value_encoding!(delegate from (General) to (Map<General, General>)
     with where clause for expedient (K: Ord)
     with where clause for distinguished (V: Eq)
     with generics (K, V));
-#[cfg(feature = "std")]
-delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (std::collections::HashSet<T, S>)
-    with where clause (S: Default + core::hash::BuildHasher)
-    with generics (T, S));
-#[cfg(feature = "std")]
-delegate_value_encoding!(delegate from (General) to (Map<General, General>)
-    for type (std::collections::HashMap<K, V, S>)
-    with where clause (K: Eq + core::hash::Hash, S: Default + core::hash::BuildHasher)
-    with generics (K, V, S));
-#[cfg(feature = "hashbrown")]
-delegate_encoding!(delegate from (General) to (Unpacked<General>)
-    for type (hashbrown::HashSet<T, S>)
-    with where clause (S: Default + core::hash::BuildHasher)
-    with generics (T, S));
-#[cfg(feature = "hashbrown")]
-delegate_value_encoding!(delegate from (General) to (Map<General, General>)
-    for type (hashbrown::HashMap<K, V, S>)
-    with where clause (K: Eq + core::hash::Hash, S: Default + core::hash::BuildHasher)
-    with generics (K, V, S));
 
 // General encodes bool and integers as varints.
 delegate_value_encoding!(delegate from (General) to (Varint)
@@ -249,131 +207,6 @@ mod cow_string {
     use crate::encoding::test::check_type_test;
     check_type_test!(General, expedient, Cow<str>, WireType::LengthDelimited);
     check_type_test!(General, distinguished, Cow<str>, WireType::LengthDelimited);
-}
-
-#[cfg(feature = "bytestring")]
-impl Wiretyped<General> for bytestring::ByteString {
-    const WIRE_TYPE: WireType = WireType::LengthDelimited;
-}
-
-#[cfg(feature = "bytestring")]
-impl ValueEncoder<General> for bytestring::ByteString {
-    #[inline]
-    fn encode_value<B: BufMut + ?Sized>(value: &bytestring::ByteString, buf: &mut B) {
-        encode_varint(value.len() as u64, buf);
-        buf.put_slice(value.as_bytes());
-    }
-
-    #[inline]
-    fn prepend_value<B: ReverseBuf + ?Sized>(value: &bytestring::ByteString, buf: &mut B) {
-        buf.prepend_slice(value.as_bytes());
-        prepend_varint(value.len() as u64, buf);
-    }
-
-    #[inline]
-    fn value_encoded_len(value: &bytestring::ByteString) -> usize {
-        encoded_len_varint(value.len() as u64) + value.len()
-    }
-
-    #[inline]
-    fn decode_value<B: Buf + ?Sized>(
-        value: &mut bytestring::ByteString,
-        mut buf: Capped<B>,
-        _ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        let mut string_data = buf.take_length_delimited()?;
-        let string_len = string_data.remaining_before_cap();
-        *value = bytestring::ByteString::try_from(string_data.copy_to_bytes(string_len))
-            .map_err(|_| DecodeError::new(InvalidValue))?;
-        Ok(())
-    }
-}
-
-#[cfg(feature = "bytestring")]
-impl DistinguishedValueEncoder<General> for bytestring::ByteString {
-    const CHECKS_EMPTY: bool = false;
-
-    #[inline]
-    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
-        value: &mut bytestring::ByteString,
-        buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
-    ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx)?;
-        Ok(Canonicity::Canonical)
-    }
-}
-
-#[cfg(feature = "bytestring")]
-#[cfg(test)]
-mod bytestring_string {
-    use super::{General, String};
-    use crate::encoding::test::check_type_test;
-    check_type_test!(General, expedient, from String,
-        into bytestring::ByteString, WireType::LengthDelimited);
-    check_type_test!(General, distinguished, from String, into bytestring::ByteString,
-        WireType::LengthDelimited);
-}
-
-#[cfg(feature = "bstr")]
-impl Wiretyped<General> for bstr::BString {
-    const WIRE_TYPE: WireType = WireType::LengthDelimited;
-}
-
-#[cfg(feature = "bstr")]
-impl ValueEncoder<General> for bstr::BString {
-    #[inline(always)]
-    fn encode_value<B: BufMut + ?Sized>(value: &bstr::BString, buf: &mut B) {
-        ValueEncoder::<PlainBytes>::encode_value(&**value, buf);
-    }
-
-    #[inline(always)]
-    fn prepend_value<B: ReverseBuf + ?Sized>(value: &bstr::BString, buf: &mut B) {
-        ValueEncoder::<PlainBytes>::prepend_value(&**value, buf);
-    }
-
-    #[inline(always)]
-    fn value_encoded_len(value: &bstr::BString) -> usize {
-        ValueEncoder::<PlainBytes>::value_encoded_len(&**value)
-    }
-
-    #[inline(always)]
-    fn decode_value<B: Buf + ?Sized>(
-        value: &mut bstr::BString,
-        buf: Capped<B>,
-        ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        ValueEncoder::<PlainBytes>::decode_value(&mut **value, buf, ctx)
-    }
-}
-
-#[cfg(feature = "bstr")]
-impl DistinguishedValueEncoder<General> for bstr::BString {
-    const CHECKS_EMPTY: bool = <Vec<u8> as DistinguishedValueEncoder<PlainBytes>>::CHECKS_EMPTY;
-
-    #[inline(always)]
-    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
-        value: &mut Self,
-        buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
-    ) -> Result<Canonicity, DecodeError> {
-        DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished::<ALLOW_EMPTY>(
-            &mut **value,
-            buf,
-            ctx,
-        )
-    }
-}
-
-#[cfg(feature = "bstr")]
-#[cfg(test)]
-mod bstr_string {
-    use super::{General, Vec};
-    use crate::encoding::test::check_type_test;
-    check_type_test!(General, expedient, from Vec<u8>, into bstr::BString,
-        WireType::LengthDelimited);
-    check_type_test!(General, distinguished, from Vec<u8>, into bstr::BString,
-        WireType::LengthDelimited);
 }
 
 impl Wiretyped<General> for Bytes {
@@ -701,81 +534,6 @@ mod impl_std_time_systemtime {
 
         check_type_empty!(SystemTime, via proxy Proxy);
         check_type_test!(General, expedient, SystemTime, WireType::LengthDelimited);
-    }
-}
-
-#[cfg(feature = "chrono")]
-mod impl_chrono {
-    use super::*;
-    mod naivedate {
-        use super::*;
-        use crate::encoding::proxy_encoder;
-        use crate::DecodeErrorKind::{self, OutOfDomainValue};
-        use chrono::{Datelike, NaiveDate};
-
-        type Proxy = crate::encoding::local_proxy::LocalProxy<i32, 2>;
-        type Encoder = crate::encoding::Packed<Varint>;
-
-        fn empty_proxy() -> Proxy {
-            Proxy::new_empty()
-        }
-
-        fn to_proxy(from: &NaiveDate) -> Proxy {
-            Proxy::new_without_empty_suffix([from.year(), from.ordinal0() as i32])
-        }
-
-        fn from_proxy(proxy: Proxy) -> Result<NaiveDate, DecodeErrorKind> {
-            let [year, ordinal0] = proxy.into_inner();
-            let ordinal0: u32 = ordinal0.try_into().map_err(|_| InvalidValue)?;
-            NaiveDate::from_yo_opt(year, ordinal0 + 1).ok_or(OutOfDomainValue)
-        }
-
-        fn from_proxy_distinguished(
-            proxy: Proxy,
-        ) -> Result<(NaiveDate, Canonicity), DecodeErrorKind> {
-            let ([year, ordinal0], canon) = proxy.into_inner_distinguished();
-            let ordinal0: u32 = ordinal0.try_into().map_err(|_| InvalidValue)?;
-            NaiveDate::from_yo_opt(year, ordinal0 + 1)
-                .map(|date| (date, canon))
-                .ok_or(OutOfDomainValue)
-        }
-
-        proxy_encoder!(
-            encode type (NaiveDate) with encoder (General)
-            via proxy (Proxy) using real encoder (Encoder)
-            including distinguished
-        );
-
-        #[cfg(test)]
-        mod test {
-            use super::*;
-            use crate::encoding::test::{check_type_empty, check_type_test};
-
-            check_type_empty!(NaiveDate, via proxy Proxy);
-            check_type_test!(
-                General,
-                expedient,
-                from Vec<u8>,
-                into NaiveDate,
-                converter(b) {
-                    use arbitrary::{Arbitrary, Unstructured};
-                    NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
-                },
-                WireType::LengthDelimited
-            );
-            check_type_empty!(NaiveDate, via distinguished proxy Proxy);
-            check_type_test!(
-                General,
-                distinguished,
-                from Vec<u8>,
-                into NaiveDate,
-                converter(b) {
-                    use arbitrary::{Arbitrary, Unstructured};
-                    NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
-                },
-                WireType::LengthDelimited
-            );
-        }
     }
 }
 

@@ -23,6 +23,8 @@ pub mod opaque;
 mod packed;
 mod plain_bytes;
 mod tuple;
+
+mod type_support;
 mod unpacked;
 mod value_traits;
 mod varint;
