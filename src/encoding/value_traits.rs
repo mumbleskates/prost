@@ -1,3 +1,6 @@
+use crate::Blob;
+use crate::DecodeErrorKind::UnexpectedlyRepeated;
+use crate::{Canonicity, DecodeErrorKind};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::collections::{btree_map, btree_set, BTreeMap, BTreeSet};
@@ -6,10 +9,6 @@ use alloc::vec::Vec;
 use core::cmp::Ordering::{Equal, Greater, Less};
 #[cfg(feature = "std")]
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
-
-use crate::Blob;
-use crate::DecodeErrorKind::UnexpectedlyRepeated;
-use crate::{Canonicity, DecodeErrorKind};
 
 /// Trait for types that have a state that is considered "empty".
 ///

@@ -42,6 +42,7 @@ bilrost-derive = { version = "=0.1011.0-dev", path = "bilrost-derive", optional 
 bstr = { version = ">=1", default-features = false, features = ["alloc"], optional = true }
 bytes = { version = "1", default-features = false }
 bytestring = { version = ">=1", default-features = false, optional = true }
+chrono = { version = ">=0.2.0", default-features = false, optional = true }
 const_panic = { version = "0.2", default-features = false, features = ["non_basic"], optional = true }
 hashbrown = { version = ">=0.1.0", default-features = false, optional = true }
 smallvec = { version = ">=1.6.1", default-features = false, features = ["const_generics"], optional = true }
@@ -53,7 +54,9 @@ tinyvec = { version = ">=1", default-features = false, features = ["alloc", "rus
 pprof = { version = ">=0.13,<0.15", features = ["flamegraph"], optional = true }
 
 [dev-dependencies]
+arbitrary = "1.4"
 bilrost = { path = ".", default-features = false, features = ["derive"] } # always enable proc-macro use for integration tests
+chrono = { version = "*", default-features = false, features = ["arbitrary", "std"] } # "arbitrary" and "std" are both required for proptests
 criterion = { version = "0.5", default-features = false }
 hashbrown = { version = ">=0.15.2", default-features = false, features = ["default-hasher"] }
 itertools = { version = "0.13", default-features = false, features = ["use_alloc"] }
@@ -73,6 +76,7 @@ third-party-type-support = [
     "arrayvec",
     "bstr",
     "bytestring",
+    "chrono",
     "hashbrown",
     "smallvec",
     "thin-vec",
@@ -81,6 +85,7 @@ third-party-type-support = [
 arrayvec = ["dep:arrayvec"]
 bstr = ["dep:bstr"]
 bytestring = ["dep:bytestring"]
+chrono = ["dep:chrono"]
 hashbrown = ["dep:hashbrown"]
 smallvec = ["dep:smallvec"]
 thin-vec = ["dep:thin-vec"]

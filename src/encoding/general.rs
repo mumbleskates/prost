@@ -745,6 +745,37 @@ mod impl_chrono {
             via proxy (Proxy) using real encoder (Encoder)
             including distinguished
         );
+
+        #[cfg(test)]
+        mod test {
+            use super::General;
+            use crate::encoding::test::check_type_test;
+            use alloc::vec::Vec;
+            use chrono::NaiveDate;
+
+            check_type_test!(
+                General,
+                expedient,
+                from Vec<u8>,
+                into NaiveDate,
+                converter(b) {
+                    use arbitrary::{Arbitrary, Unstructured};
+                    NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
+                },
+                WireType::LengthDelimited
+            );
+            check_type_test!(
+                General,
+                distinguished,
+                from Vec<u8>,
+                into NaiveDate,
+                converter(b) {
+                    use arbitrary::{Arbitrary, Unstructured};
+                    NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
+                },
+                WireType::LengthDelimited
+            );
+        }
     }
 }
 
