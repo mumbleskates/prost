@@ -2056,7 +2056,7 @@ macro_rules! delegate_encoding {
                 value: &mut $value_ty,
                 buf: $crate::encoding::Capped<B>,
                 ctx: $crate::encoding::DecodeContext,
-            ) -> Result<(), DecodeError> {
+            ) -> Result<(), $crate::DecodeError> {
                 $crate::encoding::Encoder::<$to_ty>::decode(
                     wire_type,
                     duplicated,
