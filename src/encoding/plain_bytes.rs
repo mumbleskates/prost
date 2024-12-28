@@ -267,30 +267,32 @@ macro_rules! plain_bytes_vec_impl {
         $do_extend:expr
         $(, with generics ($($generics:tt)*))?
     ) => {
-        impl$(<$($generics)*>)? Wiretyped<PlainBytes> for $ty {
-            const WIRE_TYPE: WireType = WireType::LengthDelimited;
+        impl$(<$($generics)*>)? $crate::encoding::Wiretyped<$crate::encoding::PlainBytes> for $ty {
+            const WIRE_TYPE: $crate::encoding::WireType =
+                $crate::encoding::WireType::LengthDelimited;
         }
 
-        impl$(<$($generics)*>)? ValueEncoder<PlainBytes> for $ty {
-            fn encode_value<B: BufMut + ?Sized>(value: &$ty, buf: &mut B) {
-                encode_varint(value.len() as u64, buf);
+        impl$(<$($generics)*>)? $crate::encoding::ValueEncoder<$crate::encoding::PlainBytes>
+        for $ty {
+            fn encode_value<B: $crate::bytes::BufMut + ?Sized>(value: &$ty, buf: &mut B) {
+                $crate::encoding::encode_varint(value.len() as u64, buf);
                 buf.put_slice(value.as_slice());
             }
 
-            fn prepend_value<B: ReverseBuf + ?Sized>(value: &$ty, buf: &mut B) {
+            fn prepend_value<B: $crate::buf::ReverseBuf + ?Sized>(value: &$ty, buf: &mut B) {
                 buf.prepend_slice(value);
-                prepend_varint(value.len() as u64, buf);
+                $crate::encoding::prepend_varint(value.len() as u64, buf);
             }
 
             fn value_encoded_len(value: &$ty) -> usize {
-                encoded_len_varint(value.len() as u64) + value.len()
+                $crate::encoding::encoded_len_varint(value.len() as u64) + value.len()
             }
 
-            fn decode_value<B: Buf + ?Sized>(
+            fn decode_value<B: $crate::bytes::Buf + ?Sized>(
                 $value: &mut $ty,
-                mut buf: Capped<B>,
-                _ctx: DecodeContext,
-            ) -> Result<(), DecodeError> {
+                mut buf: $crate::encoding::Capped<B>,
+                _ctx: $crate::encoding::DecodeContext,
+            ) -> Result<(), $crate::DecodeError> {
                 let mut $buf = buf.take_length_delimited()?.take_all();
                 $value.clear();
                 $do_reserve;
@@ -303,33 +305,25 @@ macro_rules! plain_bytes_vec_impl {
             }
         }
 
-        impl$(<$($generics)*>)? DistinguishedValueEncoder<PlainBytes> for $ty {
+        impl$(<$($generics)*>)?
+        $crate::encoding::DistinguishedValueEncoder<$crate::encoding::PlainBytes> for $ty {
             const CHECKS_EMPTY: bool = false;
 
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $ty,
-                buf: Capped<impl Buf + ?Sized>,
-                ctx: DecodeContext,
-            ) -> Result<Canonicity, DecodeError> {
-                ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx)?;
-                Ok(Canonicity::Canonical)
+                buf: $crate::encoding::Capped<impl $crate::bytes::Buf + ?Sized>,
+                ctx: $crate::encoding::DecodeContext,
+            ) -> Result<$crate::Canonicity, $crate::DecodeError> {
+                $crate::encoding::ValueEncoder::<$crate::encoding::PlainBytes>::decode_value(
+                    value, buf, ctx)?;
+                Ok($crate::Canonicity::Canonical)
             }
         }
     }
 }
+pub(crate) use plain_bytes_vec_impl;
 
 #[cfg(feature = "arrayvec")]
-plain_bytes_vec_impl!(
-    arrayvec::ArrayVec<u8, N>,
-    value,
-    buf,
-    chunk,
-    if buf.remaining() > N {
-        return Err(DecodeError::new(InvalidValue));
-    },
-    value.extend(chunk.iter().cloned()),
-    with generics (const N: usize)
-);
 
 #[cfg(feature = "smallvec")]
 plain_bytes_vec_impl!(
