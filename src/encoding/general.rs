@@ -530,9 +530,10 @@ mod blob {
 //      * Utc: ()
 //      * FixedOffset: [hour, minute, second] (packed<varint> with trailing zeros removed)
 //      * Local: maybe don't support this one
-//      * there is also crate chrono-tz, but it doesn't make sense to support that. concerns
+//      * there is also crate chrono-tz, but it doesn't(?) make sense to support that. concerns
 //        involving the shifting sands of timezone definitions are outside the responsibilities of
-//        an encoding library
+//        an encoding library (maybe we can just check it and make it non-canonical? these types are
+//        probably all non-canonical anyway)
 //  * struct Date<impl TimeZone>
 //      * aggregate of (NaiveDate, offset)
 //      * store as tuple
@@ -559,13 +560,14 @@ mod blob {
 
 mod impl_core_time_duration {
     use super::*;
+    use crate::encoding::proxy_encoder;
     use crate::DecodeErrorKind;
 
     type Proxy = crate::encoding::local_proxy::LocalProxy<u64, 2>;
     type Encoder = crate::encoding::Packed<Varint>;
 
-    impl Wiretyped<General> for core::time::Duration {
-        const WIRE_TYPE: WireType = WireType::LengthDelimited;
+    fn empty_proxy() -> Proxy {
+        Proxy::new_empty()
     }
 
     fn to_proxy(from: &core::time::Duration) -> Proxy {
@@ -576,10 +578,10 @@ mod impl_core_time_duration {
         let [secs, nanos] = proxy.into_inner();
         nanos
             .try_into()
-            .map_err(|_| DecodeErrorKind::OutOfDomainValue)
+            .map_err(|_| InvalidValue)
             .and_then(|nanos| {
                 if nanos > 999_999_999 {
-                    Err(DecodeErrorKind::OutOfDomainValue)
+                    Err(InvalidValue)
                 } else {
                     Ok(core::time::Duration::new(secs, nanos))
                 }
@@ -592,60 +594,21 @@ mod impl_core_time_duration {
         let ([secs, nanos], canon) = proxy.into_inner_distinguished();
         nanos
             .try_into()
-            .map_err(|_| DecodeErrorKind::OutOfDomainValue)
+            .map_err(|_| InvalidValue)
             .and_then(|nanos| {
                 if nanos > 999_999_999 {
-                    Err(DecodeErrorKind::OutOfDomainValue)
+                    Err(InvalidValue)
                 } else {
                     Ok((core::time::Duration::new(secs, nanos), canon))
                 }
             })
     }
 
-    impl ValueEncoder<General> for core::time::Duration {
-        fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
-            <Proxy as ValueEncoder<Encoder>>::encode_value(&to_proxy(value), buf);
-        }
-
-        fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
-            <Proxy as ValueEncoder<Encoder>>::prepend_value(&to_proxy(value), buf);
-        }
-
-        fn value_encoded_len(value: &Self) -> usize {
-            <Proxy as ValueEncoder<Encoder>>::value_encoded_len(&to_proxy(value))
-        }
-
-        fn decode_value<B: Buf + ?Sized>(
-            value: &mut Self,
-            buf: Capped<B>,
-            ctx: DecodeContext,
-        ) -> Result<(), DecodeError> {
-            let mut proxy = Proxy::new_empty();
-            <Proxy as ValueEncoder<Encoder>>::decode_value(&mut proxy, buf, ctx)?;
-            *value = from_proxy(proxy)?;
-            Ok(())
-        }
-    }
-
-    impl DistinguishedValueEncoder<General> for core::time::Duration {
-        const CHECKS_EMPTY: bool = <Proxy as DistinguishedValueEncoder<Encoder>>::CHECKS_EMPTY;
-
-        fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
-            value: &mut Self,
-            buf: Capped<impl Buf + ?Sized>,
-            ctx: DecodeContext,
-        ) -> Result<Canonicity, DecodeError> {
-            let mut proxy = Proxy::new_empty();
-            let mut canon =
-                <Proxy as DistinguishedValueEncoder<Encoder>>::decode_value_distinguished::<
-                    ALLOW_EMPTY,
-                >(&mut proxy, buf, ctx)?;
-            let proxy_canon;
-            (*value, proxy_canon) = from_proxy_distinguished(proxy)?;
-            canon.update(proxy_canon);
-            Ok(canon)
-        }
-    }
+    proxy_encoder!(
+        encode type (core::time::Duration) with encoder (General)
+        via proxy (Proxy) using real encoder (Encoder)
+        including distinguished
+    );
 
     #[cfg(test)]
     mod test {
@@ -669,12 +632,17 @@ mod impl_core_time_duration {
 #[cfg(feature = "std")]
 mod impl_std_time_systemtime {
     use super::*;
-    use crate::DecodeErrorKind;
+    use crate::encoding::proxy_encoder;
+    use crate::DecodeErrorKind::{self, OutOfDomainValue};
     use std::cmp::Ordering;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     type Proxy = crate::encoding::local_proxy::LocalProxy<u64, 3>;
     type Encoder = crate::encoding::Packed<Varint>;
+
+    fn empty_proxy() -> Proxy {
+        Proxy::new_empty()
+    }
 
     fn to_proxy(from: &SystemTime) -> Proxy {
         let (symbol, small, big) = match from.cmp(&UNIX_EPOCH) {
@@ -703,51 +671,25 @@ mod impl_std_time_systemtime {
         };
         let nanos = nanos
             .try_into()
-            .map_err(|_| DecodeErrorKind::OutOfDomainValue)
+            .map_err(|_| InvalidValue)
             .and_then(|nanos| {
                 if nanos > 999_999_999 {
-                    Err(DecodeErrorKind::OutOfDomainValue)
+                    Err(InvalidValue)
                 } else {
                     Ok(nanos)
                 }
             })?;
-        operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos))
-            .ok_or(DecodeErrorKind::OutOfDomainValue)
-    }
-
-    impl Wiretyped<General> for SystemTime {
-        const WIRE_TYPE: WireType = WireType::LengthDelimited;
-    }
-
-    impl ValueEncoder<General> for SystemTime {
-        fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
-            <Proxy as ValueEncoder<Encoder>>::encode_value(&to_proxy(value), buf);
-        }
-
-        fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
-            <Proxy as ValueEncoder<Encoder>>::prepend_value(&to_proxy(value), buf);
-        }
-
-        fn value_encoded_len(value: &Self) -> usize {
-            <Proxy as ValueEncoder<Encoder>>::value_encoded_len(&to_proxy(value))
-        }
-
-        fn decode_value<B: Buf + ?Sized>(
-            value: &mut Self,
-            buf: Capped<B>,
-            ctx: DecodeContext,
-        ) -> Result<(), DecodeError> {
-            let mut proxy = Proxy::new_empty();
-            <Proxy as ValueEncoder<Encoder>>::decode_value(&mut proxy, buf, ctx)?;
-            *value = from_proxy(proxy)?;
-            Ok(())
-        }
+        operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos)).ok_or(OutOfDomainValue)
     }
 
     // SystemTime does not have a distinguished decoding because the implementations vary enough
     // from platform to platform, including by their accuracy, that it isn't worthwhile to validate
     // its canonicity at the encoding level; if we did, values still might not even round trip. If
     // that kind of guarantee is needed, a dedicated stable time struct type should be used.
+    proxy_encoder!(
+        encode type (SystemTime) with encoder (General)
+        via proxy (Proxy) using real encoder (Encoder)
+    );
 
     #[cfg(test)]
     mod test {
@@ -758,6 +700,50 @@ mod impl_std_time_systemtime {
             expedient,
             std::time::SystemTime,
             WireType::LengthDelimited
+        );
+    }
+}
+
+#[cfg(feature = "chrono")]
+mod impl_chrono {
+    use super::*;
+    mod naivedate {
+        use super::*;
+        use crate::encoding::proxy_encoder;
+        use crate::DecodeErrorKind::{self, OutOfDomainValue};
+        use chrono::{Datelike, NaiveDate};
+
+        type Proxy = crate::encoding::local_proxy::LocalProxy<i32, 2>;
+        type Encoder = crate::encoding::Packed<Varint>;
+
+        fn empty_proxy() -> Proxy {
+            Proxy::new_empty()
+        }
+
+        fn to_proxy(from: &NaiveDate) -> Proxy {
+            Proxy::new_without_empty_suffix([from.year(), from.ordinal0() as i32])
+        }
+
+        fn from_proxy(proxy: Proxy) -> Result<NaiveDate, DecodeErrorKind> {
+            let [year, ordinal0] = proxy.into_inner();
+            let ordinal0: u32 = ordinal0.try_into().map_err(|_| InvalidValue)?;
+            NaiveDate::from_yo_opt(year, ordinal0 + 1).ok_or(OutOfDomainValue)
+        }
+
+        fn from_proxy_distinguished(
+            proxy: Proxy,
+        ) -> Result<(NaiveDate, Canonicity), DecodeErrorKind> {
+            let ([year, ordinal0], canon) = proxy.into_inner_distinguished();
+            let ordinal0: u32 = ordinal0.try_into().map_err(|_| InvalidValue)?;
+            NaiveDate::from_yo_opt(year, ordinal0 + 1)
+                .map(|date| (date, canon))
+                .ok_or(OutOfDomainValue)
+        }
+
+        proxy_encoder!(
+            encode type (NaiveDate) with encoder (General)
+            via proxy (Proxy) using real encoder (Encoder)
+            including distinguished
         );
     }
 }

@@ -214,6 +214,25 @@ impl EmptyState for std::time::SystemTime {
     }
 }
 
+#[cfg(feature = "chrono")]
+impl ForOverwrite for chrono::NaiveDate {
+    fn for_overwrite() -> Self {
+        Self::from_yo_opt(0, 1).unwrap()
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl EmptyState for chrono::NaiveDate {
+    fn is_empty(&self) -> bool {
+        use chrono::Datelike;
+        (self.year(), self.ordinal0()) == (0, 0)
+    }
+
+    fn clear(&mut self) {
+        *self = Self::empty();
+    }
+}
+
 #[cfg(feature = "bstr")]
 for_overwrite_via_default!(bstr::BString);
 
