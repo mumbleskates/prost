@@ -2329,28 +2329,28 @@ macro_rules! proxy_encoder {
         $(with where clause ($($where_clause:tt)+))?
         $(with generics ($($value_generics:tt)*))?
     ) => {
-        impl$(<$($value_generics),*>)? crate::encoding::Wiretyped<$encoder_ty> for $from_ty
+        impl$(<$($value_generics),*>)? $crate::encoding::Wiretyped<$encoder_ty> for $from_ty
         $(where $($where_clause)*)?
         {
-            const WIRE_TYPE: crate::encoding::WireType =
-                <$proxy_ty as crate::encoding::Wiretyped<$real_encoder_ty>>::WIRE_TYPE;
+            const WIRE_TYPE: $crate::encoding::WireType =
+                <$proxy_ty as $crate::encoding::Wiretyped<$real_encoder_ty>>::WIRE_TYPE;
         }
 
-        impl$(<$($value_generics),*>)? crate::encoding::ValueEncoder<$encoder_ty> for $from_ty
+        impl$(<$($value_generics),*>)? $crate::encoding::ValueEncoder<$encoder_ty> for $from_ty
         $(where $($where_clause)*)?
         {
             fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
-                crate::encoding::ValueEncoder::<$real_encoder_ty>::encode_value(
+                $crate::encoding::ValueEncoder::<$real_encoder_ty>::encode_value(
                     &to_proxy(value), buf);
             }
 
             fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
-                crate::encoding::ValueEncoder::<$real_encoder_ty>::prepend_value(
+                $crate::encoding::ValueEncoder::<$real_encoder_ty>::prepend_value(
                     &to_proxy(value), buf);
             }
 
             fn value_encoded_len(value: &Self) -> usize {
-                crate::encoding::ValueEncoder::<$real_encoder_ty>::value_encoded_len(
+                $crate::encoding::ValueEncoder::<$real_encoder_ty>::value_encoded_len(
                     &to_proxy(value))
             }
 
@@ -2360,7 +2360,7 @@ macro_rules! proxy_encoder {
                 ctx: DecodeContext,
             ) -> Result<(), DecodeError> {
                 let mut proxy = empty_proxy();
-                crate::encoding::ValueEncoder::<$real_encoder_ty>::decode_value(
+                $crate::encoding::ValueEncoder::<$real_encoder_ty>::decode_value(
                     &mut proxy, buf, ctx)?;
                 *value = from_proxy(proxy)?;
                 Ok(())
@@ -2386,7 +2386,7 @@ macro_rules! proxy_encoder {
         $(where $($where_clause)*)?
         {
             const CHECKS_EMPTY: bool = <
-                $proxy_ty as crate::encoding::DistinguishedValueEncoder<$real_encoder_ty>
+                $proxy_ty as $crate::encoding::DistinguishedValueEncoder<$real_encoder_ty>
             >::CHECKS_EMPTY;
 
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
@@ -2395,7 +2395,7 @@ macro_rules! proxy_encoder {
                 ctx: DecodeContext,
             ) -> Result<Canonicity, DecodeError> {
                 let mut proxy = empty_proxy();
-                let mut canon = crate::encoding::DistinguishedValueEncoder::<
+                let mut canon = $crate::encoding::DistinguishedValueEncoder::<
                         $real_encoder_ty
                     >::decode_value_distinguished::<ALLOW_EMPTY>(&mut proxy, buf, ctx)?;
                 let proxy_canon;
