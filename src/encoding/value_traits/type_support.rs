@@ -1,15 +1,11 @@
-#[allow(unused_imports)]
-use crate::{
-    encoding::value_traits::{
-        for_overwrite_via_default, Collection, EmptyState, ForOverwrite, Mapping,
-        TriviallyDistinguishedCollection,
-    },
-    DecodeErrorKind::{self, InvalidValue, UnexpectedlyRepeated},
-};
-
 #[cfg(feature = "arrayvec")]
 mod impl_arrayvec {
-    use super::*;
+    use crate::encoding::value_traits::{
+        for_overwrite_via_default, TriviallyDistinguishedCollection,
+    };
+    use crate::encoding::{Collection, EmptyState};
+    use crate::DecodeErrorKind;
+    use crate::DecodeErrorKind::InvalidValue;
 
     for_overwrite_via_default!(arrayvec::ArrayVec<T, N>, with generics (T, const N: usize));
 
@@ -64,7 +60,8 @@ mod impl_arrayvec {
 
 #[cfg(feature = "bstr")]
 mod impl_bstr {
-    use super::*;
+    use crate::encoding::value_traits::for_overwrite_via_default;
+    use crate::encoding::EmptyState;
     use alloc::vec::Vec;
 
     for_overwrite_via_default!(bstr::BString);
@@ -84,7 +81,8 @@ mod impl_bstr {
 
 #[cfg(feature = "bytestring")]
 mod impl_bytestring {
-    use super::*;
+    use crate::encoding::value_traits::for_overwrite_via_default;
+    use crate::encoding::EmptyState;
 
     for_overwrite_via_default!(bytestring::ByteString);
 
@@ -103,7 +101,7 @@ mod impl_bytestring {
 
 #[cfg(feature = "chrono")]
 mod impl_chrono {
-    use super::*;
+    use crate::encoding::{EmptyState, ForOverwrite};
 
     impl ForOverwrite for chrono::NaiveDate {
         fn for_overwrite() -> Self {
@@ -125,7 +123,10 @@ mod impl_chrono {
 
 #[cfg(feature = "hashbrown")]
 mod impl_hashbrown {
-    use super::*;
+    use crate::encoding::value_traits::for_overwrite_via_default;
+    use crate::encoding::{Collection, EmptyState, Mapping};
+    use crate::DecodeErrorKind;
+    use crate::DecodeErrorKind::UnexpectedlyRepeated;
 
     for_overwrite_via_default!(hashbrown::HashSet<T, S>,
         with generics (T, S),
@@ -255,7 +256,11 @@ mod impl_hashbrown {
 
 #[cfg(feature = "smallvec")]
 mod impl_smallvec {
-    use super::*;
+    use crate::encoding::value_traits::{
+        for_overwrite_via_default, TriviallyDistinguishedCollection,
+    };
+    use crate::encoding::{Collection, EmptyState};
+    use crate::DecodeErrorKind;
 
     for_overwrite_via_default!(smallvec::SmallVec<A>,
         with generics(A),
@@ -313,7 +318,10 @@ mod impl_smallvec {
 
 #[cfg(feature = "std")]
 mod impl_std {
-    use super::*;
+    use crate::encoding::value_traits::for_overwrite_via_default;
+    use crate::encoding::{Collection, EmptyState, ForOverwrite, Mapping};
+    use crate::DecodeErrorKind;
+    use crate::DecodeErrorKind::UnexpectedlyRepeated;
     use std::collections::{hash_map, hash_set, HashMap, HashSet};
 
     impl ForOverwrite for std::time::SystemTime {
@@ -460,7 +468,11 @@ mod impl_std {
 
 #[cfg(feature = "thin-vec")]
 mod impl_thin_vec {
-    use super::*;
+    use crate::encoding::value_traits::{
+        for_overwrite_via_default, TriviallyDistinguishedCollection,
+    };
+    use crate::encoding::{Collection, EmptyState};
+    use crate::DecodeErrorKind;
 
     for_overwrite_via_default!(thin_vec::ThinVec<T>, with generics (T));
 
@@ -516,7 +528,12 @@ mod impl_thin_vec {
 
 #[cfg(feature = "tinyvec")]
 mod impl_tinyvec {
-    use super::*;
+    use crate::encoding::value_traits::{
+        for_overwrite_via_default, TriviallyDistinguishedCollection,
+    };
+    use crate::encoding::{Collection, EmptyState};
+    use crate::DecodeErrorKind;
+    use crate::DecodeErrorKind::InvalidValue;
 
     for_overwrite_via_default!(tinyvec::ArrayVec<A>,
         with generics (A),
