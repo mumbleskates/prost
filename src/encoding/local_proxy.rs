@@ -7,6 +7,7 @@ use core::ops::Deref;
 
 /// This type is a locally implemented stand-in for types like tinyvec::ArrayVec with bare-minimum
 /// functionality to assist encoding some third party types.
+#[derive(Debug, Clone)]
 pub(crate) struct LocalProxy<T, const N: usize> {
     arr: [T; N],
     size: usize,

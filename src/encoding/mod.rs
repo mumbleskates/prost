@@ -2714,6 +2714,56 @@ mod test {
     check_type!(distinguished, DistinguishedEncoder, decode_distinguished,
         enforce with canonical);
 
+    macro_rules! check_type_empty {
+        ($ty:ty) => {
+            #[test]
+            fn check_type_empty() {
+                $crate::encoding::test::check_type_empty_impl::<$ty>();
+            }
+        };
+
+        ($ty:ty, via proxy $proxy:ty) => {
+            #[test]
+            fn check_type_empty_via_proxy() {
+                $crate::encoding::test::check_type_empty_impl::<$ty>();
+                $crate::encoding::test::check_type_empty_impl::<$proxy>();
+                let start = <$ty as $crate::encoding::value_traits::EmptyState>::empty();
+                let proxy = to_proxy(&start);
+                assert!($crate::encoding::value_traits::EmptyState::is_empty(&proxy));
+                let end = from_proxy(proxy).unwrap();
+                assert!($crate::encoding::value_traits::EmptyState::is_empty(&end));
+                assert_eq!(start, end);
+            }
+        };
+
+        ($ty:ty, via distinguished proxy $proxy:ty) => {
+            #[test]
+            fn check_type_empty_via_distinguished_proxy() {
+                $crate::encoding::test::check_type_empty_impl::<$ty>();
+                $crate::encoding::test::check_type_empty_impl::<$proxy>();
+                let start = <$ty as $crate::encoding::value_traits::EmptyState>::empty();
+                let proxy = to_proxy(&start);
+                assert!($crate::encoding::value_traits::EmptyState::is_empty(&proxy));
+                let (end, canon) = from_proxy_distinguished(proxy).unwrap();
+                assert_eq!(canon, $crate::Canonicity::Canonical);
+                assert!($crate::encoding::value_traits::EmptyState::is_empty(&end));
+                assert_eq!(start, end);
+            }
+        };
+    }
+    pub(crate) use check_type_empty;
+
+    pub fn check_type_empty_impl<T>()
+    where
+        T: Debug + EmptyState + PartialEq,
+    {
+        let mut empty = T::empty();
+        assert!(empty.is_empty());
+        empty.clear();
+        assert!(empty.is_empty());
+        assert_eq!(empty, T::empty());
+    }
+
     fn present_empty_not_canon<T, E>()
     where
         T: EmptyState + Eq + DistinguishedEncoder<E> + ValueEncoder<E>,

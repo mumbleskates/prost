@@ -612,14 +612,17 @@ mod impl_core_time_duration {
 
     #[cfg(test)]
     mod test {
-        use super::General;
-        use crate::encoding::test::check_type_test;
+        use super::*;
+        use crate::encoding::test::{check_type_empty, check_type_test};
+
+        check_type_empty!(core::time::Duration, via proxy Proxy);
         check_type_test!(
             General,
             expedient,
             core::time::Duration,
             WireType::LengthDelimited
         );
+        check_type_empty!(core::time::Duration, via distinguished proxy Proxy);
         check_type_test!(
             General,
             distinguished,
@@ -693,14 +696,11 @@ mod impl_std_time_systemtime {
 
     #[cfg(test)]
     mod test {
-        use super::General;
-        use crate::encoding::test::check_type_test;
-        check_type_test!(
-            General,
-            expedient,
-            std::time::SystemTime,
-            WireType::LengthDelimited
-        );
+        use super::*;
+        use crate::encoding::test::{check_type_empty, check_type_test};
+
+        check_type_empty!(SystemTime, via proxy Proxy);
+        check_type_test!(General, expedient, SystemTime, WireType::LengthDelimited);
     }
 }
 
@@ -748,11 +748,10 @@ mod impl_chrono {
 
         #[cfg(test)]
         mod test {
-            use super::General;
-            use crate::encoding::test::check_type_test;
-            use alloc::vec::Vec;
-            use chrono::NaiveDate;
+            use super::*;
+            use crate::encoding::test::{check_type_empty, check_type_test};
 
+            check_type_empty!(NaiveDate, via proxy Proxy);
             check_type_test!(
                 General,
                 expedient,
@@ -764,6 +763,7 @@ mod impl_chrono {
                 },
                 WireType::LengthDelimited
             );
+            check_type_empty!(NaiveDate, via distinguished proxy Proxy);
             check_type_test!(
                 General,
                 distinguished,
