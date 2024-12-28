@@ -8,8 +8,6 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering::{Equal, Greater, Less};
 
-mod type_support;
-
 /// Trait for types that have a state that is considered "empty".
 ///
 /// This type must be implemented for every type encodable as a directly included field in a bilrost
