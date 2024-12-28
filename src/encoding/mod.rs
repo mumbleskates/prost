@@ -2339,12 +2339,12 @@ macro_rules! proxy_encoder {
         impl$(<$($value_generics),*>)? $crate::encoding::ValueEncoder<$encoder_ty> for $from_ty
         $(where $($where_clause)*)?
         {
-            fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
+            fn encode_value<B: $crate::bytes::BufMut + ?Sized>(value: &Self, buf: &mut B) {
                 $crate::encoding::ValueEncoder::<$real_encoder_ty>::encode_value(
                     &to_proxy(value), buf);
             }
 
-            fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
+            fn prepend_value<B: $crate::encoding::ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
                 $crate::encoding::ValueEncoder::<$real_encoder_ty>::prepend_value(
                     &to_proxy(value), buf);
             }
@@ -2354,11 +2354,11 @@ macro_rules! proxy_encoder {
                     &to_proxy(value))
             }
 
-            fn decode_value<B: Buf + ?Sized>(
+            fn decode_value<B: $crate::bytes::Buf + ?Sized>(
                 value: &mut Self,
-                buf: Capped<B>,
-                ctx: DecodeContext,
-            ) -> Result<(), DecodeError> {
+                buf: $crate::encoding::Capped<B>,
+                ctx: $crate::encoding::DecodeContext,
+            ) -> Result<(), $crate::DecodeError> {
                 let mut proxy = empty_proxy();
                 $crate::encoding::ValueEncoder::<$real_encoder_ty>::decode_value(
                     &mut proxy, buf, ctx)?;
@@ -2382,7 +2382,8 @@ macro_rules! proxy_encoder {
             $(with generics ($($value_generics)*))?
         );
 
-        impl$(<$($value_generics),*>)? DistinguishedValueEncoder<$encoder_ty> for $from_ty
+        impl$(<$($value_generics),*>)? $crate::encoding::DistinguishedValueEncoder<$encoder_ty>
+        for $from_ty
         $(where $($where_clause)*)?
         {
             const CHECKS_EMPTY: bool = <
@@ -2391,9 +2392,9 @@ macro_rules! proxy_encoder {
 
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut Self,
-                buf: Capped<impl Buf + ?Sized>,
-                ctx: DecodeContext,
-            ) -> Result<Canonicity, DecodeError> {
+                buf: $crate::encoding::Capped<impl $crate::bytes::Buf + ?Sized>,
+                ctx: $crate::encoding::DecodeContext,
+            ) -> Result<$crate::Canonicity, $crate::DecodeError> {
                 let mut proxy = empty_proxy();
                 let mut canon = $crate::encoding::DistinguishedValueEncoder::<
                         $real_encoder_ty
