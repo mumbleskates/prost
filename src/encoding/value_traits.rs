@@ -59,7 +59,7 @@ macro_rules! empty_state_via_default {
         $(, with generics ($($generics:tt)*))?
         $(, with where clause ($($where_clause:tt)*))?
     ) => {
-        for_overwrite_via_default!(
+        $crate::encoding::value_traits::for_overwrite_via_default!(
             $ty
             $(, with generics ($($generics)*))?
             $(, with where clause ($($where_clause)*))?
