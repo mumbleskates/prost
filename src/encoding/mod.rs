@@ -22,6 +22,7 @@ mod map;
 pub mod opaque;
 mod packed;
 mod plain_bytes;
+mod proxy;
 mod tuple;
 
 mod type_support;
@@ -50,6 +51,12 @@ pub use plain_bytes::PlainBytes;
 pub use unpacked::Unpacked;
 /// Varint encoder. Encodes integer types as varints.
 pub use varint::Varint;
+
+/// Proxied is an encoding that provides value-encoding implementations for types that implement
+/// their encoded representations by first translating to another type that is already supported.
+///
+/// This encoding is not yet made available outside the crate.
+pub(crate) use proxy::{DistinguishedProxiable, Proxiable, Proxied};
 
 // This is an array of the smallest values whose varint representation is N+1 bytes, where N is the
 // index in the array.
@@ -2193,10 +2200,12 @@ macro_rules! delegate_value_encoding {
             #[inline(always)]
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $value_ty,
-                buf: $crate::encoding::Capped<impl Buf + ?Sized>,
+                buf: $crate::encoding::Capped<impl $crate::bytes::Buf + ?Sized>,
                 ctx: $crate::encoding::DecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
-                DistinguishedValueEncoder::<$to_ty>::decode_value_distinguished::<ALLOW_EMPTY>(
+                $crate::encoding::DistinguishedValueEncoder::<$to_ty>::
+                    decode_value_distinguished::<ALLOW_EMPTY>
+                (
                     value,
                     buf,
                     ctx,
@@ -2316,100 +2325,6 @@ macro_rules! encoder_where_value_encoder {
     };
 }
 pub(crate) use encoder_where_value_encoder;
-
-/// Defines an encoding using a proxy type.
-///
-/// In scope, there need to be 3-4 functions defined:
-///     * empty_proxy() -> Proxy
-///     * to_proxy(from: &FromTy) -> Proxy
-///     * from_proxy(proxy: Proxy) -> Result<FromTy, DecodeErrorKind>
-///     * from_proxy_distinguished(proxy: Proxy) -> Result<(FromTy, Canonicity), DecodeErrorKind>
-macro_rules! proxy_encoder {
-    (
-        encode type ($from_ty:ty) with encoder ($encoder_ty:ty)
-        via proxy ($proxy_ty:ty) using real encoder ($real_encoder_ty:ty)
-        $(with where clause ($($where_clause:tt)+))?
-        $(with generics ($($value_generics:tt)*))?
-    ) => {
-        impl$(<$($value_generics),*>)? $crate::encoding::Wiretyped<$encoder_ty> for $from_ty
-        $(where $($where_clause)*)?
-        {
-            const WIRE_TYPE: $crate::encoding::WireType =
-                <$proxy_ty as $crate::encoding::Wiretyped<$real_encoder_ty>>::WIRE_TYPE;
-        }
-
-        impl$(<$($value_generics),*>)? $crate::encoding::ValueEncoder<$encoder_ty> for $from_ty
-        $(where $($where_clause)*)?
-        {
-            fn encode_value<B: $crate::bytes::BufMut + ?Sized>(value: &Self, buf: &mut B) {
-                $crate::encoding::ValueEncoder::<$real_encoder_ty>::encode_value(
-                    &to_proxy(value), buf);
-            }
-
-            fn prepend_value<B: $crate::encoding::ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
-                $crate::encoding::ValueEncoder::<$real_encoder_ty>::prepend_value(
-                    &to_proxy(value), buf);
-            }
-
-            fn value_encoded_len(value: &Self) -> usize {
-                $crate::encoding::ValueEncoder::<$real_encoder_ty>::value_encoded_len(
-                    &to_proxy(value))
-            }
-
-            fn decode_value<B: $crate::bytes::Buf + ?Sized>(
-                value: &mut Self,
-                buf: $crate::encoding::Capped<B>,
-                ctx: $crate::encoding::DecodeContext,
-            ) -> Result<(), $crate::DecodeError> {
-                let mut proxy = empty_proxy();
-                $crate::encoding::ValueEncoder::<$real_encoder_ty>::decode_value(
-                    &mut proxy, buf, ctx)?;
-                *value = from_proxy(proxy)?;
-                Ok(())
-            }
-        }
-    };
-
-    (
-        encode type ($from_ty:ty) with encoder ($encoder_ty:ty)
-        via proxy ($proxy_ty:ty) using real encoder ($real_encoder_ty:ty)
-        including distinguished
-        $(with where clause ($($where_clause:tt)+))?
-        $(with generics ($($value_generics:tt)*))?
-    ) => {
-        proxy_encoder!(
-            encode type ($from_ty) with encoder ($encoder_ty)
-            via proxy ($proxy_ty) using real encoder ($real_encoder_ty)
-            $(with where clause ($($where_clause)+))?
-            $(with generics ($($value_generics)*))?
-        );
-
-        impl$(<$($value_generics),*>)? $crate::encoding::DistinguishedValueEncoder<$encoder_ty>
-        for $from_ty
-        $(where $($where_clause)*)?
-        {
-            const CHECKS_EMPTY: bool = <
-                $proxy_ty as $crate::encoding::DistinguishedValueEncoder<$real_encoder_ty>
-            >::CHECKS_EMPTY;
-
-            fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
-                value: &mut Self,
-                buf: $crate::encoding::Capped<impl $crate::bytes::Buf + ?Sized>,
-                ctx: $crate::encoding::DecodeContext,
-            ) -> Result<$crate::Canonicity, $crate::DecodeError> {
-                let mut proxy = empty_proxy();
-                let mut canon = $crate::encoding::DistinguishedValueEncoder::<
-                        $real_encoder_ty
-                    >::decode_value_distinguished::<ALLOW_EMPTY>(&mut proxy, buf, ctx)?;
-                let proxy_canon;
-                (*value, proxy_canon) = from_proxy_distinguished(proxy)?;
-                canon.update(proxy_canon);
-                Ok(canon)
-            }
-        }
-    };
-}
-pub(crate) use proxy_encoder;
 
 #[cfg(test)]
 mod test {
@@ -2717,6 +2632,12 @@ mod test {
     check_type!(distinguished, DistinguishedEncoder, decode_distinguished,
         enforce with canonical);
 
+    /// Types that have an empty state should have a consistent implementation; this can be
+    /// especially important for types that use proxied encoding, which may want to keep emptiness
+    /// of the original and proxy types in sync. That's what this tests right now, though it may be
+    /// possible that this could be loosened somewhat in the future. There's some possibility that
+    /// eventually EmptyState may become subsidiary to value encoding rather than an enforced global
+    /// semantic, but we don't need to get ahead of ourselves.
     macro_rules! check_type_empty {
         ($ty:ty) => {
             #[test]
@@ -2725,31 +2646,38 @@ mod test {
             }
         };
 
-        ($ty:ty, via proxy $proxy:ty) => {
+        ($ty:ty, via proxy) => {
             #[test]
             fn check_type_empty_via_proxy() {
                 $crate::encoding::test::check_type_empty_impl::<$ty>();
-                $crate::encoding::test::check_type_empty_impl::<$proxy>();
-                let start = <$ty as $crate::encoding::value_traits::EmptyState>::empty();
-                let proxy = to_proxy(&start);
-                assert!($crate::encoding::value_traits::EmptyState::is_empty(&proxy));
-                let end = from_proxy(proxy).unwrap();
-                assert!($crate::encoding::value_traits::EmptyState::is_empty(&end));
+                $crate::encoding::test::check_type_empty_impl::<
+                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy
+                >();
+                let start = <$ty as $crate::encoding::EmptyState>::empty();
+                let proxy = $crate::encoding::proxy::Proxiable::encode_proxy(&start);
+                assert!($crate::encoding::EmptyState::is_empty(&proxy));
+                let mut end = <$ty as $crate::encoding::EmptyState>::empty();
+                $crate::encoding::proxy::Proxiable::decode_proxy(&mut end, proxy).unwrap();
+                assert!($crate::encoding::EmptyState::is_empty(&end));
                 assert_eq!(start, end);
             }
         };
 
-        ($ty:ty, via distinguished proxy $proxy:ty) => {
+        ($ty:ty, via distinguished proxy) => {
             #[test]
             fn check_type_empty_via_distinguished_proxy() {
                 $crate::encoding::test::check_type_empty_impl::<$ty>();
-                $crate::encoding::test::check_type_empty_impl::<$proxy>();
-                let start = <$ty as $crate::encoding::value_traits::EmptyState>::empty();
-                let proxy = to_proxy(&start);
-                assert!($crate::encoding::value_traits::EmptyState::is_empty(&proxy));
-                let (end, canon) = from_proxy_distinguished(proxy).unwrap();
+                $crate::encoding::test::check_type_empty_impl::<
+                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy
+                >();
+                let start = <$ty as $crate::encoding::EmptyState>::empty();
+                let proxy = $crate::encoding::proxy::Proxiable::encode_proxy(&start);
+                assert!($crate::encoding::EmptyState::is_empty(&proxy));
+                let mut end = <$ty as $crate::encoding::EmptyState>::empty();
+                let canon = $crate::encoding::proxy::DistinguishedProxiable::
+                    decode_proxy_distinguished(&mut end, proxy).unwrap();
                 assert_eq!(canon, $crate::Canonicity::Canonical);
-                assert!($crate::encoding::value_traits::EmptyState::is_empty(&end));
+                assert!($crate::encoding::EmptyState::is_empty(&end));
                 assert_eq!(start, end);
             }
         };

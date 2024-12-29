@@ -11,12 +11,12 @@ use crate::buf::ReverseBuf;
 use crate::encoding::{
     delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint,
     encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
-    DistinguishedValueEncoder, Encoder, Fixed, Map, PlainBytes, Unpacked, ValueEncoder, Varint,
-    WireType, Wiretyped,
+    DistinguishedProxiable, DistinguishedValueEncoder, Encoder, Fixed, Map, Packed, PlainBytes,
+    Proxiable, Proxied, Unpacked, ValueEncoder, Varint, WireType, Wiretyped,
 };
 use crate::message::{merge, merge_distinguished, RawDistinguishedMessage, RawMessage};
-use crate::Blob;
 use crate::DecodeErrorKind::InvalidValue;
+use crate::{Blob, DecodeErrorKind};
 
 pub struct General;
 
@@ -391,23 +391,18 @@ mod blob {
 //          * greater: ['+' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
 //          * lesser: ['-' as u64, seconds, nanos] (packed<varint> with trailing zero(?) removed)
 
-mod impl_core_time_duration {
-    use super::*;
-    use crate::encoding::proxy_encoder;
-    use crate::DecodeErrorKind;
-
+impl Proxiable for core::time::Duration {
     type Proxy = crate::encoding::local_proxy::LocalProxy<u64, 2>;
-    type Encoder = crate::encoding::Packed<Varint>;
 
-    fn empty_proxy() -> Proxy {
-        Proxy::new_empty()
+    fn new_proxy() -> Self::Proxy {
+        Self::Proxy::new_empty()
     }
 
-    fn to_proxy(from: &core::time::Duration) -> Proxy {
-        Proxy::new_without_empty_suffix([from.as_secs(), from.subsec_nanos() as u64])
+    fn encode_proxy(&self) -> Self::Proxy {
+        Self::Proxy::new_without_empty_suffix([self.as_secs(), self.subsec_nanos() as u64])
     }
 
-    fn from_proxy(proxy: Proxy) -> Result<core::time::Duration, DecodeErrorKind> {
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let [secs, nanos] = proxy.into_inner();
         nanos
             .try_into()
@@ -416,14 +411,18 @@ mod impl_core_time_duration {
                 if nanos > 999_999_999 {
                     Err(InvalidValue)
                 } else {
-                    Ok(core::time::Duration::new(secs, nanos))
+                    *self = core::time::Duration::new(secs, nanos);
+                    Ok(())
                 }
             })
     }
+}
 
-    fn from_proxy_distinguished(
-        proxy: Proxy,
-    ) -> Result<(core::time::Duration, Canonicity), DecodeErrorKind> {
+impl DistinguishedProxiable for core::time::Duration {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
         let ([secs, nanos], canon) = proxy.into_inner_distinguished();
         nanos
             .try_into()
@@ -432,37 +431,35 @@ mod impl_core_time_duration {
                 if nanos > 999_999_999 {
                     Err(InvalidValue)
                 } else {
-                    Ok((core::time::Duration::new(secs, nanos), canon))
+                    *self = core::time::Duration::new(secs, nanos);
+                    Ok(canon)
                 }
             })
     }
+}
 
-    proxy_encoder!(
-        encode type (core::time::Duration) with encoder (General)
-        via proxy (Proxy) using real encoder (Encoder)
-        including distinguished
+delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
+    for type (core::time::Duration) including distinguished);
+
+#[cfg(test)]
+mod core_time {
+    use super::*;
+    use crate::encoding::test::{check_type_empty, check_type_test};
+
+    check_type_empty!(core::time::Duration, via proxy);
+    check_type_test!(
+        General,
+        expedient,
+        core::time::Duration,
+        WireType::LengthDelimited
     );
-
-    #[cfg(test)]
-    mod test {
-        use super::*;
-        use crate::encoding::test::{check_type_empty, check_type_test};
-
-        check_type_empty!(core::time::Duration, via proxy Proxy);
-        check_type_test!(
-            General,
-            expedient,
-            core::time::Duration,
-            WireType::LengthDelimited
-        );
-        check_type_empty!(core::time::Duration, via distinguished proxy Proxy);
-        check_type_test!(
-            General,
-            distinguished,
-            core::time::Duration,
-            WireType::LengthDelimited
-        );
-    }
+    check_type_empty!(core::time::Duration, via distinguished proxy);
+    check_type_test!(
+        General,
+        distinguished,
+        core::time::Duration,
+        WireType::LengthDelimited
+    );
 }
 
 impl<T> Wiretyped<General> for T

@@ -1,11 +1,10 @@
+use core::cmp::Ordering;
 use crate::encoding::value_traits::for_overwrite_via_default;
-use crate::encoding::{
-    delegate_encoding, delegate_value_encoding, Collection, EmptyState, ForOverwrite, General, Map,
-    Mapping, Unpacked,
-};
+use crate::encoding::{delegate_encoding, delegate_value_encoding, Collection, EmptyState, ForOverwrite, General, Map, Mapping, Packed, Proxiable, Proxied, Unpacked, Varint};
 use crate::DecodeErrorKind;
-use crate::DecodeErrorKind::UnexpectedlyRepeated;
+use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue, UnexpectedlyRepeated};
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 impl ForOverwrite for std::time::SystemTime {
     fn for_overwrite() -> Self {
@@ -49,12 +48,12 @@ where
 {
     type Item = T;
     type RefIter<'a>
-        = hash_set::Iter<'a, T>
+    = hash_set::Iter<'a, T>
     where
         Self::Item: 'a,
         Self: 'a;
     type ReverseIter<'a>
-        = Self::RefIter<'a>
+    = Self::RefIter<'a>
     where
         Self::Item: 'a,
         Self: 'a;
@@ -110,13 +109,13 @@ where
     type Key = K;
     type Value = V;
     type RefIter<'a>
-        = hash_map::Iter<'a, K, V>
+    = hash_map::Iter<'a, K, V>
     where
         K: 'a,
         V: 'a,
         Self: 'a;
     type ReverseIter<'a>
-        = Self::RefIter<'a>
+    = Self::RefIter<'a>
     where
         K: 'a,
         V: 'a,
@@ -148,41 +147,36 @@ where
     }
 }
 
-mod systemtime {
-    use super::*;
-    use crate::encoding::{proxy_encoder, Varint};
-    use crate::DecodeErrorKind::{self, InvalidValue, OutOfDomainValue};
-    use std::cmp::Ordering;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
+impl Proxiable for SystemTime {
     type Proxy = crate::encoding::local_proxy::LocalProxy<u64, 3>;
-    type Encoder = crate::encoding::Packed<Varint>;
-
-    fn empty_proxy() -> Proxy {
-        Proxy::new_empty()
+    fn new_proxy() -> Self::Proxy {
+        Self::Proxy::new_empty()
     }
 
-    fn to_proxy(from: &SystemTime) -> Proxy {
-        let (symbol, small, big) = match from.cmp(&UNIX_EPOCH) {
+    fn encode_proxy(&self) -> Self::Proxy {
+        let (symbol, small, big) = match self.cmp(&UNIX_EPOCH) {
             Ordering::Equal => {
-                return Proxy::new_empty();
+                return Self::Proxy::new_empty();
             }
-            Ordering::Greater => ('+', &UNIX_EPOCH, from),
-            Ordering::Less => ('-', from, &UNIX_EPOCH),
+            Ordering::Greater => ('+', &UNIX_EPOCH, self),
+            Ordering::Less => ('-', self, &UNIX_EPOCH),
         };
         let magnitude = big
             .duration_since(*small)
             .expect("SystemTime dates ordered wrong");
-        Proxy::new_without_empty_suffix([
+        Self::Proxy::new_without_empty_suffix([
             symbol as u64,
             magnitude.as_secs(),
             magnitude.subsec_nanos() as u64,
         ])
     }
 
-    fn from_proxy(proxy: Proxy) -> Result<SystemTime, DecodeErrorKind> {
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let (operation, secs, nanos): (fn(_, _) -> _, u64, u64) = match proxy.into_inner() {
-            [0, 0, 0] => return Ok(UNIX_EPOCH),
+            [0, 0, 0] => {
+                *self = UNIX_EPOCH;
+                return Ok(());
+            }
             [symbol, secs, nanos] if symbol == '+' as u64 => (SystemTime::checked_add, secs, nanos),
             [symbol, secs, nanos] if symbol == '-' as u64 => (SystemTime::checked_sub, secs, nanos),
             _ => return Err(InvalidValue),
@@ -197,26 +191,21 @@ mod systemtime {
                     Ok(nanos)
                 }
             })?;
-        operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos)).ok_or(OutOfDomainValue)
+        *self = operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos)).ok_or(OutOfDomainValue)?;
+        Ok(())
     }
+}
 
-    // SystemTime does not have a distinguished decoding because the implementations vary enough
-    // from platform to platform, including by their accuracy, that it isn't worthwhile to validate
-    // its canonicity at the encoding level; if we did, values still might not even round trip. If
-    // that kind of guarantee is needed, a dedicated stable time struct type should be used.
-    proxy_encoder!(
-        encode type (SystemTime) with encoder (General)
-        via proxy (Proxy) using real encoder (Encoder)
-    );
+delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
+    for type (SystemTime));
 
-    #[cfg(test)]
-    mod test {
-        use super::*;
-        use crate::encoding::test::{check_type_empty, check_type_test};
+#[cfg(test)]
+mod systemtime {
+    use super::*;
+    use crate::encoding::test::{check_type_empty, check_type_test};
 
-        check_type_empty!(SystemTime, via proxy Proxy);
-        check_type_test!(General, expedient, SystemTime, WireType::LengthDelimited);
-    }
+    check_type_empty!(SystemTime, via proxy);
+    check_type_test!(General, expedient, SystemTime, WireType::LengthDelimited);
 }
 
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
