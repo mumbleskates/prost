@@ -28,5 +28,7 @@ mod smallvec;
 mod std;
 #[cfg(feature = "thin-vec")]
 mod thin_vec;
+#[cfg(any())]
+mod time;
 #[cfg(feature = "tinyvec")]
 mod tinyvec;
