@@ -1,8 +1,11 @@
-use core::cmp::Ordering;
 use crate::encoding::value_traits::for_overwrite_via_default;
-use crate::encoding::{delegate_encoding, delegate_value_encoding, Collection, EmptyState, ForOverwrite, General, Map, Mapping, Packed, Proxiable, Proxied, Unpacked, Varint};
+use crate::encoding::{
+    delegate_encoding, delegate_value_encoding, Collection, EmptyState, ForOverwrite, General, Map,
+    Mapping, Packed, Proxiable, Proxied, Unpacked, Varint,
+};
 use crate::DecodeErrorKind;
 use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue, UnexpectedlyRepeated};
+use core::cmp::Ordering;
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -48,12 +51,12 @@ where
 {
     type Item = T;
     type RefIter<'a>
-    = hash_set::Iter<'a, T>
+        = hash_set::Iter<'a, T>
     where
         Self::Item: 'a,
         Self: 'a;
     type ReverseIter<'a>
-    = Self::RefIter<'a>
+        = Self::RefIter<'a>
     where
         Self::Item: 'a,
         Self: 'a;
@@ -109,13 +112,13 @@ where
     type Key = K;
     type Value = V;
     type RefIter<'a>
-    = hash_map::Iter<'a, K, V>
+        = hash_map::Iter<'a, K, V>
     where
         K: 'a,
         V: 'a,
         Self: 'a;
     type ReverseIter<'a>
-    = Self::RefIter<'a>
+        = Self::RefIter<'a>
     where
         K: 'a,
         V: 'a,
@@ -191,7 +194,8 @@ impl Proxiable for SystemTime {
                     Ok(nanos)
                 }
             })?;
-        *self = operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos)).ok_or(OutOfDomainValue)?;
+        *self = operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos))
+            .ok_or(OutOfDomainValue)?;
         Ok(())
     }
 }

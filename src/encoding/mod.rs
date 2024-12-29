@@ -1,18 +1,16 @@
-use alloc::boxed::Box;
-use core::cmp::{min, Eq, Ordering, PartialEq};
-use core::default::Default;
-use core::fmt::Debug;
-use core::ops::{Deref, DerefMut};
-
-use bytes::buf::Take;
-use bytes::{Buf, BufMut};
-
 use crate::buf::ReverseBuf;
 use crate::DecodeErrorKind::{
     ConflictingFields, InvalidVarint, NotCanonical, Oversize, TagOverflowed, Truncated,
     UnexpectedlyRepeated, UnknownField, WrongWireType,
 };
 use crate::{decode_length_delimiter, DecodeError, DecodeErrorKind};
+use alloc::boxed::Box;
+use bytes::buf::Take;
+use bytes::{Buf, BufMut};
+use core::cmp::{min, Eq, Ordering, PartialEq};
+use core::default::Default;
+use core::fmt::Debug;
+use core::ops::{Deref, DerefMut};
 
 mod fixed;
 mod general;
@@ -2651,7 +2649,7 @@ mod test {
             fn check_type_empty_via_proxy() {
                 $crate::encoding::test::check_type_empty_impl::<$ty>();
                 $crate::encoding::test::check_type_empty_impl::<
-                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy
+                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy,
                 >();
                 let start = <$ty as $crate::encoding::EmptyState>::empty();
                 let proxy = $crate::encoding::proxy::Proxiable::encode_proxy(&start);
@@ -2668,14 +2666,17 @@ mod test {
             fn check_type_empty_via_distinguished_proxy() {
                 $crate::encoding::test::check_type_empty_impl::<$ty>();
                 $crate::encoding::test::check_type_empty_impl::<
-                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy
+                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy,
                 >();
                 let start = <$ty as $crate::encoding::EmptyState>::empty();
                 let proxy = $crate::encoding::proxy::Proxiable::encode_proxy(&start);
                 assert!($crate::encoding::EmptyState::is_empty(&proxy));
                 let mut end = <$ty as $crate::encoding::EmptyState>::empty();
-                let canon = $crate::encoding::proxy::DistinguishedProxiable::
-                    decode_proxy_distinguished(&mut end, proxy).unwrap();
+                let canon =
+                    $crate::encoding::proxy::DistinguishedProxiable::decode_proxy_distinguished(
+                        &mut end, proxy,
+                    )
+                    .unwrap();
                 assert_eq!(canon, $crate::Canonicity::Canonical);
                 assert!($crate::encoding::EmptyState::is_empty(&end));
                 assert_eq!(start, end);
