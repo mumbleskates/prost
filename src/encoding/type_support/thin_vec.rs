@@ -1,6 +1,8 @@
+use crate::encoding::plain_bytes::plain_bytes_vec_impl;
 use crate::encoding::value_traits::{for_overwrite_via_default, TriviallyDistinguishedCollection};
 use crate::encoding::{delegate_encoding, Collection, EmptyState, General, Unpacked};
 use crate::DecodeErrorKind;
+use bytes::Buf;
 
 for_overwrite_via_default!(thin_vec::ThinVec<T>, with generics (T));
 
@@ -55,3 +57,12 @@ impl<T> TriviallyDistinguishedCollection for thin_vec::ThinVec<T> {}
 
 delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (thin_vec::ThinVec<T>) including distinguished with generics (T));
+
+plain_bytes_vec_impl!(
+    thin_vec::ThinVec<u8>,
+    value,
+    buf,
+    chunk,
+    value.reserve(buf.remaining()),
+    value.extend_from_slice(chunk)
+);

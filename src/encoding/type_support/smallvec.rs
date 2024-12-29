@@ -1,6 +1,8 @@
+use crate::encoding::plain_bytes::plain_bytes_vec_impl;
 use crate::encoding::value_traits::{for_overwrite_via_default, TriviallyDistinguishedCollection};
 use crate::encoding::{delegate_encoding, Collection, EmptyState, General, Unpacked};
 use crate::DecodeErrorKind;
+use bytes::Buf;
 
 for_overwrite_via_default!(smallvec::SmallVec<A>,
     with generics(A),
@@ -59,3 +61,13 @@ delegate_encoding!(delegate from (General) to (Unpacked<General>)
     for type (smallvec::SmallVec<A>) including distinguished
     with where clause (A: smallvec::Array<Item = T>)
     with generics (T, A));
+
+plain_bytes_vec_impl!(
+    smallvec::SmallVec<A>,
+    value,
+    buf,
+    chunk,
+    value.reserve(buf.remaining()),
+    value.extend_from_slice(chunk),
+    with generics (A: smallvec::Array<Item = u8>)
+);

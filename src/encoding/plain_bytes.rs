@@ -323,53 +323,6 @@ macro_rules! plain_bytes_vec_impl {
 }
 pub(crate) use plain_bytes_vec_impl;
 
-#[cfg(feature = "arrayvec")]
-
-#[cfg(feature = "smallvec")]
-plain_bytes_vec_impl!(
-    smallvec::SmallVec<A>,
-    value,
-    buf,
-    chunk,
-    value.reserve(buf.remaining()),
-    value.extend_from_slice(chunk),
-    with generics (A: smallvec::Array<Item = u8>)
-);
-
-#[cfg(feature = "thin-vec")]
-plain_bytes_vec_impl!(
-    thin_vec::ThinVec<u8>,
-    value,
-    buf,
-    chunk,
-    value.reserve(buf.remaining()),
-    value.extend_from_slice(chunk)
-);
-
-#[cfg(feature = "tinyvec")]
-plain_bytes_vec_impl!(
-    tinyvec::ArrayVec<A>,
-    value,
-    buf,
-    chunk,
-    if buf.remaining() > A::CAPACITY {
-        return Err(DecodeError::new(InvalidValue));
-    },
-    value.extend_from_slice(chunk),
-    with generics (A: tinyvec::Array<Item = u8>)
-);
-
-#[cfg(feature = "tinyvec")]
-plain_bytes_vec_impl!(
-    tinyvec::TinyVec<A>,
-    value,
-    buf,
-    chunk,
-    value.reserve(buf.remaining()),
-    value.extend_from_slice(chunk),
-    with generics (A: tinyvec::Array<Item = u8>)
-);
-
 #[cfg(test)]
 mod third_party_vecs {
     #[allow(unused_macros)]
