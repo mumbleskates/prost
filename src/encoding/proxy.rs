@@ -12,7 +12,7 @@ use core::ops::Deref;
 //  can be sealed by their implementers
 pub struct Proxied<E>(E);
 
-pub(crate) trait Proxiable: Sized {
+pub(crate) trait Proxiable {
     type Proxy;
 
     fn new_proxy() -> Self::Proxy;
