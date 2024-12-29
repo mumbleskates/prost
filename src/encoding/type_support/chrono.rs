@@ -3,8 +3,9 @@ use crate::encoding::{
     delegate_value_encoding, DistinguishedProxiable, Packed, Proxiable, Proxied,
 };
 use crate::encoding::{Canonicity, DecodeErrorKind, EmptyState, ForOverwrite, General, Varint};
+use crate::Canonicity::Canonical;
 use crate::DecodeErrorKind::OutOfDomainValue;
-use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 
 impl ForOverwrite for NaiveDate {
     fn for_overwrite() -> Self {
@@ -232,7 +233,10 @@ impl Proxiable for NaiveDateTime {
 }
 
 impl DistinguishedProxiable for NaiveDateTime {
-    fn decode_proxy_distinguished(&mut self, proxy: Self::Proxy) -> Result<Canonicity, DecodeErrorKind> {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
         let ([year, ordinal0, hour, min, sec, nano], canon) = proxy.into_inner_distinguished();
         let [ordinal0, hour, min, sec, nano]: [u32; 5] = [
             ordinal0.try_into().map_err(|_| OutOfDomainValue)?,
@@ -285,6 +289,143 @@ mod naivedatetime {
     );
 }
 
+impl<Z> ForOverwrite for DateTime<Z>
+where
+    Z: TimeZone,
+    Z::Offset: EmptyState,
+{
+    fn for_overwrite() -> Self {
+        Self::from_naive_utc_and_offset(EmptyState::empty(), EmptyState::empty())
+    }
+}
+
+impl<Z> EmptyState for DateTime<Z>
+where
+    Z: TimeZone,
+    Z::Offset: EmptyState,
+{
+    fn is_empty(&self) -> bool {
+        self.naive_utc().is_empty() && self.offset().is_empty()
+    }
+
+    fn clear(&mut self) {
+        *self = Self::empty();
+    }
+}
+
+impl<Z> Proxiable for DateTime<Z>
+where
+    Z: TimeZone,
+    Z::Offset: EmptyState,
+{
+    type Proxy = (NaiveDateTime, Z::Offset);
+
+    fn new_proxy() -> Self::Proxy {
+        Self::Proxy::empty()
+    }
+
+    fn encode_proxy(&self) -> Self::Proxy {
+        (self.naive_utc(), self.offset().clone())
+    }
+
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        *self = Self::from_naive_utc_and_offset(proxy.0, proxy.1);
+        Ok(())
+    }
+}
+
+impl<Z> DistinguishedProxiable for DateTime<Z>
+where
+    Z: TimeZone,
+    Z::Offset: EmptyState,
+{
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
+        self.decode_proxy(proxy)?;
+        Ok(Canonical)
+    }
+}
+
+delegate_value_encoding!(delegate from (General) to (Proxied<General>)
+    for type (DateTime<Z>) including distinguished
+    with where clause for expedient (Z: TimeZone, Z::Offset: EmptyState)
+    with generics (Z));
+
+impl ForOverwrite for Utc {
+    fn for_overwrite() -> Self {
+        Self
+    }
+}
+
+impl EmptyState for Utc {
+    fn is_empty(&self) -> bool {
+        true
+    }
+
+    fn clear(&mut self) {}
+}
+
+// TODO(widders): consider actually using a proxy for this that checks the offsets so it will fail
+//  when decoding non-UTC timestamps, which could otherwise be a footgun in expedient mode
+impl Proxiable for Utc {
+    type Proxy = ();
+
+    fn new_proxy() {}
+
+    fn encode_proxy(&self) {}
+
+    fn decode_proxy(&mut self, _: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        Ok(())
+    }
+}
+
+impl DistinguishedProxiable for Utc {
+    fn decode_proxy_distinguished(
+        &mut self,
+        _: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
+        Ok(Canonical)
+    }
+}
+
+delegate_value_encoding!(delegate from (General) to (Proxied<General>)
+    for type (Utc) including distinguished);
+
+#[cfg(test)]
+mod datetime {
+    use crate::encoding::test::{check_type_empty, check_type_test};
+    use crate::encoding::General;
+    use alloc::vec::Vec;
+    use chrono::{DateTime, Utc};
+
+    check_type_empty!(DateTime<Utc>, via proxy);
+    check_type_test!(
+        General,
+        expedient,
+        from Vec<u8>,
+        into DateTime<Utc>,
+        converter(b) {
+            use arbitrary::{Arbitrary, Unstructured};
+            DateTime::<Utc>::arbitrary(&mut Unstructured::new(&b)).unwrap()
+        },
+        WireType::LengthDelimited
+    );
+    check_type_empty!(DateTime<Utc>, via distinguished proxy);
+    check_type_test!(
+        General,
+        distinguished,
+        from Vec<u8>,
+        into DateTime<Utc>,
+        converter(b) {
+            use arbitrary::{Arbitrary, Unstructured};
+            DateTime::<Utc>::arbitrary(&mut Unstructured::new(&b)).unwrap()
+        },
+        WireType::LengthDelimited
+    );
+}
+
 // TODO(widders): finish these
 // crate chrono: (other deps: derive)
 //  * struct NaiveDate
@@ -308,6 +449,7 @@ mod naivedatetime {
 //  * struct Date<impl TimeZone>
 //      * aggregate of (NaiveDate, offset)
 //      * store as tuple
+//      * actually this is deprecated nvm
 //  * struct DateTime<impl TimeZone>
 //      * aggreagate of (NaiveDateTime, offset)
 //      * store as tuple
