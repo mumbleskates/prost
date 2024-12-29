@@ -321,6 +321,7 @@ macro_rules! plain_bytes_vec_impl {
         }
     }
 }
+#[allow(unused_imports)]
 pub(crate) use plain_bytes_vec_impl;
 
 #[cfg(test)]
@@ -344,7 +345,7 @@ pub(crate) mod test {
                 converter(val) val.into_iter().collect(),
                 $crate::encoding::WireType::LengthDelimited
             );
-        }
+        };
     }
     #[allow(unused_macros)]
     macro_rules! check_bounded {
@@ -391,7 +392,7 @@ pub(crate) mod test {
                     )?;
                 }
             }
-        }
+        };
     }
     #[allow(unused_imports)]
     pub(crate) use {check_bounded, check_unbounded};

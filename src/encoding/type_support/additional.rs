@@ -1,7 +1,7 @@
-use alloc::vec::Vec;
-use crate::Blob;
-use crate::encoding::EmptyState;
 use crate::encoding::value_traits::for_overwrite_via_default;
+use crate::encoding::EmptyState;
+use crate::Blob;
+use alloc::vec::Vec;
 
 for_overwrite_via_default!(Blob);
 

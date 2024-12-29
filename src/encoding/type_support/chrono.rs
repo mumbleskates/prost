@@ -1,6 +1,6 @@
-use crate::encoding::{EmptyState, ForOverwrite, Varint, Canonicity, DecodeErrorKind, General,};
 use crate::encoding::proxy_encoder;
-use crate::DecodeErrorKind::{OutOfDomainValue, InvalidValue};
+use crate::encoding::{Canonicity, DecodeErrorKind, EmptyState, ForOverwrite, General, Varint};
+use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
 use chrono::Datelike;
 
 impl ForOverwrite for chrono::NaiveDate {
@@ -40,9 +40,7 @@ mod naivedate {
         NaiveDate::from_yo_opt(year, ordinal0 + 1).ok_or(OutOfDomainValue)
     }
 
-    fn from_proxy_distinguished(
-        proxy: Proxy,
-    ) -> Result<(NaiveDate, Canonicity), DecodeErrorKind> {
+    fn from_proxy_distinguished(proxy: Proxy) -> Result<(NaiveDate, Canonicity), DecodeErrorKind> {
         let ([year, ordinal0], canon) = proxy.into_inner_distinguished();
         let ordinal0: u32 = ordinal0.try_into().map_err(|_| InvalidValue)?;
         NaiveDate::from_yo_opt(year, ordinal0 + 1)
@@ -59,8 +57,8 @@ mod naivedate {
     #[cfg(test)]
     mod test {
         use super::*;
-        use alloc::vec::Vec;
         use crate::encoding::test::{check_type_empty, check_type_test};
+        use alloc::vec::Vec;
 
         check_type_empty!(NaiveDate, via proxy Proxy);
         check_type_test!(
