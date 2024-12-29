@@ -2647,39 +2647,16 @@ mod test {
         ($ty:ty, via proxy) => {
             #[test]
             fn check_type_empty_via_proxy() {
-                $crate::encoding::test::check_type_empty_impl::<$ty>();
-                $crate::encoding::test::check_type_empty_impl::<
-                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy,
-                >();
-                let start = <$ty as $crate::encoding::EmptyState>::empty();
-                let proxy = $crate::encoding::proxy::Proxiable::encode_proxy(&start);
-                assert!($crate::encoding::EmptyState::is_empty(&proxy));
-                let mut end = <$ty as $crate::encoding::EmptyState>::empty();
-                $crate::encoding::proxy::Proxiable::decode_proxy(&mut end, proxy).unwrap();
-                assert!($crate::encoding::EmptyState::is_empty(&end));
-                assert_eq!(start, end);
+                $crate::encoding::test::check_type_empty_proxied_impl::<$ty>();
+                $crate::encoding::test::check_proxy_round_trip::<$ty>();
             }
         };
 
         ($ty:ty, via distinguished proxy) => {
             #[test]
             fn check_type_empty_via_distinguished_proxy() {
-                $crate::encoding::test::check_type_empty_impl::<$ty>();
-                $crate::encoding::test::check_type_empty_impl::<
-                    <$ty as $crate::encoding::proxy::Proxiable>::Proxy,
-                >();
-                let start = <$ty as $crate::encoding::EmptyState>::empty();
-                let proxy = $crate::encoding::proxy::Proxiable::encode_proxy(&start);
-                assert!($crate::encoding::EmptyState::is_empty(&proxy));
-                let mut end = <$ty as $crate::encoding::EmptyState>::empty();
-                let canon =
-                    $crate::encoding::proxy::DistinguishedProxiable::decode_proxy_distinguished(
-                        &mut end, proxy,
-                    )
-                    .unwrap();
-                assert_eq!(canon, $crate::Canonicity::Canonical);
-                assert!($crate::encoding::EmptyState::is_empty(&end));
-                assert_eq!(start, end);
+                $crate::encoding::test::check_type_empty_proxied_impl::<$ty>();
+                $crate::encoding::test::check_proxy_round_trip_distinguished::<$ty>();
             }
         };
     }
@@ -2694,6 +2671,44 @@ mod test {
         empty.clear();
         assert!(empty.is_empty());
         assert_eq!(empty, T::empty());
+    }
+
+    pub fn check_type_empty_proxied_impl<T>()
+    where
+        T: Debug + EmptyState + PartialEq + Proxiable,
+        T::Proxy: Debug + EmptyState + PartialEq,
+    {
+        check_type_empty_impl::<T>();
+        check_type_empty_impl::<T::Proxy>();
+    }
+
+    pub fn check_proxy_round_trip<T>()
+    where
+        T: Debug + EmptyState + PartialEq + Proxiable,
+        T::Proxy: Debug + EmptyState + PartialEq,
+    {
+        let start = T::empty();
+        let proxy = start.encode_proxy();
+        assert!(proxy.is_empty());
+        let mut end = T::for_overwrite();
+        end.decode_proxy(proxy).unwrap();
+        assert!(end.is_empty());
+        assert_eq!(start, end);
+    }
+
+    pub fn check_proxy_round_trip_distinguished<T>()
+    where
+        T: Debug + EmptyState + Eq + DistinguishedProxiable,
+        T::Proxy: Debug + EmptyState + Eq,
+    {
+        let start = T::empty();
+        let proxy = start.encode_proxy();
+        assert!(proxy.is_empty());
+        let mut end = T::for_overwrite();
+        let canon = end.decode_proxy_distinguished(proxy).unwrap();
+        assert_eq!(canon, Canonicity::Canonical);
+        assert!(end.is_empty());
+        assert_eq!(start, end);
     }
 
     fn present_empty_not_canon<T, E>()
