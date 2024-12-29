@@ -2662,7 +2662,7 @@ mod test {
     }
     pub(crate) use check_type_empty;
 
-    pub fn check_type_empty_impl<T>()
+    pub(crate) fn check_type_empty_impl<T>()
     where
         T: Debug + EmptyState + PartialEq,
     {
@@ -2673,7 +2673,7 @@ mod test {
         assert_eq!(empty, T::empty());
     }
 
-    pub fn check_type_empty_proxied_impl<T>()
+    pub(crate) fn check_type_empty_proxied_impl<T>()
     where
         T: Debug + EmptyState + PartialEq + Proxiable,
         T::Proxy: Debug + EmptyState + PartialEq,
@@ -2682,7 +2682,7 @@ mod test {
         check_type_empty_impl::<T::Proxy>();
     }
 
-    pub fn check_proxy_round_trip<T>()
+    pub(crate) fn check_proxy_round_trip<T>()
     where
         T: Debug + EmptyState + PartialEq + Proxiable,
         T::Proxy: Debug + EmptyState + PartialEq,
@@ -2696,7 +2696,7 @@ mod test {
         assert_eq!(start, end);
     }
 
-    pub fn check_proxy_round_trip_distinguished<T>()
+    pub(crate) fn check_proxy_round_trip_distinguished<T>()
     where
         T: Debug + EmptyState + Eq + DistinguishedProxiable,
         T::Proxy: Debug + EmptyState + Eq,
