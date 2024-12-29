@@ -70,3 +70,8 @@ plain_bytes_vec_impl!(
     value.extend(chunk.iter().cloned()),
     with generics (const N: usize)
 );
+
+#[cfg(test)]
+mod test {
+    crate::encoding::plain_bytes::test::check_bounded!(arrayvec::ArrayVec<u8, 8>, 8);
+}

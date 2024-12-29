@@ -66,3 +66,8 @@ plain_bytes_vec_impl!(
     value.reserve(buf.remaining()),
     value.extend_from_slice(chunk)
 );
+
+#[cfg(test)]
+mod test {
+    crate::encoding::plain_bytes::test::check_unbounded!(thin_vec::ThinVec<u8>);
+}

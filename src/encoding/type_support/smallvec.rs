@@ -71,3 +71,8 @@ plain_bytes_vec_impl!(
     value.extend_from_slice(chunk),
     with generics (A: smallvec::Array<Item = u8>)
 );
+
+#[cfg(test)]
+mod test {
+    crate::encoding::plain_bytes::test::check_unbounded!(smallvec::SmallVec<[u8; 8]>);
+}

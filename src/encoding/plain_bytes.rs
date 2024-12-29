@@ -324,28 +324,25 @@ macro_rules! plain_bytes_vec_impl {
 pub(crate) use plain_bytes_vec_impl;
 
 #[cfg(test)]
-mod third_party_vecs {
+pub(crate) mod test {
     #[allow(unused_macros)]
     macro_rules! check_unbounded {
         ($ty:ty) => {
-            use crate::encoding::test::check_type_test;
-            use crate::encoding::PlainBytes;
-            use alloc::vec::Vec;
-            check_type_test!(
-                PlainBytes,
+            $crate::encoding::test::check_type_test!(
+                $crate::encoding::PlainBytes,
                 expedient,
-                from Vec<u8>,
+                from ::alloc::vec::Vec<u8>,
                 into $ty,
                 converter(val) val.into_iter().collect(),
-                WireType::LengthDelimited
+                $crate::encoding::WireType::LengthDelimited
             );
-            check_type_test!(
-                PlainBytes,
+            $crate::encoding::test::check_type_test!(
+                $crate::encoding::PlainBytes,
                 distinguished,
-                from Vec<u8>,
+                from ::alloc::vec::Vec<u8>,
                 into $ty,
                 converter(val) val.into_iter().collect(),
-                WireType::LengthDelimited
+                $crate::encoding::WireType::LengthDelimited
             );
         }
     }
@@ -353,59 +350,49 @@ mod third_party_vecs {
     macro_rules! check_bounded {
         ($ty:ty, $N:expr) => {
             use proptest::prelude::*;
-            use crate::encoding::{PlainBytes, WireType};
-            use crate::encoding::test::{distinguished, expedient};
             proptest! {
                 #[test]
                 fn check(from in prop::collection::vec(any::<u8>(), 0..=$N), tag: u32) {
                     let into: $ty = from.into_iter().collect();
-                    expedient::check_type::<$ty, PlainBytes>(
+                    $crate::encoding::test::expedient::
+                        check_type::<$ty, $crate::encoding::PlainBytes>
+                    (
                         into.clone(),
                         tag,
-                        WireType::LengthDelimited,
+                        $crate::encoding::WireType::LengthDelimited,
                     )?;
-                    distinguished::check_type::<$ty, PlainBytes>(
+                    $crate::encoding::test::distinguished::
+                        check_type::<$ty, $crate::encoding::PlainBytes>
+                    (
                         into,
                         tag,
-                        WireType::LengthDelimited,
+                        $crate::encoding::WireType::LengthDelimited,
                     )?;
                 }
                 #[test]
-                fn check_optional(from in prop::option::of(prop::collection::vec(any::<u8>(), 0..=$N)), tag: u32) {
+                fn check_optional(
+                    from in prop::option::of(prop::collection::vec(any::<u8>(), 0..=$N)),
+                    tag: u32,
+                ) {
                     let into: Option<$ty> = from.map(|val| val.into_iter().collect());
-                    expedient::check_type::<Option<$ty>, PlainBytes>(
+                    $crate::encoding::test::expedient::
+                        check_type::<Option<$ty>, $crate::encoding::PlainBytes>
+                    (
                         into.clone(),
                         tag,
-                        WireType::LengthDelimited,
+                        $crate::encoding::WireType::LengthDelimited,
                     )?;
-                    distinguished::check_type::<Option<$ty>, PlainBytes>(
+                    $crate::encoding::test::distinguished::
+                        check_type::<Option<$ty>, $crate::encoding::PlainBytes>
+                    (
                         into,
                         tag,
-                        WireType::LengthDelimited,
+                        $crate::encoding::WireType::LengthDelimited,
                     )?;
                 }
             }
         }
     }
-
-    #[cfg(feature = "arrayvec")]
-    mod arrayvec {
-        check_bounded!(arrayvec::ArrayVec<u8, 8>, 8);
-    }
-    #[cfg(feature = "smallvec")]
-    mod smallvec {
-        check_unbounded!(smallvec::SmallVec<[u8; 8]>);
-    }
-    #[cfg(feature = "thin-vec")]
-    mod thin_vec {
-        check_unbounded!(thin_vec::ThinVec<u8>);
-    }
-    #[cfg(feature = "tinyvec")]
-    mod tinyarrayvec {
-        check_bounded!(tinyvec::ArrayVec<[u8; 8]>, 8);
-    }
-    #[cfg(feature = "tinyvec")]
-    mod tinyvec {
-        check_unbounded!(tinyvec::TinyVec<[u8; 8]>);
-    }
+    #[allow(unused_imports)]
+    pub(crate) use {check_bounded, check_unbounded};
 }
