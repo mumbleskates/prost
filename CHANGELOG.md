@@ -12,11 +12,17 @@
   types.
 * `Oneof` types can now be wrapped in `Box` (multiple times even, and either
   side of `Option` if you really want.)
+* A new fuzzer binary is available specifically for the newer types which have
+  the newer, slightly more abstract encoding paths. These fuzzers are typically
+  run in the order of hundreds to thousands of CPU hours per significant change,
+  and are available for you to run as well.
 
 ### Fixes
 
 * Rectify an ambiguous usage of `PartialEq` that could potentially cause
   compilation failures when supported types in the program support equality.
+* bilrost-derive: simplify some codegen to remove a needless `let mut` in
+  derived decoding implementations.
 
 ### Cleanups
 
