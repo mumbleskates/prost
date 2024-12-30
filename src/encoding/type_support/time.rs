@@ -4,7 +4,7 @@ use crate::encoding::{
     ForOverwrite, General, Packed, Proxiable, Proxied, Varint,
 };
 use crate::DecodeErrorKind::OutOfDomainValue;
-use time::Date;
+use time::{Date, Time};
 
 #[cfg(test)]
 const RANDOM_SAMPLES: u32 = 100;
@@ -98,6 +98,107 @@ mod date {
     }
     check_type_empty!(Date, via proxy);
     check_type_empty!(Date, via distinguished proxy);
+}
+
+impl ForOverwrite for Time {
+    fn for_overwrite() -> Self {
+        Time::MIDNIGHT
+    }
+}
+
+impl EmptyState for Time {
+    fn is_empty(&self) -> bool {
+        *self == Time::MIDNIGHT
+    }
+
+    fn clear(&mut self) {
+        *self = Time::MIDNIGHT;
+    }
+}
+
+#[inline(always)]
+fn parts_to_time<T>(hour: T, min: T, sec: T, nano: T) -> Option<Time>
+where
+    T: Into<u32>,
+    u8: TryFrom<T>,
+{
+    Time::from_hms_nano(
+        u8::try_from(hour).ok()?,
+        u8::try_from(min).ok()?,
+        u8::try_from(sec).ok()?,
+        nano.into(),
+    )
+    .ok()
+}
+
+impl Proxiable for Time {
+    type Proxy = LocalProxy<u32, 4>;
+
+    fn new_proxy() -> Self::Proxy {
+        Self::Proxy::new_empty()
+    }
+
+    fn encode_proxy(&self) -> Self::Proxy {
+        Self::Proxy::new_without_empty_suffix([
+            self.hour() as u32,
+            self.minute() as u32,
+            self.second() as u32,
+            self.nanosecond(),
+        ])
+    }
+
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        let [hour, min, sec, nano] = proxy.into_inner();
+        *self = parts_to_time(hour, min, sec, nano).ok_or(OutOfDomainValue)?;
+        Ok(())
+    }
+}
+
+impl DistinguishedProxiable for Time {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
+        let ([hour, min, sec, nano], canon) = proxy.into_inner_distinguished();
+        *self = parts_to_time(hour, min, sec, nano).ok_or(OutOfDomainValue)?;
+        Ok(canon)
+    }
+}
+
+delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
+    for type (Time) including distinguished);
+
+#[cfg(test)]
+mod time_ty {
+    use super::RANDOM_SAMPLES;
+    use crate::encoding::test::check_type_empty;
+    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::{EmptyState, WireType};
+    use rand::{thread_rng, Rng};
+    use time::Time;
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for date in [
+            Time::MIDNIGHT,
+            Time::MAX,
+            Time::empty(),
+            Time::from_hms_nano(11, 11, 11, 111_111_111).unwrap(),
+        ] {
+            expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
+        }
+
+        for i in 0..RANDOM_SAMPLES {
+            let time: Time = rng.gen();
+            expedient::check_type(time, i, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(time, i, WireType::LengthDelimited).unwrap();
+        }
+    }
+    check_type_empty!(Time, via proxy);
+    check_type_empty!(Time, via distinguished proxy);
 }
 
 // TODO(widders): this
