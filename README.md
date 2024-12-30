@@ -435,7 +435,8 @@ assert_eq!(
 
 The `bilrost` crate has several optional features:
 
-* "std" (default): provides support for `HashMap` and `HashSet`.
+* "std" (default): provides support for [`HashMap`][hashmap],
+  [`HashSet`][hashset], and [`SystemTime`][stdsystemtime].
 * "derive" (default): includes the `bilrost-derive` crate and re-exports its
   derive macros. It's unlikely this should ever be disabled if `bilrost` is used
   normally.
@@ -452,13 +453,24 @@ The `bilrost` crate has several optional features:
 * "extended-diagnostics": with a small added dependency, attempts to provide
   better compile-time diagnostics when derives and derived implementations don't
   work. Somewhat experimental.
-* "arrayvec": provides first-party support for `arrayvec::ArrayVec`
-* "bstr": provides first-party support for `bstr::BString`
-* "bytestring": provides first-party support for `bytestring::Bytestring`
-* "hashbrown": provides first-party support for `hashbrown::{HashMap, HashSet}`
-* "smallvec": provides first-party support for `smallvec::SmallVec`
-* "thin-vec": provides first-party support for `thin_vec::ThinVec`
-* "tinyvec": provides first-party support for `tinyvec::{ArrayVec, TinyVec}`
+* "arrayvec": provides first-party support for [`arrayvec::ArrayVec`][arrayvec]
+* "bstr": provides first-party support for [`bstr::BString`][bstr]
+* "bytestring": provides first-party support for
+  [`bytestring::Bytestring`][bytestring]
+* "chrono": provides first-party support for the following `chrono` types:
+    * [`NaiveDate`][chrononaivedate]
+    * [`NaiveTime`][chrononaivetime]
+    * [`NaiveDateTime`][chrononaivedatetime]
+    * [`Utc`][chronoutc], [`FixedOffset`][chronofixedoffset], and
+      [`DateTime<Tz>`][chronodatetime] with either of those timezone
+      types
+    * [`TimeDelta`][chronotimedelta]
+* "hashbrown": provides first-party support for `hashbrown` types
+  [`HashMap`][hbmap] and [`HashSet`][hbset]
+* "smallvec": provides first-party support for [`smallvec::SmallVec`][smallvec]
+* "thin-vec": provides first-party support for [`thin_vec::ThinVec`][thinvec]
+* "tinyvec": provides first-party support for `tinyvec` types
+  [`ArrayVec`][tinyarrayvec] and [`TinyVec`][tinyvec]
 
 #### `no_std` support
 
@@ -706,10 +718,10 @@ enum Big {
 
 #[derive(Message)]
 struct Tiny {
-  #[bilrost(oneof(1, 2))]
-  big_fields: Option<Box<Big>>,
-  #[bilrost(3)]
-  small_field: i16,
+    #[bilrost(oneof(1, 2))]
+    big_fields: Option<Box<Big>>,
+    #[bilrost(3)]
+    small_field: i16,
 }
 ```
 
@@ -1241,6 +1253,42 @@ discriminant value). Otherwise, enumeration types must always be nested.
 covering impl; message types [can nest recursively](#writing-recursive-messages)
 this way.
 
+With the relevant crate features enabled there is built in support for certain
+additional types as well:
+
+| Encoding  | Value type                                     | Empty value                            | Distinguished | Required feature |
+|-----------|------------------------------------------------|----------------------------------------|---------------|------------------|
+| `general` | [`core::time::Duration`][coreduration]         | zero duration                          | yes           | (none)           |
+| `general` | [`std::time::SystemTime`][stdsystemtime]       | `UNIX_EPOCH` (1970-01-01 00:00:00 UTC) | no            | "std"            |
+| `general` | [`chrono::NaiveDate`][chrononaivedate]         | 0000-01-01                             | yes           | "chrono"         |
+| `general` | [`chrono::NaiveTime`][chrononaivetime]         | 00:00:00                               | yes           | "chrono"         |
+| `general` | [`chrono::NaiveDateTime`][chrononaivedatetime] | 0000-01-01 00:00:00                    | yes           | "chrono"         |
+| `general` | [`chrono::Utc`][chronoutc]                     | Utc                                    | yes           | "chrono"         |
+| `general` | [`chrono::FixedOffset`][chronofixedoffset]     | UTC+00:00                              | yes           | "chrono"         |
+| `general` | [`chrono::DateTime<Tz>`][chronodatetime]*      | 0000-01-01 00:00:00 +00:00             | yes           | "chrono"         |
+| `general` | [`chrono::TimeDelta`][chronotimedelta]         | zero duration                          | yes           | "chrono"         |
+
+*`chrono::DateTime<Tz>` is supported whenever `Tz::Offset` is supported by the
+`general` encoding. Currently this means `Utc` and `FixedOffset`.
+
+[coreduration]: https://doc.rust-lang.org/core/time/struct.Duration.html
+
+[stdsystemtime]: https://doc.rust-lang.org/std/time/struct.SystemTime.html
+
+[chrononaivedate]: https://docs.rs/chrono/latest/chrono/struct.NaiveDate.html
+
+[chrononaivetime]: https://docs.rs/chrono/latest/chrono/struct.NaiveTime.html
+
+[chrononaivedatetime]: https://docs.rs/chrono/latest/chrono/struct.NaiveDateTime.html
+
+[chronoutc]: https://docs.rs/chrono/latest/chrono/struct.Utc.html
+
+[chronofixedoffset]: https://docs.rs/chrono/latest/chrono/struct.FixedOffset.html
+
+[chronodatetime]: https://docs.rs/chrono/latest/chrono/struct.DateTime.html
+
+[chronotimedelta]: https://docs.rs/chrono/latest/chrono/struct.TimeDelta.html
+
 Any of these types may be included directly in a `bilrost` message struct. If
 that field's value is [empty](#empty-values), no bytes will be emitted when it
 is encoded.
@@ -1285,7 +1333,8 @@ hold any unvalidated bytes content (it can work with UTF-8 text, but it doesn't
 *necessarily* contain valid UTF-8 text). This can be useful for both speed and
 for semi-valid data that is mostly textual, and its third-party support is
 included here for those use cases. If it's not immediately convenient as a value
-type, the crate also provides [`bstr::BStr`][bstrref] as a reference type (analogous to
+type, the crate also provides [`bstr::BStr`][bstrref] as a reference type (
+analogous to
 `str`) which can be used with any `&[u8]`.
 
 [^bzcopy]: When decoding from a `bytes::Bytes` object, both `bytes::Bytes` and
@@ -1483,6 +1532,8 @@ same representation.
 | `Option<[T; N]>` --> `Vec<T>`                                                          | no change                                                                                   | data is a length different than that of the array             |
 | `Message` types --> with new fields added                                              | no change, new fields are empty                                                             | new fields are not empty; it will be considered non-canonical |
 | `Enumeration` types --> with new variants added                                        | no change                                                                                   | value is a new variant                                        |
+| `chrono::NaiveDate` --> `chrono::NaiveDateTime`                                        | midnight on the corresponding date                                                          | value has a non-midnight time component                       |
+| `chrono::Utc` --> `chrono::FixedOffset` (and `chrono::DateTime` using those)           | timezone is always UTC                                                                      | value is a non-UTC offset                                     |
 
 `Vec<T>` and other list- and set-like collections that contain repeated values
 can also be changed between `unpacked` and `packed` encoding, as long as the
