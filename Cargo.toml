@@ -47,6 +47,7 @@ const_panic = { version = "0.2", default-features = false, features = ["non_basi
 hashbrown = { version = ">=0.1.0", default-features = false, optional = true }
 smallvec = { version = ">=1.6.1", default-features = false, features = ["const_generics"], optional = true }
 thin-vec = { version = ">=0.2", default-features = false, optional = true }
+time = { version = ">=0.3.0", default-features = false, optional = true }
 tinyvec = { version = ">=1", default-features = false, features = ["alloc", "rustc_1_57"], optional = true }
 
 # pprof prevents building on windows, so must be an optional feature.
@@ -63,6 +64,7 @@ itertools = { version = "0.13", default-features = false, features = ["use_alloc
 proptest = "1"
 rand = "0.8"
 static_assertions = "1"
+time = { version = "*", default-features = false, features = ["rand"] }
 
 [features]
 default = ["auto-optimize", "derive", "detailed-errors", "std"]
