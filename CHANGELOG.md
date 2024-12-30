@@ -4,9 +4,12 @@
 
 ### New features
 
-* Add 3rd party type support for the `bstr` crate and its `BString` type, which
-  is a wrapper around `Vec<u8>` that acts like text but does not guarantee UTF-8
-  and does not require any validation.
+* Added support for `core::time::Duration` and `std::time::SystemTime`.
+* Added 3rd party type support for the `bstr` crate and its `BString` type,
+  which is a wrapper around `Vec<u8>` that acts like text but does not guarantee
+  UTF-8 and does not require any validation.
+* Added 3rd party type support for the `chrono` crate and most of its important
+  types.
 * `Oneof` types can now be wrapped in `Box` (multiple times even, and either
   side of `Option` if you really want.)
 
@@ -23,6 +26,12 @@
 * New keywords and categories have been added to the crate metadata.
 * Various small cleanups to the readme and to the code as `rustfmt` and `clippy`
   develop more and stronger opinions.
+* Major reorganization of type implementations, especially of common value-trait
+  implementations and third-party types. All that code is now filed under
+  `encoding::type_support` and conditionally enabled at the file level. Impls
+  for primitive and core types in the builtin encoders are still in those
+  encoders' modules, but the `value_traits` module now contains only traits and
+  macros and all conditionally-enabled code has been moved into `type_support`.
 
 ## v0.1010.0
 
