@@ -15,6 +15,9 @@
 
 ### Fixes
 
+* Rectify an ambiguous usage of `PartialEq` that could potentially cause
+  compilation failures when supported types in the program support equality.
+
 ### Cleanups
 
 * `bilrost-types`: parsing fractional seconds with more than 9 digits now
