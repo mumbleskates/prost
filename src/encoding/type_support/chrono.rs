@@ -457,7 +457,7 @@ impl Proxiable for FixedOffset {
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let offset_secs = match proxy {
-            (hours @ -24..24, mins @ -60..60, secs @ -60..60) => {
+            (hours @ -23..=23, mins @ -59..=59, secs @ -59..=59) => {
                 let total_offset = (hours as i32) * 60 * 60 + (mins as i32) * 60 + (secs as i32);
 
                 // offsets should always have the same sign for all three components; we don't want
@@ -774,11 +774,11 @@ impl Proxiable for TimeDelta {
 
         let (secs, nanos) = match (proxy.secs, proxy.nanos) {
             // we must be able to subtract 1 from secs no matter what
-            (secs @ NEGATED_I64_MAX..=0, nanos @ -999_999_999..0) => {
+            (secs @ NEGATED_I64_MAX..=0, nanos @ -999_999_999..=-1) => {
                 (secs - 1, nanos + 1_000_000_000)
             }
             // we also ensure that the sign of secs and nanos matches and that nanos is in-bounds
-            (secs @ 0.., nanos @ 0..1_000_000_000) => (secs, nanos),
+            (secs @ 0.., nanos @ 0..=999_999_999) => (secs, nanos),
             _ => return Err(InvalidValue),
         };
         // TimeDelta only wants to be constructed from a u32 nanos, which is its internal repr, even
@@ -839,7 +839,7 @@ mod timedelta {
             #[test]
             fn check_expedient(
                 millis in 0..i64::MAX,
-                submilli_nanos in 0..1_000_000u32,
+                submilli_nanos in 0..=999_999u32,
                 negative: bool,
                 tag: u32,
             ) {
@@ -852,7 +852,7 @@ mod timedelta {
             #[test]
             fn check_distinguished(
                 millis in 0..i64::MAX,
-                submilli_nanos in 0..1_000_000u32,
+                submilli_nanos in 0..=999_999u32,
                 negative: bool,
                 tag: u32,
             ) {
