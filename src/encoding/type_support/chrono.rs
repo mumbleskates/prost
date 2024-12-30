@@ -50,7 +50,9 @@ impl Proxiable for NaiveDate {
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let [year, ordinal0] = proxy.into_inner();
         let ordinal0: Option<u32> = ordinal0.try_into().ok();
-        let ordinal = ordinal0.and_then(|o| o.checked_add(1)).ok_or(OutOfDomainValue)?;
+        let ordinal = ordinal0
+            .and_then(|o| o.checked_add(1))
+            .ok_or(OutOfDomainValue)?;
         *self = NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?;
         Ok(())
     }
@@ -63,7 +65,9 @@ impl DistinguishedProxiable for NaiveDate {
     ) -> Result<Canonicity, DecodeErrorKind> {
         let ([year, ordinal0], canon) = proxy.into_inner_distinguished();
         let ordinal0: Option<u32> = ordinal0.try_into().ok();
-        let ordinal = ordinal0.and_then(|o| o.checked_add(1)).ok_or(OutOfDomainValue)?;
+        let ordinal = ordinal0
+            .and_then(|o| o.checked_add(1))
+            .ok_or(OutOfDomainValue)?;
         *self = NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?;
         Ok(canon)
     }
