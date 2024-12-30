@@ -1,8 +1,6 @@
-use std::collections::{BTreeMap, BTreeSet};
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Utc};
-use tinyvec::ArrayVec;
-
 use bilrost::{Blob, DistinguishedMessage, DistinguishedOneof, Enumeration, Message, Oneof};
+use std::collections::{BTreeMap, BTreeSet};
+use tinyvec::ArrayVec;
 
 /// This proto includes every type of field in both singular and repeated
 /// forms.
@@ -35,6 +33,8 @@ pub struct TestAllTypes {
     #[bilrost(encoding(plainbytes))]
     pub bytes: Vec<u8>,
     pub blob: Blob,
+    pub core_duration: core::time::Duration,
+    pub core_systemtime: std::time::SystemTime,
     pub direct_message: test_message::NestedMessage,
     pub boxed_message: Box<test_message::NestedMessage>,
     #[bilrost(enumeration(test_message::NestedEnum))]
@@ -308,6 +308,7 @@ pub struct TestDistinguished {
     pub bytes: Vec<u8>,
     #[bilrost(encoding((general, general, fixed)))]
     pub tuple: (u64, String, u32),
+    pub core_duration: core::time::Duration,
     pub direct_message: test_distinguished::NestedMessage,
     pub direct_enum: test_distinguished::NestedEnum,
     pub map_varint_varint: BTreeMap<i32, i32>,
@@ -457,12 +458,30 @@ pub mod test_distinguished {
     }
 }
 
+#[derive(Debug, PartialEq, Message)]
+pub struct TestTypeSupport {
+    core_duration: core::time::Duration,
+    chrono_naive_date: chrono::NaiveDate,
+    chrono_naive_time: chrono::NaiveTime,
+    chrono_naive_date_time: chrono::NaiveDateTime,
+    chrono_fixed_offset: chrono::FixedOffset,
+    chrono_date_time_utc: chrono::DateTime<chrono::Utc>,
+    chrono_date_time_fixed: chrono::DateTime<chrono::FixedOffset>,
+    chrono_time_delta: chrono::TimeDelta,
+    time_date: time::Date,
+
+    std_systemtime: std::time::SystemTime,
+}
+
 #[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
-pub struct TestChronoTypes {
-    naive_date: NaiveDate,
-    naive_time: NaiveTime,
-    naive_date_time: NaiveDateTime,
-    date_time_utc: DateTime<Utc>,
-    date_time_fixed: DateTime<FixedOffset>,
-    time_delta: TimeDelta,
+pub struct TestTypeSupportDistinguished {
+    core_duration: core::time::Duration,
+    chrono_naive_date: chrono::NaiveDate,
+    chrono_naive_time: chrono::NaiveTime,
+    chrono_naive_date_time: chrono::NaiveDateTime,
+    chrono_fixed_offset: chrono::FixedOffset,
+    chrono_date_time_utc: chrono::DateTime<chrono::Utc>,
+    chrono_date_time_fixed: chrono::DateTime<chrono::FixedOffset>,
+    chrono_time_delta: chrono::TimeDelta,
+    time_date: time::Date,
 }

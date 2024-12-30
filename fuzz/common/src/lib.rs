@@ -14,9 +14,10 @@ pub fn test_message(data: &[u8]) {
     let _ = roundtrip_distinguished::<test_messages::TestDistinguished>(data).unwrap_error();
 }
 
-pub fn test_chrono_types(data: &[u8]) {
-    let _ = roundtrip::<test_messages::TestChronoTypes>(data).unwrap_error();
-    let _ = roundtrip_distinguished::<test_messages::TestChronoTypes>(data).unwrap_error();
+pub fn test_type_support(data: &[u8]) {
+    let _ = roundtrip::<test_messages::TestTypeSupport>(data).unwrap_error();
+    let _ =
+        roundtrip_distinguished::<test_messages::TestTypeSupportDistinguished>(data).unwrap_error();
 }
 
 static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
