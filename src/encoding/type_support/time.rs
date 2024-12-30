@@ -6,6 +6,9 @@ use crate::encoding::{
 use crate::DecodeErrorKind::OutOfDomainValue;
 use time::Date;
 
+#[cfg(test)]
+const RANDOM_SAMPLES: u32 = 100;
+
 impl ForOverwrite for Date {
     fn for_overwrite() -> Self {
         Self::from_ordinal_date(0, 1).unwrap()
@@ -64,6 +67,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod date {
+    use super::RANDOM_SAMPLES;
     use crate::encoding::test::check_type_empty;
     use crate::encoding::test::{distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
@@ -86,7 +90,7 @@ mod date {
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
         }
 
-        for i in 0..100 {
+        for i in 0..RANDOM_SAMPLES {
             let date: Date = rng.gen();
             expedient::check_type(date, i, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, i, WireType::LengthDelimited).unwrap();
