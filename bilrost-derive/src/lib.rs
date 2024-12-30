@@ -602,13 +602,12 @@ fn try_message(input: TokenStream) -> Result<TokenStream, Error> {
     });
 
     let decode = unsorted_fields.iter().map(|(field_ident, field)| {
-        let decode = field.decode_expedient(quote!(value));
+        let decode = field.decode_expedient(quote!(&mut self.#field_ident));
         let tags = field.tags().into_iter().map(|tag| quote!(#tag));
         let tags = Itertools::intersperse(tags, quote!(|));
 
         quote! {
             #(#tags)* => {
-                let mut value = &mut self.#field_ident;
                 #decode.map_err(|mut error| {
                     error.push(STRUCT_NAME, stringify!(#field_ident));
                     error
@@ -876,13 +875,12 @@ fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
     );
 
     let decode = unsorted_fields.iter().map(|(field_ident, field)| {
-        let decode = field.decode_distinguished(quote!(value));
+        let decode = field.decode_distinguished(quote!(&mut self.#field_ident));
         let tags = field.tags().into_iter().map(|tag| quote!(#tag));
         let tags = Itertools::intersperse(tags, quote!(|));
 
         quote! {
             #(#tags)* => {
-                let mut value = &mut self.#field_ident;
                 canon.update(#decode.map_err(|mut error| {
                     error.push(STRUCT_NAME, stringify!(#field_ident));
                     error
