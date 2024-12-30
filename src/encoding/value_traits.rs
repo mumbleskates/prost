@@ -72,12 +72,12 @@ macro_rules! empty_state_via_default {
         {
             #[inline]
             fn is_empty(&self) -> bool {
-                *self == ::core::default::Default::default()
+                *self == Self::default()
             }
 
             #[inline]
             fn clear(&mut self) {
-                *self = $crate::encoding::EmptyState::empty();
+                *self = Self::empty();
             }
         }
     };
