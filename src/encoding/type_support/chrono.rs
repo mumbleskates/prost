@@ -49,8 +49,9 @@ impl Proxiable for NaiveDate {
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let [year, ordinal0] = proxy.into_inner();
-        let ordinal0: u32 = ordinal0.try_into().map_err(|_| OutOfDomainValue)?;
-        *self = NaiveDate::from_yo_opt(year, ordinal0 + 1).ok_or(OutOfDomainValue)?;
+        let ordinal0: Option<u32> = ordinal0.try_into().ok();
+        let ordinal = ordinal0.and_then(|o| o.checked_add(1)).ok_or(OutOfDomainValue)?;
+        *self = NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?;
         Ok(())
     }
 }
@@ -61,8 +62,9 @@ impl DistinguishedProxiable for NaiveDate {
         proxy: Self::Proxy,
     ) -> Result<Canonicity, DecodeErrorKind> {
         let ([year, ordinal0], canon) = proxy.into_inner_distinguished();
-        let ordinal0: u32 = ordinal0.try_into().map_err(|_| OutOfDomainValue)?;
-        *self = NaiveDate::from_yo_opt(year, ordinal0 + 1).ok_or(OutOfDomainValue)?;
+        let ordinal0: Option<u32> = ordinal0.try_into().ok();
+        let ordinal = ordinal0.and_then(|o| o.checked_add(1)).ok_or(OutOfDomainValue)?;
+        *self = NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?;
         Ok(canon)
     }
 }
@@ -242,8 +244,9 @@ impl Proxiable for NaiveDateTime {
             sec.try_into().map_err(|_| OutOfDomainValue)?,
             nano.try_into().map_err(|_| OutOfDomainValue)?,
         ];
+        let ordinal = ordinal0.checked_add(1).ok_or(OutOfDomainValue)?;
         *self = Self::new(
-            NaiveDate::from_yo_opt(year, ordinal0 + 1).ok_or(OutOfDomainValue)?,
+            NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?,
             NaiveTime::from_hms_nano_opt(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
         );
         Ok(())
@@ -263,8 +266,9 @@ impl DistinguishedProxiable for NaiveDateTime {
             sec.try_into().map_err(|_| OutOfDomainValue)?,
             nano.try_into().map_err(|_| OutOfDomainValue)?,
         ];
+        let ordinal = ordinal0.checked_add(1).ok_or(OutOfDomainValue)?;
         *self = Self::new(
-            NaiveDate::from_yo_opt(year, ordinal0 + 1).ok_or(OutOfDomainValue)?,
+            NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?,
             NaiveTime::from_hms_nano_opt(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
         );
         Ok(canon)
