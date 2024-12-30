@@ -1,12 +1,23 @@
+use crate::buf::ReverseBuf;
 use crate::encoding::local_proxy::LocalProxy;
-use crate::encoding::{
-    delegate_value_encoding, DistinguishedProxiable, Packed, Proxiable, Proxied,
+use crate::encoding::underived::{
+    underived_decode, underived_decode_distinguished, underived_encode, underived_encoded_len,
+    underived_prepend,
 };
-use crate::encoding::{Canonicity, DecodeErrorKind, EmptyState, ForOverwrite, General, Varint};
+use crate::encoding::value_traits::empty_state_via_default;
+use crate::encoding::{
+    delegate_value_encoding, Canonicity, Capped, DecodeContext, DecodeErrorKind,
+    DistinguishedEncoder, DistinguishedProxiable, DistinguishedValueEncoder, EmptyState, Encoder,
+    Fixed, ForOverwrite, General, Packed, Proxiable, Proxied, ValueEncoder, Varint, WireType,
+    Wiretyped,
+};
 use crate::Canonicity::Canonical;
+use crate::DecodeError;
 use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
+use bytes::{Buf, BufMut};
 use chrono::{
-    DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc,
+    DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, TimeZone,
+    Timelike, Utc,
 };
 
 impl ForOverwrite for NaiveDate {
@@ -56,6 +67,9 @@ impl DistinguishedProxiable for NaiveDate {
     }
 }
 
+// NaiveDate encodes as a packed sequence of signed varints with trailing zeros cut off:
+// [year, ordinal day in year (starting at zero)]. The empty value is January 1st on the year 0,
+// not 1970.
 delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
     for type (NaiveDate) including distinguished);
 
@@ -142,6 +156,8 @@ impl DistinguishedProxiable for NaiveTime {
     }
 }
 
+// NaiveTime encodes as a packed sequence of UNsigned varints with trailing zeros cut off:
+// [hour, minute, second, nanosecond].
 delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
     for type (NaiveTime) including distinguished);
 
@@ -255,6 +271,10 @@ impl DistinguishedProxiable for NaiveDateTime {
     }
 }
 
+// NaiveDateTime encodes as a packed sequence of signed varints with trailing zeros cut off:
+// [year, ordinal day in year (starting at zero), hour, minute, second, nanosecond]. It can decode
+// NaiveDate values as if they were truncated NaiveDateTimes. The empty value is midnight on January
+// 1st of the year 0, not 1970.
 delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
     for type (NaiveDateTime) including distinguished);
 
@@ -335,6 +355,9 @@ impl DistinguishedProxiable for Utc {
     }
 }
 
+// The encoding for Utc is the same as the encoding for FixedOffset: it's a tuple of three signed
+// varints (hour, minute, second) which are always zero. It always fails to decode when they are not
+// all zero.
 delegate_value_encoding!(delegate from (General) to (Proxied<(Varint, Varint, Varint)>)
     for type (Utc) including distinguished);
 
@@ -469,6 +492,8 @@ impl DistinguishedProxiable for FixedOffset {
     }
 }
 
+// The encoding for FixedOffset is (hour, minute, second) as a basic tuple of signed varints. It
+// It fails to decode whenever the components have mixed signs or are out of range.
 delegate_value_encoding!(delegate from (General) to (Proxied<(Varint, Varint, Varint)>)
     for type (FixedOffset) including distinguished);
 
@@ -622,6 +647,8 @@ where
     }
 }
 
+// The encoding for DateTime<Tz> is the same as the (NaiveDateTime, Tz::Offset) that it is composed
+// of.
 delegate_value_encoding!(delegate from (General) to (Proxied<General>)
     for type (DateTime<Z>) including distinguished
     with where clause for expedient (Z: TimeZone, Z::Offset: EmptyState)
@@ -660,33 +687,181 @@ mod datetime {
     );
 }
 
-// TODO(widders): finish these
-// crate chrono: (other deps: derive)
-//  * struct NaiveDate
-//      * store as [year, ordinal-zero] (packed<varint> with trailing zeros removed)
-//  * struct NaiveTime
-//      * store as [hour, minute, second, nanos] (packed<varint> with trailing zeros removed)
-//  * struct NaiveDateTime
-//      * aggregate of (NaiveDate, NaiveTime)
-//      * store as [year, ordinal-zero, hour, minute, second, nanos]
-//        (packed<varint> with trailing zeros removed)
-//  * trait TimeZone
-//      * has an Offset trait associated type that's stored with aware times. we need to be able to
-//        encode these
-//      * Utc: ()
-//      * FixedOffset: [hour, minute, second] (packed<varint> with trailing zeros removed)
-//      * Local: maybe don't support this one
-//      * there is also crate chrono-tz, but it doesn't(?) make sense to support that. concerns
-//        involving the shifting sands of timezone definitions are outside the responsibilities of
-//        an encoding library (maybe we can just check it and make it non-canonical? these types are
-//        probably all non-canonical anyway)
-//  * struct Date<impl TimeZone>
-//      * aggregate of (NaiveDate, offset)
-//      * store as tuple
-//      * actually this is deprecated nvm
-//  * struct DateTime<impl TimeZone>
-//      * aggreagate of (NaiveDateTime, offset)
-//      * store as tuple
-//  * struct TimeDelta
-//      * matches bilrost_types::Duration, but nanos is always positive
-//      * use derived storage
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct TimeDeltaProxy {
+    secs: i64,
+    nanos: i32,
+}
+
+empty_state_via_default!(TimeDeltaProxy);
+
+impl Wiretyped<General> for TimeDeltaProxy {
+    const WIRE_TYPE: WireType = WireType::LengthDelimited;
+}
+
+impl ValueEncoder<General> for TimeDeltaProxy {
+    fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
+        underived_encode!(TimeDelta {
+            1: General => secs: &value.secs,
+            2: Fixed => nanos: &value.nanos,
+        }, buf)
+    }
+
+    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
+        underived_prepend!(TimeDelta {
+            2: Fixed => nanos: &value.nanos,
+            1: General => secs: &value.secs,
+        }, buf)
+    }
+
+    fn value_encoded_len(value: &Self) -> usize {
+        underived_encoded_len!(TimeDelta {
+            1: General => secs: &value.secs,
+            2: Fixed => nanos: &value.nanos,
+        })
+    }
+
+    fn decode_value<B: Buf + ?Sized>(
+        value: &mut Self,
+        mut buf: Capped<B>,
+        ctx: DecodeContext,
+    ) -> Result<(), DecodeError> {
+        underived_decode!(TimeDelta {
+            1: General => secs: &mut value.secs,
+            2: Fixed => nanos: &mut value.nanos,
+        }, buf, ctx)?;
+        if value.secs.signum() as i32 * value.nanos.signum() == -1 {
+            Err(DecodeError::new(InvalidValue))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl DistinguishedValueEncoder<General> for TimeDeltaProxy {
+    const CHECKS_EMPTY: bool = true;
+
+    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
+        value: &mut Self,
+        mut buf: Capped<impl Buf + ?Sized>,
+        ctx: DecodeContext,
+    ) -> Result<Canonicity, DecodeError> {
+        underived_decode_distinguished!(TimeDelta {
+            1: General => secs: &mut value.secs,
+            2: Fixed => nanos: &mut value.nanos,
+        }, buf, ctx)
+    }
+}
+
+empty_state_via_default!(TimeDelta);
+
+impl Proxiable for TimeDelta {
+    type Proxy = TimeDeltaProxy;
+
+    fn new_proxy() -> Self::Proxy {
+        TimeDeltaProxy::default()
+    }
+
+    fn encode_proxy(&self) -> Self::Proxy {
+        TimeDeltaProxy {
+            secs: self.num_seconds(),
+            nanos: self.subsec_nanos(),
+        }
+    }
+
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        const NEGATED_I64_MAX: i64 = -i64::MAX;
+
+        let (secs, nanos) = match (proxy.secs, proxy.nanos) {
+            // we must be able to subtract 1 from secs no matter what
+            (secs @ NEGATED_I64_MAX..=0, nanos @ -999_999_999..0) => {
+                (secs - 1, nanos + 1_000_000_000)
+            }
+            // we also ensure that the sign of secs and nanos matches and that nanos is in-bounds
+            (secs @ 0.., nanos @ 0..1_000_000_000) => (secs, nanos),
+            _ => return Err(InvalidValue),
+        };
+        // TimeDelta only wants to be constructed from a u32 nanos, which is its internal repr, even
+        // though it only gives the value back as an i32 with the same sign as the original.
+        *self = Self::new(secs, nanos as u32).ok_or(OutOfDomainValue)?;
+        Ok(())
+    }
+}
+
+impl DistinguishedProxiable for TimeDelta {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
+        self.decode_proxy(proxy)?;
+        Ok(Canonical)
+    }
+}
+
+// The encoding for TimeDelta matches that of bilrost_types::Duration.
+delegate_value_encoding!(delegate from (General) to (Proxied<General>)
+    for type (TimeDelta) including distinguished);
+
+#[cfg(test)]
+mod timedelta {
+    use crate::encoding::test::check_type_empty;
+    use crate::encoding::General;
+    use chrono::TimeDelta;
+
+    check_type_empty!(TimeDelta, via proxy);
+    check_type_empty!(TimeDelta, via distinguished proxy);
+
+    #[cfg(test)]
+    mod check_type {
+        use proptest::prelude::*;
+
+        use super::*;
+        use crate::encoding::WireType;
+
+        fn milli_nanos_to_timedelta(millis: i64, submilli_nanos: u32, negative: bool) -> TimeDelta {
+            // compute millisecond part
+            let secs = millis / 1000;
+            let nanos = (millis % 1000 * 1_000_000) as u32 + submilli_nanos;
+            let td = TimeDelta::new(secs, nanos).unwrap();
+            if negative {
+                -td
+            } else {
+                td
+            }
+        }
+
+        // we write these out because the arbitrary::Arbitrary impl for TimeDelta is, for some
+        // reason, extremely fallible. The underlying data model for TimeDelta is also pretty weird,
+        // in that its internal repr is (secs: i64, nanos: i32 /* always positive */), and it is
+        // also documented to be restricted to a magnitude of plus or minus i64::MAX
+        // *milliseconds* plus up to 999,999 nanoseconds, with a freely swappable sign.
+        proptest! {
+            #[test]
+            fn check_expedient(
+                millis in 0..i64::MAX,
+                submilli_nanos in 0..1_000_000u32,
+                negative: bool,
+                tag: u32,
+            ) {
+                crate::encoding::test::expedient::check_type::<TimeDelta, General>(
+                    milli_nanos_to_timedelta(millis, submilli_nanos, negative),
+                    tag,
+                    WireType::LengthDelimited,
+                )?;
+            }
+            #[test]
+            fn check_distinguished(
+                millis in 0..i64::MAX,
+                submilli_nanos in 0..1_000_000u32,
+                negative: bool,
+                tag: u32,
+            ) {
+                crate::encoding::test::distinguished::check_type::<TimeDelta, General>(
+                    milli_nanos_to_timedelta(millis, submilli_nanos, negative),
+                    tag,
+                    WireType::LengthDelimited,
+                )?;
+            }
+        }
+    }
+}
