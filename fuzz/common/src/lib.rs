@@ -14,6 +14,10 @@ pub fn test_message(data: &[u8]) {
     let _ = roundtrip_distinguished::<test_messages::TestDistinguished>(data).unwrap_error();
 }
 
+pub fn test_chrono_types(data: &[u8]) {
+    let _ = roundtrip::<test_messages::TestChronoTypes>(data).unwrap_error();
+}
+
 static DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
     // exactly four digits, or +/- followed by any number
     let year = r"(\d{4}|[+-]\d+)";

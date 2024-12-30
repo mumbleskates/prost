@@ -28,5 +28,9 @@ name = "bilrost_fuzz"
 path = "fuzzers/bilrost_fuzz.rs"
 
 [[bin]]
+name = "bilrost_chrono_fuzz"
+path = "fuzzers/bilrost_chrono_fuzz.rs"
+
+[[bin]]
 name = "parse_date_fuzz"
 path = "fuzzers/parse_date_fuzz.rs"

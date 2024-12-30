@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Utc};
 use tinyvec::ArrayVec;
 
 use bilrost::{Blob, DistinguishedMessage, DistinguishedOneof, Enumeration, Message, Oneof};
@@ -455,4 +455,14 @@ pub mod test_distinguished {
         #[bilrost(tag = 206)]
         OneofEnum(NestedEnum),
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Message, DistinguishedMessage)]
+pub struct TestChronoTypes {
+    naive_date: NaiveDate,
+    naive_time: NaiveTime,
+    naive_date_time: NaiveDateTime,
+    date_time_utc: DateTime<Utc>,
+    date_time_fixed: DateTime<FixedOffset>,
+    time_delta: TimeDelta,
 }
