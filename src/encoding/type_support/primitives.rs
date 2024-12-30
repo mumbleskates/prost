@@ -1,4 +1,4 @@
-use crate::encoding::value_traits::{empty_state_via_default, for_overwrite_via_default};
+use crate::encoding::value_traits::empty_state_via_default;
 use crate::encoding::{EmptyState, ForOverwrite};
 
 empty_state_via_default!(bool);
