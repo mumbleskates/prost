@@ -9,19 +9,19 @@ use core::cmp::Ordering;
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-impl ForOverwrite for std::time::SystemTime {
+impl ForOverwrite for SystemTime {
     fn for_overwrite() -> Self {
-        std::time::UNIX_EPOCH
+        UNIX_EPOCH
     }
 }
 
-impl EmptyState for std::time::SystemTime {
+impl EmptyState for SystemTime {
     fn is_empty(&self) -> bool {
-        *self == std::time::UNIX_EPOCH
+        *self == UNIX_EPOCH
     }
 
     fn clear(&mut self) {
-        *self = std::time::UNIX_EPOCH;
+        *self = UNIX_EPOCH;
     }
 }
 
