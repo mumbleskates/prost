@@ -6,16 +6,30 @@ To run the libfuzzer tests, first install cargo-fuzz:
 
     cargo install cargo-fuzz
 
-Then the fuzzer can be run:
+Then the fuzzers can be run:
 
-    cargo fuzz run bilrost_fuzz -- <flags>
+    cargo fuzz run <fuzzer> -- <flags>
+
+The following fuzzers are available:
+
+* `bilrost_fuzz`: core bilrost functionality and parsing
+* `bilrost_type_support_fuzz`: extended bilrost type support for third party
+  types
+* `parse_date_fuzz`: tests the conversions to and from strings for `Timestamp`
+  and `Duration` in `bilrost-types`.
+
+Example invocation:
+
+    cargo fuzz run bilrost_fuzz -- -fork=12
 
 See [the libfuzzer docs](https://llvm.org/docs/LibFuzzer.html) for options and
 further info.
 
-To run the afl fuzz tests, first install cargo-afl:
+To run the afl fuzz tests, first install [cargo-afl][afl]:
 
     cargo install cargo-afl
+
+[afl]: https://rust-fuzz.github.io/book/afl/tutorial.html
 
 Then build a fuzz target and run afl on it:
 
