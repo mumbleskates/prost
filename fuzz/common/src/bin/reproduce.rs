@@ -1,6 +1,8 @@
 use bilrost::encoding::opaque::OpaqueMessage;
 use bilrost::{DistinguishedMessage, Message};
-use common::test_messages::{TestAllTypes, TestDistinguished};
+use common::test_messages::{
+    TestAllTypes, TestDistinguished, TestTypeSupport, TestTypeSupportDistinguished,
+};
 
 fn main() {
     let mut args = std::env::args();
@@ -17,6 +19,14 @@ fn main() {
         println!(
             "TestDistinguished: {:#?}",
             TestDistinguished::decode_distinguished(data.as_slice())
+        );
+        println!(
+            "TestTypeSupport: {:#?}",
+            TestTypeSupport::decode(data.as_slice())
+        );
+        println!(
+            "TestTypeSupportDistinguished: {:#?}",
+            TestTypeSupportDistinguished::decode_distinguished(data.as_slice())
         );
         common::test_message(&data);
     }
