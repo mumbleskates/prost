@@ -82,6 +82,7 @@ third-party-type-support = [
     "hashbrown",
     "smallvec",
     "thin-vec",
+    "time",
     "tinyvec",
 ]
 arrayvec = ["dep:arrayvec"]
