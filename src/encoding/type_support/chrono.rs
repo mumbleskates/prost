@@ -729,64 +729,77 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 
 #[cfg(test)]
 mod timedelta {
-    use crate::encoding::test::check_type_empty;
-    use crate::encoding::General;
+    use crate::encoding::test::{check_type_empty, distinguished, expedient};
+    use crate::encoding::{EmptyState, General, WireType};
     use chrono::TimeDelta;
+    use proptest::prelude::*;
 
     check_type_empty!(TimeDelta, via proxy);
     check_type_empty!(TimeDelta, via distinguished proxy);
 
-    #[cfg(test)]
-    mod check_type {
-        use proptest::prelude::*;
+    pub(super) fn test_timedeltas() -> impl Iterator<Item = TimeDelta> + Clone {
+        [
+            TimeDelta::default(),
+            TimeDelta::MIN,
+            TimeDelta::MAX,
+            TimeDelta::empty(),
+            TimeDelta::new(900, 10).unwrap(),
+            TimeDelta::seconds(-60),
+        ]
+        .into_iter()
+    }
 
-        use super::*;
-        use crate::encoding::WireType;
-
-        fn milli_nanos_to_timedelta(millis: i64, submilli_nanos: u32, negative: bool) -> TimeDelta {
-            // compute millisecond part
-            let secs = millis / 1000;
-            let nanos = (millis % 1000 * 1_000_000) as u32 + submilli_nanos;
-            let td = TimeDelta::new(secs, nanos).unwrap();
-            if negative {
-                -td
-            } else {
-                td
-            }
+    #[test]
+    fn check_type() {
+        for td in test_timedeltas() {
+            expedient::check_type(td, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(td, 123, WireType::LengthDelimited).unwrap();
         }
+    }
 
-        // we write these out because the arbitrary::Arbitrary impl for TimeDelta is, for some
-        // reason, extremely fallible. The underlying data model for TimeDelta is also pretty weird,
-        // in that its internal repr is (secs: i64, nanos: i32 /* always positive */), and it is
-        // also documented to be restricted to a magnitude of plus or minus i64::MAX
-        // *milliseconds* plus up to 999,999 nanoseconds, with a freely swappable sign.
-        proptest! {
-            #[test]
-            fn check_expedient(
-                millis in 0..i64::MAX,
-                submilli_nanos in 0..=999_999u32,
-                negative: bool,
-                tag: u32,
-            ) {
-                crate::encoding::test::expedient::check_type::<TimeDelta, General>(
-                    milli_nanos_to_timedelta(millis, submilli_nanos, negative),
-                    tag,
-                    WireType::LengthDelimited,
-                )?;
-            }
-            #[test]
-            fn check_distinguished(
-                millis in 0..i64::MAX,
-                submilli_nanos in 0..=999_999u32,
-                negative: bool,
-                tag: u32,
-            ) {
-                crate::encoding::test::distinguished::check_type::<TimeDelta, General>(
-                    milli_nanos_to_timedelta(millis, submilli_nanos, negative),
-                    tag,
-                    WireType::LengthDelimited,
-                )?;
-            }
+    fn milli_nanos_to_timedelta(millis: i64, submilli_nanos: u32, negative: bool) -> TimeDelta {
+        // compute millisecond part
+        let secs = millis / 1000;
+        let nanos = (millis % 1000 * 1_000_000) as u32 + submilli_nanos;
+        let td = TimeDelta::new(secs, nanos).unwrap();
+        if negative {
+            -td
+        } else {
+            td
+        }
+    }
+
+    // we write these out because the arbitrary::Arbitrary impl for TimeDelta is, for some
+    // reason, extremely fallible. The underlying data model for TimeDelta is also pretty weird,
+    // in that its internal repr is (secs: i64, nanos: i32 /* always positive */), and it is
+    // also documented to be restricted to a magnitude of plus or minus i64::MAX
+    // *milliseconds* plus up to 999,999 nanoseconds, with a freely swappable sign.
+    proptest! {
+        #[test]
+        fn check_expedient(
+            millis in 0..i64::MAX,
+            submilli_nanos in 0..=999_999u32,
+            negative: bool,
+            tag: u32,
+        ) {
+            crate::encoding::test::expedient::check_type::<TimeDelta, General>(
+                milli_nanos_to_timedelta(millis, submilli_nanos, negative),
+                tag,
+                WireType::LengthDelimited,
+            )?;
+        }
+        #[test]
+        fn check_distinguished(
+            millis in 0..i64::MAX,
+            submilli_nanos in 0..=999_999u32,
+            negative: bool,
+            tag: u32,
+        ) {
+            crate::encoding::test::distinguished::check_type::<TimeDelta, General>(
+                milli_nanos_to_timedelta(millis, submilli_nanos, negative),
+                tag,
+                WireType::LengthDelimited,
+            )?;
         }
     }
 }
