@@ -1,11 +1,13 @@
 use crate::encoding::local_proxy::LocalProxy;
+use crate::encoding::type_support::common::time_proxies::TimeDeltaProxy;
+use crate::encoding::value_traits::empty_state_via_default;
 use crate::encoding::{
     delegate_value_encoding, Canonicity, DecodeErrorKind, DistinguishedProxiable, EmptyState,
     ForOverwrite, General, Packed, Proxiable, Proxied, Varint,
 };
 use crate::Canonicity::Canonical;
 use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
-use time::{Date, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
+use time::{Date, Duration, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
 
 #[cfg(test)]
 const RANDOM_SAMPLES: u32 = 100;
@@ -537,21 +539,87 @@ mod offsetdatetime {
     check_type_empty!(OffsetDateTime, via distinguished proxy);
 }
 
-// TODO(widders): this
-// crate time: (other deps: derive)
-//  * struct Date
-//      * store as [year, ordinal-zero] (packed<varint> with trailing zeros removed)
-//  * struct Time
-//      * store as [hour, minute, second, nanos] (packed<varint> with trailing zeros removed)
-//  * struct PrimitiveDateTime
-//      * aggregate of (Date, Time)
-//      * store as [year, ordinal-zero, hour, minute, second, nanos]
-//        (packed<varint> with trailing zeros removed)
-//  * struct UtcOffset
-//      * store as [hour, minute, second] (packed<varint> with trailing zeros removed)
-//  * struct OffsetDateTime
-//      * aggregate of (PrimitiveDateTime, UtcOffset)
-//      * store as tuple
-//  * struct Duration
-//      * matches bilrost_types::Duration
-//      * use derived storage
+empty_state_via_default!(Duration);
+
+impl Proxiable for Duration {
+    type Proxy = TimeDeltaProxy;
+
+    fn new_proxy() -> Self::Proxy {
+        TimeDeltaProxy::default()
+    }
+
+    fn encode_proxy(&self) -> Self::Proxy {
+        TimeDeltaProxy {
+            secs: self.whole_seconds(),
+            nanos: self.subsec_nanoseconds(),
+        }
+    }
+
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        const NOT_QUITE_I64_MIN: i64 = i64::MIN + 1;
+
+        let (secs, nanos) = match (proxy.secs, proxy.nanos) {
+            // we must be able to subtract 1 from secs no matter what
+            (secs @ NOT_QUITE_I64_MIN..=0, nanos @ -999_999_999..=-1) => {
+                (secs - 1, nanos + 1_000_000_000)
+            }
+            // we also ensure that the sign of secs and nanos matches and that nanos is in-bounds
+            (secs @ 0.., nanos @ 0..=999_999_999) => (secs, nanos),
+            _ => return Err(InvalidValue),
+        };
+        *self = Self::new(secs, nanos);
+        Ok(())
+    }
+}
+
+impl DistinguishedProxiable for Duration {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
+        self.decode_proxy(proxy)?;
+        Ok(Canonical)
+    }
+}
+
+delegate_value_encoding!(delegate from (General) to (Proxied<General>)
+    for type (Duration) including distinguished);
+
+#[cfg(test)]
+mod duration {
+    use super::RANDOM_SAMPLES;
+    use crate::encoding::test::{check_type_empty, distinguished, expedient};
+    use crate::encoding::{EmptyState, WireType,
+    };
+    use rand::{thread_rng, Rng};
+    use time::Duration;
+
+    pub(super) fn test_durations() -> impl Iterator<Item = Duration> + Clone {
+        [
+            Duration::ZERO,
+            Duration::MIN,
+            Duration::MAX,
+            Duration::empty(),
+            Duration::seconds_f64(900.00000001),
+        ]
+        .into_iter()
+    }
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for duration in test_durations() {
+            expedient::check_type(duration, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(duration, 123, WireType::LengthDelimited).unwrap();
+        }
+
+        for i in 0..RANDOM_SAMPLES {
+            let duration: Duration = rng.gen();
+            expedient::check_type(duration, i, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(duration, i, WireType::LengthDelimited).unwrap();
+        }
+    }
+    check_type_empty!(Duration, via proxy);
+    check_type_empty!(Duration, via distinguished proxy);
+}

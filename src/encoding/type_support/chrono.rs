@@ -695,11 +695,11 @@ impl Proxiable for TimeDelta {
     }
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
-        const NEGATED_I64_MAX: i64 = -i64::MAX;
+        const NOT_QUITE_I64_MIN: i64 = i64::MIN + 1;
 
         let (secs, nanos) = match (proxy.secs, proxy.nanos) {
             // we must be able to subtract 1 from secs no matter what
-            (secs @ NEGATED_I64_MAX..=0, nanos @ -999_999_999..=-1) => {
+            (secs @ NOT_QUITE_I64_MIN..=0, nanos @ -999_999_999..=-1) => {
                 (secs - 1, nanos + 1_000_000_000)
             }
             // we also ensure that the sign of secs and nanos matches and that nanos is in-bounds
