@@ -556,15 +556,11 @@ impl Proxiable for Duration {
     }
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
-        const NOT_QUITE_I64_MIN: i64 = i64::MIN + 1;
-
+        #[allow(overlapping_range_endpoints)]
         let (secs, nanos) = match (proxy.secs, proxy.nanos) {
-            // we must be able to subtract 1 from secs no matter what
-            (secs @ NOT_QUITE_I64_MIN..=0, nanos @ -999_999_999..=-1) => {
-                (secs - 1, nanos + 1_000_000_000)
+            (secs @ ..=0, nanos @ -999_999_999..=0) | (secs @ 0.., nanos @ 0..=999_999_999) => {
+                (secs, nanos)
             }
-            // we also ensure that the sign of secs and nanos matches and that nanos is in-bounds
-            (secs @ 0.., nanos @ 0..=999_999_999) => (secs, nanos),
             _ => return Err(InvalidValue),
         };
         *self = Self::new(secs, nanos);
@@ -589,8 +585,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 mod duration {
     use super::RANDOM_SAMPLES;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
-    use crate::encoding::{EmptyState, WireType,
-    };
+    use crate::encoding::{EmptyState, WireType};
     use rand::{thread_rng, Rng};
     use time::Duration;
 
@@ -601,6 +596,7 @@ mod duration {
             Duration::MAX,
             Duration::empty(),
             Duration::seconds_f64(900.00000001),
+            Duration::seconds(-60),
         ]
         .into_iter()
     }
