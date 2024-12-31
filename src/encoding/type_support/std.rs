@@ -161,6 +161,8 @@ impl Proxiable for SystemTime {
             Ordering::Equal => {
                 return Self::Proxy::new_empty();
             }
+            // lacking a simpler way, we put a literal ascii + or - to indicate the sign of the
+            // timestamp.
             Ordering::Greater => ('+', &UNIX_EPOCH, self),
             Ordering::Less => ('-', self, &UNIX_EPOCH),
         };
@@ -175,26 +177,25 @@ impl Proxiable for SystemTime {
     }
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        const PLUS: u64 = '+' as u64; 
+        const MINUS: u64 = '-' as u64;
         let (operation, secs, nanos): (fn(_, _) -> _, u64, u64) = match proxy.into_inner() {
             [0, 0, 0] => {
                 *self = UNIX_EPOCH;
                 return Ok(());
             }
-            [symbol, secs, nanos] if symbol == '+' as u64 => (SystemTime::checked_add, secs, nanos),
-            [symbol, secs, nanos] if symbol == '-' as u64 => (SystemTime::checked_sub, secs, nanos),
+            [symbol @ (PLUS | MINUS), secs, nanos @ 0..=999_999_999] => (
+                if symbol == PLUS {
+                    SystemTime::checked_add
+                } else {
+                    SystemTime::checked_sub
+                },
+                secs,
+                nanos,
+            ),
             _ => return Err(InvalidValue),
         };
-        let nanos = nanos
-            .try_into()
-            .map_err(|_| InvalidValue)
-            .and_then(|nanos| {
-                if nanos > 999_999_999 {
-                    Err(InvalidValue)
-                } else {
-                    Ok(nanos)
-                }
-            })?;
-        *self = operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos))
+        *self = operation(&UNIX_EPOCH, core::time::Duration::new(secs, nanos as u32))
             .ok_or(OutOfDomainValue)?;
         Ok(())
     }
