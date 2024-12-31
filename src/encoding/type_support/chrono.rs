@@ -12,8 +12,7 @@ use chrono::{
     Timelike, Utc,
 };
 
-#[allow(unused_imports)]
-#[cfg(test)]
+#[cfg(all(test, feature = "time"))]
 pub(super) use {
     fixedoffset::test_zones,
     naivedate::test_dates,
@@ -889,6 +888,7 @@ mod timedelta {
         }
     }
 
+    #[cfg(feature = "time")]
     pub(in super::super) fn random_timedelta(rng: &mut impl Rng) -> TimeDelta {
         let millis = rng.gen_range(0..=i64::MAX);
         let submilli_nanos = rng.gen_range(0..1_000_000);
