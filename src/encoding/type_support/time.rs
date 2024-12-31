@@ -3,8 +3,9 @@ use crate::encoding::{
     delegate_value_encoding, Canonicity, DecodeErrorKind, DistinguishedProxiable, EmptyState,
     ForOverwrite, General, Packed, Proxiable, Proxied, Varint,
 };
-use crate::DecodeErrorKind::OutOfDomainValue;
-use time::{Date, PrimitiveDateTime, Time};
+use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
+use time::{Date, PrimitiveDateTime, Time, UtcOffset};
+use crate::Canonicity::Canonical;
 
 #[cfg(test)]
 const RANDOM_SAMPLES: u32 = 100;
@@ -300,6 +301,97 @@ mod primitivedatetime {
     }
     check_type_empty!(PrimitiveDateTime, via proxy);
     check_type_empty!(PrimitiveDateTime, via distinguished proxy);
+}
+
+impl ForOverwrite for UtcOffset {
+    fn for_overwrite() -> Self {
+        Self::UTC
+    }
+}
+
+impl EmptyState for UtcOffset {
+    fn is_empty(&self) -> bool {
+        *self == Self::UTC
+    }
+
+    fn clear(&mut self) {
+        *self = Self::UTC;
+    }
+}
+
+impl Proxiable for UtcOffset {
+    type Proxy = (i8, i8, i8);
+
+    fn new_proxy() -> Self::Proxy {
+        (0, 0, 0)
+    }
+
+    fn encode_proxy(&self) -> Self::Proxy {
+        self.as_hms()
+    }
+
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        let (hours, mins, secs) = proxy;
+
+        // offsets should always have the same sign for all three components; we don't want
+        // any two offsets to have the same total via different combinations.
+        //
+        // we enforce this even in expedient mode because dealing with time is already bad
+        // enough.
+        let mut signums = [false; 3];
+        for component in [hours, mins, secs] {
+            signums[(component.signum() + 1) as usize] = true;
+        }
+        if let [true, _, true] = signums {
+            return Err(InvalidValue);
+        }
+
+        *self = Self::from_hms(hours, mins, secs).map_err(|_| OutOfDomainValue)?;
+        Ok(())
+    }
+}
+
+impl DistinguishedProxiable for UtcOffset {
+    fn decode_proxy_distinguished(&mut self, proxy: Self::Proxy) -> Result<Canonicity, DecodeErrorKind> {
+        self.decode_proxy(proxy)?;
+        Ok(Canonical)
+    }
+}
+
+delegate_value_encoding!(delegate from (General) to (Proxied<(Varint, Varint, Varint)>)
+    for type (UtcOffset) including distinguished);
+
+#[cfg(test)]
+mod utcoffset {
+    use super::RANDOM_SAMPLES;
+    use crate::encoding::test::check_type_empty;
+    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::{EmptyState, WireType};
+    use rand::{thread_rng, Rng};
+    use time::UtcOffset;
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for date in [
+            UtcOffset::UTC,
+            UtcOffset::empty(),
+            UtcOffset::from_hms(-7, 15, 0).unwrap(),
+            UtcOffset::from_hms(14, 0, 0).unwrap(),
+        ] {
+            expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
+        }
+
+        for i in 0..RANDOM_SAMPLES {
+            let date: UtcOffset = rng.gen();
+            expedient::check_type(date, i, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(date, i, WireType::LengthDelimited).unwrap();
+        }
+    }
+    check_type_empty!(UtcOffset, via proxy);
+    check_type_empty!(UtcOffset, via distinguished proxy);
 }
 
 // TODO(widders): this
