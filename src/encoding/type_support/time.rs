@@ -71,8 +71,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 #[cfg(test)]
 mod date {
     use super::RANDOM_SAMPLES;
-    use crate::encoding::test::check_type_empty;
-    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
     use rand::{thread_rng, Rng};
     use time::Date;
@@ -178,8 +177,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 #[cfg(test)]
 mod time_ty {
     use super::RANDOM_SAMPLES;
-    use crate::encoding::test::check_type_empty;
-    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
     use rand::{thread_rng, Rng};
     use time::Time;
@@ -189,6 +187,7 @@ mod time_ty {
             Time::MIDNIGHT,
             Time::MAX,
             Time::empty(),
+            Time::from_hms(17, 0, 0).unwrap(),
             Time::from_hms_nano(11, 11, 11, 111_111_111).unwrap(),
         ]
         .into_iter()
@@ -279,8 +278,7 @@ mod primitivedatetime {
     use super::date::test_dates;
     use super::time_ty::test_times;
     use super::RANDOM_SAMPLES;
-    use crate::encoding::test::check_type_empty;
-    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
     use itertools::iproduct;
     use rand::{thread_rng, Rng};
@@ -312,15 +310,15 @@ mod primitivedatetime {
     fn check_type() {
         let mut rng = thread_rng();
 
-        for date in test_datetimes() {
-            expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
+        for datetime in test_datetimes() {
+            expedient::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
         }
 
         for i in 0..RANDOM_SAMPLES {
-            let date: PrimitiveDateTime = rng.gen();
-            expedient::check_type(date, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(date, i, WireType::LengthDelimited).unwrap();
+            let datetime: PrimitiveDateTime = rng.gen();
+            expedient::check_type(datetime, i, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(datetime, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(PrimitiveDateTime, via proxy);
@@ -406,7 +404,7 @@ mod utcoffset {
         [
             UtcOffset::UTC,
             UtcOffset::empty(),
-            UtcOffset::from_hms(-7, 15, 0).unwrap(),
+            UtcOffset::from_hms(-7, -15, 0).unwrap(),
             UtcOffset::from_hms(14, 0, 0).unwrap(),
         ]
         .into_iter()
@@ -416,15 +414,15 @@ mod utcoffset {
     fn check_type() {
         let mut rng = thread_rng();
 
-        for date in test_zones() {
-            expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
+        for zone in test_zones() {
+            expedient::check_type(zone, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(zone, 123, WireType::LengthDelimited).unwrap();
         }
 
         for i in 0..RANDOM_SAMPLES {
-            let date: UtcOffset = rng.gen();
-            expedient::check_type(date, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(date, i, WireType::LengthDelimited).unwrap();
+            let zone: UtcOffset = rng.gen();
+            expedient::check_type(zone, i, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(zone, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(UtcOffset, via proxy);
@@ -512,8 +510,7 @@ mod offsetdatetime {
     use super::primitivedatetime::test_datetimes;
     use super::utcoffset::test_zones;
     use super::RANDOM_SAMPLES;
-    use crate::encoding::test::check_type_empty;
-    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::WireType;
     use itertools::iproduct;
     use rand::{thread_rng, Rng};
