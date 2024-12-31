@@ -703,7 +703,7 @@ impl Proxiable for TimeDelta {
                 (secs - 1, nanos + 1_000_000_000)
             }
             // we also ensure that the sign of secs and nanos matches and that nanos is in-bounds
-            (secs @ 0.., nanos @ 0..=999_999_999) => (secs, nanos),
+            (secs, nanos @ 0) | (secs @ 0.., nanos @ 0..=999_999_999) => (secs, nanos),
             _ => return Err(InvalidValue),
         };
         // TimeDelta only wants to be constructed from a u32 nanos, which is its internal repr, even
