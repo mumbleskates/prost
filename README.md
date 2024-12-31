@@ -469,6 +469,13 @@ The `bilrost` crate has several optional features:
   [`HashMap`][hbmap] and [`HashSet`][hbset]
 * "smallvec": provides first-party support for [`smallvec::SmallVec`][smallvec]
 * "thin-vec": provides first-party support for [`thin_vec::ThinVec`][thinvec]
+* "time": provides first-party support for the following `time` types:
+    * [`Date`][timedate]
+    * [`Time`][timetime]
+    * [`PrimitiveDateTime`][timeprimitivedatetime]
+    * [`UtcOffset`][timeutcoffset]
+    * [`OffsetDateTime`][timeoffsetdatetime]
+    * [`Duration`][timeduration]
 * "tinyvec": provides first-party support for `tinyvec` types
   [`ArrayVec`][tinyarrayvec] and [`TinyVec`][tinyvec]
 
@@ -1256,17 +1263,23 @@ this way.
 With the relevant crate features enabled there is built in support for certain
 additional types as well:
 
-| Encoding  | Value type                                     | Empty value                            | Distinguished | Required feature |
-|-----------|------------------------------------------------|----------------------------------------|---------------|------------------|
-| `general` | [`core::time::Duration`][coreduration]         | zero duration                          | yes           | (none)           |
-| `general` | [`std::time::SystemTime`][stdsystemtime]       | `UNIX_EPOCH` (1970-01-01 00:00:00 UTC) | no            | "std"            |
-| `general` | [`chrono::NaiveDate`][chrononaivedate]         | 0000-01-01                             | yes           | "chrono"         |
-| `general` | [`chrono::NaiveTime`][chrononaivetime]         | 00:00:00                               | yes           | "chrono"         |
-| `general` | [`chrono::NaiveDateTime`][chrononaivedatetime] | 0000-01-01 00:00:00                    | yes           | "chrono"         |
-| `general` | [`chrono::Utc`][chronoutc]                     | Utc                                    | yes           | "chrono"         |
-| `general` | [`chrono::FixedOffset`][chronofixedoffset]     | UTC+00:00                              | yes           | "chrono"         |
-| `general` | [`chrono::DateTime<Tz>`][chronodatetime]*      | 0000-01-01 00:00:00 +00:00             | yes           | "chrono"         |
-| `general` | [`chrono::TimeDelta`][chronotimedelta]         | zero duration                          | yes           | "chrono"         |
+| Encoding  | Value type                                         | Empty value                            | Distinguished | Required feature |
+|-----------|----------------------------------------------------|----------------------------------------|---------------|------------------|
+| `general` | [`core::time::Duration`][coreduration]             | zero duration                          | yes           | (none)           |
+| `general` | [`std::time::SystemTime`][stdsystemtime]           | `UNIX_EPOCH` (1970-01-01 00:00:00 UTC) | no            | "std"            |
+| `general` | [`chrono::NaiveDate`][chrononaivedate]             | 0000-01-01                             | yes           | "chrono"         |
+| `general` | [`chrono::NaiveTime`][chrononaivetime]             | 00:00:00                               | yes           | "chrono"         |
+| `general` | [`chrono::NaiveDateTime`][chrononaivedatetime]     | 0000-01-01 00:00:00                    | yes           | "chrono"         |
+| `general` | [`chrono::Utc`][chronoutc]                         | Utc                                    | yes           | "chrono"         |
+| `general` | [`chrono::FixedOffset`][chronofixedoffset]         | UTC+00:00                              | yes           | "chrono"         |
+| `general` | [`chrono::DateTime<Tz>`][chronodatetime]*          | 0000-01-01 00:00:00 +00:00             | yes           | "chrono"         |
+| `general` | [`chrono::TimeDelta`][chronotimedelta]             | zero duration                          | yes           | "chrono"         |
+| `general` | [`time::Date`][timedate]                           | 0000-01-01                             | yes           | "time"           |
+| `general` | [`time::Time`][timetime]                           | 00:00:00                               | yes           | "time"           |
+| `general` | [`time::PrimitiveDateTime`][timeprimitivedatetime] | 0000-01-01 00:00:00                    | yes           | "time"           |
+| `general` | [`time::UtcOffset`][timeutcoffset]                 | UTC+00:00                              | yes           | "time"           |
+| `general` | [`time::OffsetDateTime`][timeoffsetdatetime]       | 0000-01-01 00:00:00 +00:00             | yes           | "time"           |
+| `general` | [`time::Duration`][timeduration]                   | zero duration                          | yes           | "time"           |
 
 *`chrono::DateTime<Tz>` is supported whenever `Tz::Offset` is supported by the
 `general` encoding. Currently this means `Utc` and `FixedOffset`.
@@ -1288,6 +1301,18 @@ additional types as well:
 [chronodatetime]: https://docs.rs/chrono/latest/chrono/struct.DateTime.html
 
 [chronotimedelta]: https://docs.rs/chrono/latest/chrono/struct.TimeDelta.html
+
+[timedate]: https://docs.rs/time/latest/time/struct.Date.html
+
+[timetime]: https://docs.rs/time/latest/time/struct.Time.html
+
+[timeprimitivedatetime]: https://docs.rs/time/latest/time/struct.PrimitiveDateTime.html
+
+[timeutcoffset]: https://docs.rs/time/latest/time/struct.UtcOffset.html
+
+[timeoffsetdatetime]: https://docs.rs/time/latest/time/struct.OffsetDateTime.html
+
+[timeduration]: https://docs.rs/time/latest/time/struct.Duration.html
 
 Any of these types may be included directly in a `bilrost` message struct. If
 that field's value is [empty](#empty-values), no bytes will be emitted when it
@@ -1521,19 +1546,26 @@ Old message data will always decode to an equivalent/corresponding value, and
 those corresponding values will re-encode from the new widened struct into the
 same representation.
 
-| Change                                                                                 | Corresponding values                                                                        | Backwards compatibility breaks when...                        |
-|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|---------------------------------------------------------------|
-| `bool` --> `u8` --> `u16` --> `u32` --> `u64`, all with `general` or `varint` encoding | `true`/`false` becomes 1/0                                                                  | value is out of range of the narrower type                    |
-| `bool` --> `i8` --> `i16` --> `i32` --> `i64`, all with `general` or `varint` encoding | `true`/`false` becomes -1/0                                                                 | value is out of range of the narrower type                    |
-| `String` --> `Vec<u8>`                                                                 | string becomes its UTF-8 data                                                               | value contains invalid UTF-8                                  |
-| `T` --> `Option<T>`                                                                    | default value of `T` becomes `None`                                                         | `Some(empty)` is encoded; it will be considered non-canonical |
-| `Option<T>` --> `Vec<T>` (with `unpacked` encoding)                                    | maybe-contained value is identical                                                          | multiple values are in the `Vec`                              |
-| `[T; N]` --> `Vec<T>`                                                                  | when each array value is empty, the `Vec` will be empty instead of filled with empty values | data is a nonzero length different than that of the array     |
-| `Option<[T; N]>` --> `Vec<T>`                                                          | no change                                                                                   | data is a length different than that of the array             |
-| `Message` types --> with new fields added                                              | no change, new fields are empty                                                             | new fields are not empty; it will be considered non-canonical |
-| `Enumeration` types --> with new variants added                                        | no change                                                                                   | value is a new variant                                        |
-| `chrono::NaiveDate` --> `chrono::NaiveDateTime`                                        | midnight on the corresponding date                                                          | value has a non-midnight time component                       |
-| `chrono::Utc` --> `chrono::FixedOffset` (and `chrono::DateTime` using those)           | timezone is always UTC                                                                      | value is a non-UTC offset                                     |
+| Change                                                                                 | Corresponding values                                                                        | Backwards compatibility breaks when...                                                                                                |
+|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| `bool` --> `u8` --> `u16` --> `u32` --> `u64`, all with `general` or `varint` encoding | `true`/`false` becomes 1/0                                                                  | value is out of range of the narrower type                                                                                            |
+| `bool` --> `i8` --> `i16` --> `i32` --> `i64`, all with `general` or `varint` encoding | `true`/`false` becomes -1/0                                                                 | value is out of range of the narrower type                                                                                            |
+| `String` --> `Vec<u8>`                                                                 | string becomes its UTF-8 data                                                               | value contains invalid UTF-8                                                                                                          |
+| `T` --> `Option<T>`                                                                    | default value of `T` becomes `None`                                                         | `Some(empty)` is encoded; it will be considered non-canonical                                                                         |
+| `Option<T>` --> `Vec<T>` (with `unpacked` encoding)                                    | maybe-contained value is identical                                                          | multiple values are in the `Vec`                                                                                                      |
+| `[T; N]` --> `Vec<T>`                                                                  | when each array value is empty, the `Vec` will be empty instead of filled with empty values | data is a nonzero length different than that of the array                                                                             |
+| `Option<[T; N]>` --> `Vec<T>`                                                          | no change                                                                                   | data is a length different than that of the array                                                                                     |
+| `Message` types --> with new fields added                                              | no change, new fields are empty                                                             | new fields are not empty; it will be considered non-canonical                                                                         |
+| `Enumeration` types --> with new variants added                                        | no change                                                                                   | value is a new variant                                                                                                                |
+| `chrono::NaiveDate` --> `chrono::NaiveDateTime`                                        | midnight on the corresponding date                                                          | value has a non-midnight time component                                                                                               |
+| `time::Date` --> `time::PrimitiveDateTime`                                             | midnight on the corresponding date                                                          | value as a non-midnight time component                                                                                                |
+| `chrono::Utc` --> `chrono::FixedOffset` (and `chrono::DateTime` using those)           | timezone is always UTC                                                                      | value has a non-UTC offset                                                                                                            |
+| `chrono::NaiveDate` <--> `time::Date`                                                  | no change                                                                                   | whenever one library is out of its supported range                                                                                    |
+| `chrono::NaiveTime` <--> `time::Time`                                                  | no change                                                                                   | whenever one library is out of its supported range (including leap seconds)                                                           |
+| `chrono::NaiveDateTime` <--> `time::PrimitiveDateTime`                                 | no change                                                                                   | whenever one library is out of its supported range                                                                                    |
+| `chrono::FixedOffset` <--> `time::UtcOffset`                                           | no change                                                                                   | probably never                                                                                                                        |
+| `chrono::DateTime<Tz>` <--> `time::OffsetDateTime`                                     | no change                                                                                   | whenever one library is out of its supported range                                                                                    |
+| `chrono::TimeDelta` <--> `time::Duration` <--> `bilrost_types::Duration`               | no change                                                                                   | whenever one library is out of its supported range. `time` and `chrono` impls are strict about seconds and nanos having matching sign |
 
 `Vec<T>` and other list- and set-like collections that contain repeated values
 can also be changed between `unpacked` and `packed` encoding, as long as the
