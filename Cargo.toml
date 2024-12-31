@@ -136,5 +136,11 @@ full-test-suite = [
     "third-party-type-support",
 ]
 
+# Extra parameters to outside crates that may affect our encoding and decoding we should test for.
+test-suite-extra = [
+    "time",
+    "time/large-dates",
+]
+
 # Enables pprof profiling in benchmarks.
 pprof = ["dep:pprof"]

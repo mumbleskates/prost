@@ -47,6 +47,8 @@ jobs:
         run: cargo test --workspace --doc --features full-test-suite --no-default-features
       - name: test doc minimal features
         run: cargo test --workspace --doc --no-default-features
+      - name: test suite extra external crate options
+        run: cargo test --workspace --features test-suite-extra --no-default-features
 
   kani:
     runs-on: ubuntu-latest

@@ -35,6 +35,7 @@ test:
     - cargo test --workspace --doc         --features full-test-suite --no-default-features
     - cargo test --workspace --all-targets --no-default-features
     - cargo test --workspace --doc         --no-default-features
+    - cargo test --workspace --all-targets --features test-suite-extra --no-default-features
 
 test-msrv:
   image: rust:1.65
@@ -48,3 +49,4 @@ test-msrv:
     - cargo test --workspace --doc         --features full-test-suite --no-default-features
     - cargo test --workspace --all-targets --no-default-features
     - cargo test --workspace --doc         --no-default-features
+    - cargo test --workspace --all-targets --features test-suite-extra --no-default-features
