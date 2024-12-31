@@ -863,8 +863,8 @@ mod timedelta {
     pub(super) fn test_timedeltas() -> impl Iterator<Item = TimeDelta> + Clone {
         [
             TimeDelta::default(),
-            TimeDelta::milliseconds(-i64::MAX) - TimeDelta::nanoseconds(999_999),
-            TimeDelta::milliseconds(i64::MAX) + TimeDelta::nanoseconds(999_999),
+            TimeDelta::milliseconds(-i64::MAX), // apparently the minimum
+            TimeDelta::milliseconds(i64::MAX), // apparently the maximum
             TimeDelta::empty(),
             TimeDelta::new(900, 10).unwrap(),
             TimeDelta::seconds(-60),
