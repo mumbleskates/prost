@@ -25,6 +25,14 @@ impl EmptyState for Date {
     }
 }
 
+#[inline(always)]
+fn parts_to_date(year: i32, ordinal0: i32) -> Option<Date> {
+    let ordinal = u16::try_from(ordinal0)
+        .ok()
+        .and_then(|o| o.checked_add(1))?;
+    Date::from_ordinal_date(year, ordinal).ok()
+}
+
 impl Proxiable for Date {
     type Proxy = LocalProxy<i32, 2>;
 
@@ -38,11 +46,7 @@ impl Proxiable for Date {
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let [year, ordinal0] = proxy.into_inner();
-        let ordinal0: Option<u16> = ordinal0.try_into().ok();
-        let ordinal = ordinal0
-            .and_then(|o| o.checked_add(1))
-            .ok_or(OutOfDomainValue)?;
-        *self = Self::from_ordinal_date(year, ordinal).map_err(|_| OutOfDomainValue)?;
+        *self = parts_to_date(year, ordinal0).ok_or(OutOfDomainValue)?;
         Ok(())
     }
 }
@@ -53,11 +57,7 @@ impl DistinguishedProxiable for Date {
         proxy: Self::Proxy,
     ) -> Result<Canonicity, DecodeErrorKind> {
         let ([year, ordinal0], canon) = proxy.into_inner_distinguished();
-        let ordinal0: Option<u16> = ordinal0.try_into().ok();
-        let ordinal = ordinal0
-            .and_then(|o| o.checked_add(1))
-            .ok_or(OutOfDomainValue)?;
-        *self = Self::from_ordinal_date(year, ordinal).map_err(|_| OutOfDomainValue)?;
+        *self = parts_to_date(year, ordinal0).ok_or(OutOfDomainValue)?;
         Ok(canon)
     }
 }
@@ -119,14 +119,13 @@ impl EmptyState for Time {
 #[inline(always)]
 fn parts_to_time<T>(hour: T, min: T, sec: T, nano: T) -> Option<Time>
 where
-    T: Into<u32>,
-    u8: TryFrom<T>,
+    T: TryInto<u8> + TryInto<u32>,
 {
     Time::from_hms_nano(
-        u8::try_from(hour).ok()?,
-        u8::try_from(min).ok()?,
-        u8::try_from(sec).ok()?,
-        nano.into(),
+        hour.try_into().ok()?,
+        min.try_into().ok()?,
+        sec.try_into().ok()?,
+        nano.try_into().ok()?,
     )
     .ok()
 }

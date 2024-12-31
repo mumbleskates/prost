@@ -36,6 +36,14 @@ impl EmptyState for NaiveDate {
     }
 }
 
+#[inline(always)]
+fn parts_to_naivedate(year: i32, ordinal0: i32) -> Option<NaiveDate> {
+    NaiveDate::from_yo_opt(
+        year,
+        u32::try_from(ordinal0).ok()?.checked_add(1)?,
+    )
+}
+
 impl Proxiable for NaiveDate {
     type Proxy = LocalProxy<i32, 2>;
 
@@ -49,11 +57,7 @@ impl Proxiable for NaiveDate {
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let [year, ordinal0] = proxy.into_inner();
-        let ordinal0: Option<u32> = ordinal0.try_into().ok();
-        let ordinal = ordinal0
-            .and_then(|o| o.checked_add(1))
-            .ok_or(OutOfDomainValue)?;
-        *self = NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?;
+        *self = parts_to_naivedate(year, ordinal0).ok_or(OutOfDomainValue)?;
         Ok(())
     }
 }
@@ -64,11 +68,7 @@ impl DistinguishedProxiable for NaiveDate {
         proxy: Self::Proxy,
     ) -> Result<Canonicity, DecodeErrorKind> {
         let ([year, ordinal0], canon) = proxy.into_inner_distinguished();
-        let ordinal0: Option<u32> = ordinal0.try_into().ok();
-        let ordinal = ordinal0
-            .and_then(|o| o.checked_add(1))
-            .ok_or(OutOfDomainValue)?;
-        *self = NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?;
+        *self = parts_to_naivedate(year, ordinal0).ok_or(OutOfDomainValue)?;
         Ok(canon)
     }
 }
@@ -221,6 +221,16 @@ impl EmptyState for NaiveDateTime {
     }
 }
 
+#[inline(always)]
+fn parts_to_naivetime(hour: i32, min: i32, sec: i32, nanos: i32) -> Option<NaiveTime> {
+    NaiveTime::from_hms_nano_opt(
+        hour.try_into().ok()?,
+        min.try_into().ok()?,
+        sec.try_into().ok()?,
+        nanos.try_into().ok()?,
+    )
+}
+
 impl Proxiable for NaiveDateTime {
     type Proxy = LocalProxy<i32, 6>;
 
@@ -241,17 +251,9 @@ impl Proxiable for NaiveDateTime {
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let [year, ordinal0, hour, min, sec, nano] = proxy.into_inner();
-        let [ordinal0, hour, min, sec, nano]: [u32; 5] = [
-            ordinal0.try_into().map_err(|_| OutOfDomainValue)?,
-            hour.try_into().map_err(|_| OutOfDomainValue)?,
-            min.try_into().map_err(|_| OutOfDomainValue)?,
-            sec.try_into().map_err(|_| OutOfDomainValue)?,
-            nano.try_into().map_err(|_| OutOfDomainValue)?,
-        ];
-        let ordinal = ordinal0.checked_add(1).ok_or(OutOfDomainValue)?;
         *self = Self::new(
-            NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?,
-            NaiveTime::from_hms_nano_opt(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
+            parts_to_naivedate(year, ordinal0).ok_or(OutOfDomainValue)?,
+            parts_to_naivetime(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
         );
         Ok(())
     }
@@ -263,17 +265,9 @@ impl DistinguishedProxiable for NaiveDateTime {
         proxy: Self::Proxy,
     ) -> Result<Canonicity, DecodeErrorKind> {
         let ([year, ordinal0, hour, min, sec, nano], canon) = proxy.into_inner_distinguished();
-        let [ordinal0, hour, min, sec, nano]: [u32; 5] = [
-            ordinal0.try_into().map_err(|_| OutOfDomainValue)?,
-            hour.try_into().map_err(|_| OutOfDomainValue)?,
-            min.try_into().map_err(|_| OutOfDomainValue)?,
-            sec.try_into().map_err(|_| OutOfDomainValue)?,
-            nano.try_into().map_err(|_| OutOfDomainValue)?,
-        ];
-        let ordinal = ordinal0.checked_add(1).ok_or(OutOfDomainValue)?;
         *self = Self::new(
-            NaiveDate::from_yo_opt(year, ordinal).ok_or(OutOfDomainValue)?,
-            NaiveTime::from_hms_nano_opt(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
+            parts_to_naivedate(year, ordinal0).ok_or(OutOfDomainValue)?,
+            parts_to_naivetime(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
         );
         Ok(canon)
     }
