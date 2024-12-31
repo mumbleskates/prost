@@ -4,7 +4,7 @@ use crate::encoding::{
     ForOverwrite, General, Packed, Proxiable, Proxied, Varint,
 };
 use crate::DecodeErrorKind::OutOfDomainValue;
-use time::{Date, Time};
+use time::{Date, PrimitiveDateTime, Time};
 
 #[cfg(test)]
 const RANDOM_SAMPLES: u32 = 100;
@@ -198,6 +198,108 @@ mod time_ty {
     }
     check_type_empty!(Time, via proxy);
     check_type_empty!(Time, via distinguished proxy);
+}
+
+impl ForOverwrite for PrimitiveDateTime {
+    fn for_overwrite() -> Self {
+        Self::new(EmptyState::empty(), EmptyState::empty())
+    }
+}
+
+impl EmptyState for PrimitiveDateTime {
+    fn is_empty(&self) -> bool {
+        self.date().is_empty() && self.time().is_empty()
+    }
+
+    fn clear(&mut self) {
+        *self = Self::empty();
+    }
+}
+
+impl Proxiable for PrimitiveDateTime {
+    type Proxy = LocalProxy<i32, 6>;
+
+    fn new_proxy() -> Self::Proxy {
+        Self::Proxy::new_empty()
+    }
+
+    fn encode_proxy(&self) -> Self::Proxy {
+        Self::Proxy::new_without_empty_suffix([
+            self.year(),
+            (self.ordinal() - 1) as i32,
+            self.hour() as i32,
+            self.minute() as i32,
+            self.second() as i32,
+            self.nanosecond() as i32,
+        ])
+    }
+
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        let [year, ordinal0, hour, min, sec, nano] = proxy.into_inner();
+        *self = Self::new(
+            parts_to_date(year, ordinal0).ok_or(OutOfDomainValue)?,
+            parts_to_time(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
+        );
+        Ok(())
+    }
+}
+
+impl DistinguishedProxiable for PrimitiveDateTime {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
+        let ([year, ordinal0, hour, min, sec, nano], canon) = proxy.into_inner_distinguished();
+        *self = Self::new(
+            parts_to_date(year, ordinal0).ok_or(OutOfDomainValue)?,
+            parts_to_time(hour, min, sec, nano).ok_or(OutOfDomainValue)?,
+        );
+        Ok(canon)
+    }
+}
+
+delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
+    for type (PrimitiveDateTime) including distinguished);
+
+#[cfg(test)]
+mod primitivedatetime {
+    use super::RANDOM_SAMPLES;
+    use crate::encoding::test::check_type_empty;
+    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::{EmptyState, WireType};
+    use rand::{thread_rng, Rng};
+    use time::Month::{August, March};
+    use time::{Date, PrimitiveDateTime, Time};
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for date in [
+            PrimitiveDateTime::MIN,
+            PrimitiveDateTime::MAX,
+            PrimitiveDateTime::empty(),
+            PrimitiveDateTime::new(
+                Date::from_calendar_date(-44, March, 15).unwrap(),
+                Time::from_hms(12, 36, 27).unwrap(),
+            ),
+            PrimitiveDateTime::new(
+                Date::from_calendar_date(-1753, August, 21).unwrap(),
+                Time::from_hms(16, 49, 8).unwrap(),
+            ),
+        ] {
+            expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
+        }
+
+        for i in 0..RANDOM_SAMPLES {
+            let date: PrimitiveDateTime = rng.gen();
+            expedient::check_type(date, i, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(date, i, WireType::LengthDelimited).unwrap();
+        }
+    }
+    check_type_empty!(PrimitiveDateTime, via proxy);
+    check_type_empty!(PrimitiveDateTime, via distinguished proxy);
 }
 
 // TODO(widders): this

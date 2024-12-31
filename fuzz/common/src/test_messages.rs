@@ -470,6 +470,7 @@ pub struct TestTypeSupport {
     chrono_time_delta: chrono::TimeDelta,
     time_date: time::Date,
     time_time: time::Time,
+    time_primitivedatetime: time::PrimitiveDateTime,
 
     std_systemtime: std::time::SystemTime,
 }
@@ -486,4 +487,5 @@ pub struct TestTypeSupportDistinguished {
     chrono_time_delta: chrono::TimeDelta,
     time_date: time::Date,
     time_time: time::Time,
+    time_primitivedatetime: time::PrimitiveDateTime,
 }
