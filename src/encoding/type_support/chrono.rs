@@ -12,6 +12,15 @@ use chrono::{
     Timelike, Utc,
 };
 
+#[cfg(test)]
+pub(super) use {
+    fixedoffset::test_zones,
+    naivedate::test_dates,
+    naivedatetime::test_datetimes,
+    naivetime::test_times,
+    timedelta::{random_timedelta, test_timedeltas},
+};
+
 impl ForOverwrite for NaiveDate {
     fn for_overwrite() -> Self {
         Self::from_yo_opt(0, 1).unwrap()
@@ -75,7 +84,7 @@ mod naivedate {
     use alloc::vec::Vec;
     use chrono::NaiveDate;
 
-    pub(super) fn test_dates() -> impl Iterator<Item = NaiveDate> {
+    pub(in super::super) fn test_dates() -> impl Iterator<Item = NaiveDate> {
         [
             NaiveDate::MIN,
             NaiveDate::MAX,
@@ -186,7 +195,7 @@ mod naivetime {
     use alloc::vec::Vec;
     use chrono::NaiveTime;
 
-    pub(super) fn test_times() -> impl Iterator<Item = NaiveTime> + Clone {
+    pub(in super::super) fn test_times() -> impl Iterator<Item = NaiveTime> + Clone {
         [
             NaiveTime::MIN,
             NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap(),
@@ -325,7 +334,7 @@ mod naivedatetime {
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
     use itertools::iproduct;
 
-    pub(super) fn test_datetimes() -> impl IntoIterator<Item = NaiveDateTime> {
+    pub(in super::super) fn test_datetimes() -> impl IntoIterator<Item = NaiveDateTime> {
         [
             NaiveDateTime::MIN,
             NaiveDateTime::MAX,
@@ -584,7 +593,7 @@ mod fixedoffset {
     use alloc::vec::Vec;
     use chrono::FixedOffset;
 
-    pub(super) fn test_zones() -> impl Iterator<Item = FixedOffset> + Clone {
+    pub(in super::super) fn test_zones() -> impl Iterator<Item = FixedOffset> + Clone {
         [
             FixedOffset::east_opt(0).unwrap(),
             FixedOffset::empty(),
@@ -859,7 +868,7 @@ mod timedelta {
     check_type_empty!(TimeDelta, via proxy);
     check_type_empty!(TimeDelta, via distinguished proxy);
 
-    pub(super) fn test_timedeltas() -> impl Iterator<Item = TimeDelta> + Clone {
+    pub(in super::super) fn test_timedeltas() -> impl Iterator<Item = TimeDelta> + Clone {
         [
             TimeDelta::default(),
             TimeDelta::milliseconds(-i64::MAX), // apparently the minimum
@@ -879,10 +888,17 @@ mod timedelta {
         }
     }
 
+    pub(in super::super) fn random_timedelta(rng: &mut impl Rng) -> TimeDelta {
+        let millis = rng.gen_range(0..=i64::MAX);
+        let submilli_nanos = rng.gen_range(0..1_000_000);
+        let negative = rng.gen();
+        milli_nanos_to_timedelta(millis, submilli_nanos, negative)
+    }
+
     fn milli_nanos_to_timedelta(millis: i64, submilli_nanos: u32, negative: bool) -> TimeDelta {
         // compute millisecond part
         let secs = millis / 1000;
-        let nanos = (millis % 1000 * 1_000_000) as u32 + submilli_nanos;
+        let nanos = ((millis % 1000) * 1_000_000) as u32 + submilli_nanos;
         let td = TimeDelta::new(secs, nanos).unwrap();
         if negative {
             -td
@@ -899,7 +915,7 @@ mod timedelta {
     proptest! {
         #[test]
         fn check_expedient(
-            millis in 0..i64::MAX,
+            millis in 0..=i64::MAX,
             submilli_nanos in 0..=999_999u32,
             negative: bool,
             tag: u32,

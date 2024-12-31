@@ -10,7 +10,13 @@ use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
 use time::{Date, Duration, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
 
 #[cfg(test)]
-const RANDOM_SAMPLES: u32 = 100;
+pub(super) use {
+    date::test_dates, duration::test_durations, primitivedatetime::test_datetimes,
+    time_ty::test_times, utcoffset::test_zones,
+};
+
+#[cfg(test)]
+pub(super) const RANDOM_SAMPLES: u32 = 100;
 
 impl ForOverwrite for Date {
     fn for_overwrite() -> Self {
@@ -77,7 +83,7 @@ mod date {
     use time::Date;
     use time::Month::{January, June};
 
-    pub(super) fn test_dates() -> impl Iterator<Item = Date> + Clone {
+    pub(in super::super) fn test_dates() -> impl Iterator<Item = Date> + Clone {
         [
             Date::MIN,
             Date::MAX,
@@ -182,7 +188,7 @@ mod time_ty {
     use rand::{thread_rng, Rng};
     use time::Time;
 
-    pub(super) fn test_times() -> impl Iterator<Item = Time> + Clone {
+    pub(in super::super) fn test_times() -> impl Iterator<Item = Time> + Clone {
         [
             Time::MIDNIGHT,
             Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
@@ -285,7 +291,7 @@ mod primitivedatetime {
     use time::Month::{August, March};
     use time::{Date, PrimitiveDateTime, Time};
 
-    pub(super) fn test_datetimes() -> impl IntoIterator<Item = PrimitiveDateTime> {
+    pub(in super::super) fn test_datetimes() -> impl IntoIterator<Item = PrimitiveDateTime> {
         [
             PrimitiveDateTime::empty(),
             PrimitiveDateTime::new(
@@ -398,7 +404,7 @@ mod utcoffset {
     use rand::{thread_rng, Rng};
     use time::UtcOffset;
 
-    pub(super) fn test_zones() -> impl Iterator<Item = UtcOffset> + Clone {
+    pub(in super::super) fn test_zones() -> impl Iterator<Item = UtcOffset> + Clone {
         [
             UtcOffset::UTC,
             UtcOffset::empty(),
@@ -590,7 +596,7 @@ mod duration {
     use rand::{thread_rng, Rng};
     use time::Duration;
 
-    pub(super) fn test_durations() -> impl Iterator<Item = Duration> + Clone {
+    pub(in super::super) fn test_durations() -> impl Iterator<Item = Duration> + Clone {
         [
             Duration::ZERO,
             Duration::MIN,
