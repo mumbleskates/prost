@@ -472,6 +472,7 @@ pub struct TestTypeSupport {
     time_time: time::Time,
     time_primitivedatetime: time::PrimitiveDateTime,
     time_utcoffset: time::UtcOffset,
+    time_offsetdatetime: time::OffsetDateTime,
 
     std_systemtime: std::time::SystemTime,
 }
@@ -490,4 +491,5 @@ pub struct TestTypeSupportDistinguished {
     time_time: time::Time,
     time_primitivedatetime: time::PrimitiveDateTime,
     time_utcoffset: time::UtcOffset,
+    time_offsetdatetime: time::OffsetDateTime,
 }

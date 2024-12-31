@@ -5,7 +5,7 @@ use crate::encoding::{
 };
 use crate::Canonicity::Canonical;
 use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
-use time::{Date, PrimitiveDateTime, Time, UtcOffset};
+use time::{Date, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
 
 #[cfg(test)]
 const RANDOM_SAMPLES: u32 = 100;
@@ -76,17 +76,22 @@ mod date {
     use time::Date;
     use time::Month::{January, June};
 
-    #[test]
-    fn check_type() {
-        let mut rng = thread_rng();
-
-        for date in [
+    pub(super) fn test_dates() -> impl Iterator<Item = Date> + Clone {
+        [
             Date::MIN,
             Date::MAX,
             Date::empty(),
             Date::from_calendar_date(1970, January, 1).unwrap(),
             Date::from_calendar_date(1998, June, 28).unwrap(),
-        ] {
+        ]
+        .into_iter()
+    }
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for date in test_dates() {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
         }
@@ -177,16 +182,21 @@ mod time_ty {
     use rand::{thread_rng, Rng};
     use time::Time;
 
-    #[test]
-    fn check_type() {
-        let mut rng = thread_rng();
-
-        for date in [
+    pub(super) fn test_times() -> impl Iterator<Item = Time> + Clone {
+        [
             Time::MIDNIGHT,
             Time::MAX,
             Time::empty(),
             Time::from_hms_nano(11, 11, 11, 111_111_111).unwrap(),
-        ] {
+        ]
+        .into_iter()
+    }
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for date in test_times() {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
         }
@@ -264,19 +274,19 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod primitivedatetime {
+    use super::date::test_dates;
+    use super::time_ty::test_times;
     use super::RANDOM_SAMPLES;
     use crate::encoding::test::check_type_empty;
     use crate::encoding::test::{distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
+    use itertools::iproduct;
     use rand::{thread_rng, Rng};
     use time::Month::{August, March};
     use time::{Date, PrimitiveDateTime, Time};
 
-    #[test]
-    fn check_type() {
-        let mut rng = thread_rng();
-
-        for date in [
+    pub(super) fn test_datetimes() -> impl IntoIterator<Item = PrimitiveDateTime> {
+        [
             PrimitiveDateTime::MIN,
             PrimitiveDateTime::MAX,
             PrimitiveDateTime::empty(),
@@ -288,7 +298,19 @@ mod primitivedatetime {
                 Date::from_calendar_date(-1753, August, 21).unwrap(),
                 Time::from_hms(16, 49, 8).unwrap(),
             ),
-        ] {
+        ]
+        .into_iter()
+        .chain(
+            iproduct!(test_dates(), test_times())
+                .map(|(date, time)| PrimitiveDateTime::new(date, time)),
+        )
+    }
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for date in test_datetimes() {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
         }
@@ -378,16 +400,21 @@ mod utcoffset {
     use rand::{thread_rng, Rng};
     use time::UtcOffset;
 
-    #[test]
-    fn check_type() {
-        let mut rng = thread_rng();
-
-        for date in [
+    pub(super) fn test_zones() -> impl Iterator<Item = UtcOffset> + Clone {
+        [
             UtcOffset::UTC,
             UtcOffset::empty(),
             UtcOffset::from_hms(-7, 15, 0).unwrap(),
             UtcOffset::from_hms(14, 0, 0).unwrap(),
-        ] {
+        ]
+        .into_iter()
+    }
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for date in test_zones() {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
         }
@@ -426,6 +453,88 @@ mod utcoffset {
             );
         }
     }
+}
+
+impl ForOverwrite for OffsetDateTime {
+    fn for_overwrite() -> Self {
+        Self::new_utc(EmptyState::empty(), EmptyState::empty())
+    }
+}
+
+impl EmptyState for OffsetDateTime {
+    fn is_empty(&self) -> bool {
+        self.date().is_empty() && self.time().is_empty() && self.offset().is_empty()
+    }
+
+    fn clear(&mut self) {
+        *self = Self::empty();
+    }
+}
+
+impl Proxiable for OffsetDateTime {
+    type Proxy = (PrimitiveDateTime, UtcOffset);
+
+    fn new_proxy() -> Self::Proxy {
+        EmptyState::empty()
+    }
+
+    fn encode_proxy(&self) -> Self::Proxy {
+        (
+            PrimitiveDateTime::new(self.date(), self.time()),
+            self.offset(),
+        )
+    }
+
+    fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
+        let (datetime, offset) = proxy;
+        *self = Self::new_in_offset(datetime.date(), datetime.time(), offset);
+        Ok(())
+    }
+}
+
+impl DistinguishedProxiable for OffsetDateTime {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
+        self.decode_proxy(proxy)?;
+        Ok(Canonical)
+    }
+}
+
+delegate_value_encoding!(delegate from (General) to (Proxied<General>)
+    for type (OffsetDateTime) including distinguished);
+
+#[cfg(test)]
+mod offsetdatetime {
+    use super::primitivedatetime::test_datetimes;
+    use super::utcoffset::test_zones;
+    use super::RANDOM_SAMPLES;
+    use crate::encoding::test::check_type_empty;
+    use crate::encoding::test::{distinguished, expedient};
+    use crate::encoding::WireType;
+    use itertools::iproduct;
+    use rand::{thread_rng, Rng};
+    use time::OffsetDateTime;
+
+    #[test]
+    fn check_type() {
+        let mut rng = thread_rng();
+
+        for (datetime, zone) in iproduct!(test_datetimes(), test_zones()) {
+            let odt = OffsetDateTime::new_in_offset(datetime.date(), datetime.time(), zone);
+            expedient::check_type(odt, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(odt, 123, WireType::LengthDelimited).unwrap();
+        }
+
+        for i in 0..RANDOM_SAMPLES {
+            let odt: OffsetDateTime = rng.gen();
+            expedient::check_type(odt, i, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(odt, i, WireType::LengthDelimited).unwrap();
+        }
+    }
+    check_type_empty!(OffsetDateTime, via proxy);
+    check_type_empty!(OffsetDateTime, via distinguished proxy);
 }
 
 // TODO(widders): this
