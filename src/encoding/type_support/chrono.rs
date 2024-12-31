@@ -745,7 +745,8 @@ where
 }
 
 // The encoding for DateTime<Tz> is the same as the (NaiveDateTime, Tz::Offset) that it is composed
-// of.
+// of. The date-time shuld always be non-naively the real time in UTC, and the offset describes the
+// timezone.
 delegate_value_encoding!(delegate from (General) to (Proxied<General>)
     for type (DateTime<Z>) including distinguished
     with where clause for expedient (Z: TimeZone, Z::Offset: EmptyState)
@@ -862,8 +863,8 @@ mod timedelta {
     pub(super) fn test_timedeltas() -> impl Iterator<Item = TimeDelta> + Clone {
         [
             TimeDelta::default(),
-            TimeDelta::MIN,
-            TimeDelta::MAX,
+            TimeDelta::milliseconds(-i64::MAX) - TimeDelta::nanoseconds(999_999),
+            TimeDelta::milliseconds(i64::MAX) + TimeDelta::nanoseconds(999_999),
             TimeDelta::empty(),
             TimeDelta::new(900, 10).unwrap(),
             TimeDelta::seconds(-60),

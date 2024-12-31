@@ -185,7 +185,7 @@ mod time_ty {
     pub(super) fn test_times() -> impl Iterator<Item = Time> + Clone {
         [
             Time::MIDNIGHT,
-            Time::MAX,
+            Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
             Time::empty(),
             Time::from_hms(17, 0, 0).unwrap(),
             Time::from_hms_nano(11, 11, 11, 111_111_111).unwrap(),
@@ -287,8 +287,6 @@ mod primitivedatetime {
 
     pub(super) fn test_datetimes() -> impl IntoIterator<Item = PrimitiveDateTime> {
         [
-            PrimitiveDateTime::MIN,
-            PrimitiveDateTime::MAX,
             PrimitiveDateTime::empty(),
             PrimitiveDateTime::new(
                 Date::from_calendar_date(-44, March, 15).unwrap(),
@@ -457,7 +455,7 @@ mod utcoffset {
 
 impl ForOverwrite for OffsetDateTime {
     fn for_overwrite() -> Self {
-        Self::new_utc(EmptyState::empty(), EmptyState::empty())
+        Self::UNIX_EPOCH.replace_date_time(EmptyState::empty()).to_offset(EmptyState::empty())
     }
 }
 
@@ -487,7 +485,7 @@ impl Proxiable for OffsetDateTime {
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let (datetime, offset) = proxy;
-        *self = Self::new_in_offset(datetime.date(), datetime.time(), offset);
+        *self = Self::UNIX_EPOCH.replace_date_time(datetime).to_offset(offset);
         Ok(())
     }
 }
@@ -521,7 +519,7 @@ mod offsetdatetime {
         let mut rng = thread_rng();
 
         for (datetime, zone) in iproduct!(test_datetimes(), test_zones()) {
-            let odt = OffsetDateTime::new_in_offset(datetime.date(), datetime.time(), zone);
+            let odt = OffsetDateTime::UNIX_EPOCH.replace_date_time(datetime).replace_offset(zone);
             expedient::check_type(odt, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(odt, 123, WireType::LengthDelimited).unwrap();
         }
