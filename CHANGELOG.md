@@ -8,8 +8,8 @@
 * Added 3rd party type support for the `bstr` crate and its `BString` type,
   which is a wrapper around `Vec<u8>` that acts like text but does not guarantee
   UTF-8 and does not require any validation.
-* Added 3rd party type support for the `chrono` crate and most of its important
-  types.
+* Added 3rd party type support for the `chrono` and `time` crates and most of
+  their important types, available through new crate features.
 * `Oneof` types can now be wrapped in `Box` (multiple times even, and either
   side of `Option` if you really want.)
 * A new fuzzer binary is available specifically for the newer types which have
