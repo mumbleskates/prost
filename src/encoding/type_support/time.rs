@@ -454,7 +454,9 @@ mod utcoffset {
 }
 
 const fn odt_compose(utc_timestamp: PrimitiveDateTime, offset: UtcOffset) -> OffsetDateTime {
-    OffsetDateTime::UNIX_EPOCH.replace_offset(offset).replace_date_time(utc_timestamp)
+    OffsetDateTime::UNIX_EPOCH
+        .replace_offset(offset)
+        .replace_date_time(utc_timestamp)
 }
 
 const fn odt_decompose(odt: OffsetDateTime) -> (PrimitiveDateTime, UtcOffset) {
@@ -558,9 +560,8 @@ impl Proxiable for Duration {
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         #[allow(overlapping_range_endpoints)]
         let (secs, nanos) = match (proxy.secs, proxy.nanos) {
-            (secs @ ..=0, nanos @ -999_999_999..=0) | (secs @ 0.., nanos @ 0..=999_999_999) => {
-                (secs, nanos)
-            }
+            (secs @ i64::MIN..=0, nanos @ -999_999_999..=0)
+            | (secs @ 0.., nanos @ 0..=999_999_999) => (secs, nanos),
             _ => return Err(InvalidValue),
         };
         *self = Self::new(secs, nanos);
