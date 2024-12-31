@@ -9,22 +9,6 @@ use core::cmp::Ordering;
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-impl ForOverwrite for SystemTime {
-    fn for_overwrite() -> Self {
-        UNIX_EPOCH
-    }
-}
-
-impl EmptyState for SystemTime {
-    fn is_empty(&self) -> bool {
-        *self == UNIX_EPOCH
-    }
-
-    fn clear(&mut self) {
-        *self = UNIX_EPOCH;
-    }
-}
-
 for_overwrite_via_default!(HashSet<T, S>,
     with generics (T, S),
     with where clause (S: Default + core::hash::BuildHasher));
@@ -147,6 +131,22 @@ where
         } else {
             Err(UnexpectedlyRepeated)
         }
+    }
+}
+
+impl ForOverwrite for SystemTime {
+    fn for_overwrite() -> Self {
+        UNIX_EPOCH
+    }
+}
+
+impl EmptyState for SystemTime {
+    fn is_empty(&self) -> bool {
+        *self == UNIX_EPOCH
+    }
+
+    fn clear(&mut self) {
+        *self = UNIX_EPOCH;
     }
 }
 
