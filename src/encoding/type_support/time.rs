@@ -3,9 +3,9 @@ use crate::encoding::{
     delegate_value_encoding, Canonicity, DecodeErrorKind, DistinguishedProxiable, EmptyState,
     ForOverwrite, General, Packed, Proxiable, Proxied, Varint,
 };
+use crate::Canonicity::Canonical;
 use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
 use time::{Date, PrimitiveDateTime, Time, UtcOffset};
-use crate::Canonicity::Canonical;
 
 #[cfg(test)]
 const RANDOM_SAMPLES: u32 = 100;
@@ -352,7 +352,10 @@ impl Proxiable for UtcOffset {
 }
 
 impl DistinguishedProxiable for UtcOffset {
-    fn decode_proxy_distinguished(&mut self, proxy: Self::Proxy) -> Result<Canonicity, DecodeErrorKind> {
+    fn decode_proxy_distinguished(
+        &mut self,
+        proxy: Self::Proxy,
+    ) -> Result<Canonicity, DecodeErrorKind> {
         self.decode_proxy(proxy)?;
         Ok(Canonical)
     }
@@ -364,9 +367,14 @@ delegate_value_encoding!(delegate from (General) to (Proxied<(Varint, Varint, Va
 #[cfg(test)]
 mod utcoffset {
     use super::RANDOM_SAMPLES;
-    use crate::encoding::test::check_type_empty;
-    use crate::encoding::test::{distinguished, expedient};
-    use crate::encoding::{EmptyState, WireType};
+    use crate::encoding::test::{check_type_empty, distinguished, expedient};
+    use crate::encoding::{
+        Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, ForOverwrite, General,
+        ValueEncoder, WireType,
+    };
+    use crate::DecodeError;
+    use crate::DecodeErrorKind::InvalidValue;
+    use alloc::vec::Vec;
     use rand::{thread_rng, Rng};
     use time::UtcOffset;
 
@@ -392,6 +400,32 @@ mod utcoffset {
     }
     check_type_empty!(UtcOffset, via proxy);
     check_type_empty!(UtcOffset, via distinguished proxy);
+
+    #[test]
+    fn utcoffset_rejects_mixed_signs() {
+        {
+            let mut buf = Vec::new();
+            let out_of_range: (i32, i32, i32) = (10, 0, -10);
+            ValueEncoder::<General>::encode_value(&out_of_range, &mut buf);
+            let mut utc_off = UtcOffset::for_overwrite();
+            assert_eq!(
+                ValueEncoder::<General>::decode_value(
+                    &mut utc_off,
+                    Capped::new(&mut buf.as_slice()),
+                    DecodeContext::default()
+                ),
+                Err(DecodeError::new(InvalidValue))
+            );
+            assert_eq!(
+                DistinguishedValueEncoder::<General>::decode_value_distinguished::<true>(
+                    &mut utc_off,
+                    Capped::new(&mut buf.as_slice()),
+                    DecodeContext::default()
+                ),
+                Err(DecodeError::new(InvalidValue))
+            );
+        }
+    }
 }
 
 // TODO(widders): this
