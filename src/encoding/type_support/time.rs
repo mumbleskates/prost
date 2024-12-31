@@ -453,9 +453,17 @@ mod utcoffset {
     }
 }
 
+const fn odt_compose(utc_timestamp: PrimitiveDateTime, offset: UtcOffset) -> OffsetDateTime {
+    OffsetDateTime::UNIX_EPOCH.replace_offset(offset).replace_date_time(utc_timestamp)
+}
+
+const fn odt_decompose(odt: OffsetDateTime) -> (PrimitiveDateTime, UtcOffset) {
+    (PrimitiveDateTime::new(odt.date(), odt.time()), odt.offset())
+}
+
 impl ForOverwrite for OffsetDateTime {
     fn for_overwrite() -> Self {
-        Self::UNIX_EPOCH.replace_date_time(EmptyState::empty()).to_offset(EmptyState::empty())
+        odt_compose(EmptyState::empty(), EmptyState::empty())
     }
 }
 
@@ -477,15 +485,12 @@ impl Proxiable for OffsetDateTime {
     }
 
     fn encode_proxy(&self) -> Self::Proxy {
-        (
-            PrimitiveDateTime::new(self.date(), self.time()),
-            self.offset(),
-        )
+        odt_decompose(*self)
     }
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
         let (datetime, offset) = proxy;
-        *self = Self::UNIX_EPOCH.replace_date_time(datetime).to_offset(offset);
+        *self = odt_compose(datetime, offset);
         Ok(())
     }
 }
@@ -507,7 +512,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 mod offsetdatetime {
     use super::primitivedatetime::test_datetimes;
     use super::utcoffset::test_zones;
-    use super::RANDOM_SAMPLES;
+    use super::{odt_compose, RANDOM_SAMPLES};
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::WireType;
     use itertools::iproduct;
@@ -519,7 +524,7 @@ mod offsetdatetime {
         let mut rng = thread_rng();
 
         for (datetime, zone) in iproduct!(test_datetimes(), test_zones()) {
-            let odt = OffsetDateTime::UNIX_EPOCH.replace_date_time(datetime).replace_offset(zone);
+            let odt = odt_compose(datetime, zone);
             expedient::check_type(odt, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(odt, 123, WireType::LengthDelimited).unwrap();
         }

@@ -745,8 +745,7 @@ where
 }
 
 // The encoding for DateTime<Tz> is the same as the (NaiveDateTime, Tz::Offset) that it is composed
-// of. The date-time shuld always be non-naively the real time in UTC, and the offset describes the
-// timezone.
+// of.
 delegate_value_encoding!(delegate from (General) to (Proxied<General>)
     for type (DateTime<Z>) including distinguished
     with where clause for expedient (Z: TimeZone, Z::Offset: EmptyState)
