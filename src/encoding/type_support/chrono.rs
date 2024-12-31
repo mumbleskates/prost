@@ -863,7 +863,7 @@ mod timedelta {
         [
             TimeDelta::default(),
             TimeDelta::milliseconds(-i64::MAX), // apparently the minimum
-            TimeDelta::milliseconds(i64::MAX), // apparently the maximum
+            TimeDelta::milliseconds(i64::MAX),  // apparently the maximum
             TimeDelta::empty(),
             TimeDelta::new(900, 10).unwrap(),
             TimeDelta::seconds(-60),
