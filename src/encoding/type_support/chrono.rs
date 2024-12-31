@@ -70,35 +70,58 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod naivedate {
-    use crate::encoding::test::{check_type_empty, check_type_test};
-    use crate::encoding::General;
+    use crate::encoding::test::{check_type_empty, check_type_test, distinguished, expedient};
+    use crate::encoding::{EmptyState, General, WireType};
     use alloc::vec::Vec;
     use chrono::NaiveDate;
 
+    pub(super) fn test_dates() -> impl Iterator<Item = NaiveDate> {
+        [
+            NaiveDate::MIN,
+            NaiveDate::MAX,
+            NaiveDate::empty(),
+            NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(1988, 6, 28).unwrap(),
+        ]
+        .into_iter()
+    }
+
+    #[test]
+    fn check_type() {
+        for date in test_dates() {
+            expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
+        }
+    }
+
     check_type_empty!(NaiveDate, via proxy);
-    check_type_test!(
-        General,
-        expedient,
-        from Vec<u8>,
-        into NaiveDate,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
     check_type_empty!(NaiveDate, via distinguished proxy);
-    check_type_test!(
-        General,
-        distinguished,
-        from Vec<u8>,
-        into NaiveDate,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
+
+    mod proptests {
+        use super::*;
+        check_type_test!(
+            General,
+            expedient,
+            from Vec<u8>,
+            into NaiveDate,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+        check_type_test!(
+            General,
+            distinguished,
+            from Vec<u8>,
+            into NaiveDate,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                NaiveDate::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+    }
 }
 
 impl ForOverwrite for NaiveTime {
@@ -158,35 +181,58 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod naivetime {
-    use crate::encoding::test::{check_type_empty, check_type_test};
-    use crate::encoding::General;
+    use crate::encoding::test::{check_type_empty, check_type_test, distinguished, expedient};
+    use crate::encoding::{EmptyState, General, WireType};
     use alloc::vec::Vec;
     use chrono::NaiveTime;
 
+    pub(super) fn test_times() -> impl Iterator<Item = NaiveTime> + Clone {
+        [
+            NaiveTime::MIN,
+            NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap(),
+            NaiveTime::empty(),
+            NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
+            NaiveTime::from_hms_nano_opt(11, 11, 11, 111_111_111).unwrap(),
+        ]
+        .into_iter()
+    }
+
+    #[test]
+    fn check_type() {
+        for time in test_times() {
+            expedient::check_type(time, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(time, 123, WireType::LengthDelimited).unwrap();
+        }
+    }
+
     check_type_empty!(NaiveTime, via proxy);
-    check_type_test!(
-        General,
-        expedient,
-        from Vec<u8>,
-        into NaiveTime,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            NaiveTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
     check_type_empty!(NaiveTime, via distinguished proxy);
-    check_type_test!(
-        General,
-        distinguished,
-        from Vec<u8>,
-        into NaiveTime,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            NaiveTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
+
+    mod proptests {
+        use super::*;
+        check_type_test!(
+            General,
+            expedient,
+            from Vec<u8>,
+            into NaiveTime,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                NaiveTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+        check_type_test!(
+            General,
+            distinguished,
+            from Vec<u8>,
+            into NaiveTime,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                NaiveTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+    }
 }
 
 impl ForOverwrite for NaiveDateTime {
@@ -271,35 +317,72 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod naivedatetime {
-    use crate::encoding::test::{check_type_empty, check_type_test};
-    use crate::encoding::General;
+    use super::naivedate::test_dates;
+    use super::naivetime::test_times;
+    use crate::encoding::test::{check_type_empty, check_type_test, distinguished, expedient};
+    use crate::encoding::{EmptyState, General, WireType};
     use alloc::vec::Vec;
-    use chrono::NaiveDateTime;
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+    use itertools::iproduct;
+
+    pub(super) fn test_datetimes() -> impl IntoIterator<Item = NaiveDateTime> {
+        [
+            NaiveDateTime::MIN,
+            NaiveDateTime::MAX,
+            NaiveDateTime::default(),
+            NaiveDateTime::empty(),
+            NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(-44, 3, 15).unwrap(),
+                NaiveTime::from_hms_opt(12, 36, 27).unwrap(),
+            ),
+            NaiveDateTime::new(
+                NaiveDate::from_ymd_opt(-1753, 8, 21).unwrap(),
+                NaiveTime::from_hms_opt(14, 49, 8).unwrap(),
+            ),
+        ]
+        .into_iter()
+        .chain(
+            iproduct!(test_dates(), test_times())
+                .map(|(date, time)| NaiveDateTime::new(date, time)),
+        )
+    }
+
+    #[test]
+    fn check_type() {
+        for datetime in test_datetimes() {
+            expedient::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
+        }
+    }
 
     check_type_empty!(NaiveDateTime, via proxy);
-    check_type_test!(
-        General,
-        expedient,
-        from Vec<u8>,
-        into NaiveDateTime,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            NaiveDateTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
     check_type_empty!(NaiveDateTime, via distinguished proxy);
-    check_type_test!(
-        General,
-        distinguished,
-        from Vec<u8>,
-        into NaiveDateTime,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            NaiveDateTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
+
+    mod proptests {
+        use super::*;
+        check_type_test!(
+            General,
+            expedient,
+            from Vec<u8>,
+            into NaiveDateTime,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                NaiveDateTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+        check_type_test!(
+            General,
+            distinguished,
+            from Vec<u8>,
+            into NaiveDateTime,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                NaiveDateTime::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+    }
 }
 
 impl ForOverwrite for Utc {
@@ -490,40 +573,63 @@ delegate_value_encoding!(delegate from (General) to (Proxied<(Varint, Varint, Va
 
 #[cfg(test)]
 mod fixedoffset {
-    use crate::encoding::test::{check_type_empty, check_type_test};
+    use crate::encoding::test::{check_type_empty, check_type_test, distinguished, expedient};
     use crate::encoding::value_traits::ForOverwrite;
     use crate::encoding::{
-        Capped, DecodeContext, DistinguishedValueEncoder, General, ValueEncoder,
+        Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, General, ValueEncoder,
+        WireType,
     };
     use crate::DecodeError;
     use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
     use alloc::vec::Vec;
     use chrono::FixedOffset;
 
+    pub(super) fn test_zones() -> impl Iterator<Item = FixedOffset> + Clone {
+        [
+            FixedOffset::east_opt(0).unwrap(),
+            FixedOffset::empty(),
+            FixedOffset::west_opt(-7 * 3600 - 15 * 60).unwrap(),
+            FixedOffset::east_opt(14 * 3600).unwrap(),
+        ]
+        .into_iter()
+    }
+
+    #[test]
+    fn check_type() {
+        for zone in test_zones() {
+            expedient::check_type(zone, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(zone, 123, WireType::LengthDelimited).unwrap();
+        }
+    }
+
     check_type_empty!(FixedOffset, via proxy);
-    check_type_test!(
-        General,
-        expedient,
-        from Vec<u8>,
-        into FixedOffset,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            FixedOffset::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
     check_type_empty!(FixedOffset, via distinguished proxy);
-    check_type_test!(
-        General,
-        distinguished,
-        from Vec<u8>,
-        into FixedOffset,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            FixedOffset::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
+
+    mod proptests {
+        use super::*;
+        check_type_test!(
+            General,
+            expedient,
+            from Vec<u8>,
+            into FixedOffset,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                FixedOffset::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+        check_type_test!(
+            General,
+            distinguished,
+            from Vec<u8>,
+            into FixedOffset,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                FixedOffset::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+    }
 
     #[test]
     fn fixedoffset_rejects_out_of_range() {
@@ -647,35 +753,51 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 
 #[cfg(test)]
 mod datetime {
-    use crate::encoding::test::{check_type_empty, check_type_test};
-    use crate::encoding::General;
+    use super::fixedoffset::test_zones;
+    use super::naivedatetime::test_datetimes;
+    use crate::encoding::test::{check_type_empty, check_type_test, distinguished, expedient};
+    use crate::encoding::{General, WireType};
     use alloc::vec::Vec;
-    use chrono::{DateTime, Utc};
+    use chrono::{DateTime, FixedOffset, Utc};
+    use itertools::iproduct;
+
+    #[test]
+    fn check_type() {
+        for (naivedatetime, zone) in iproduct!(test_datetimes(), test_zones()) {
+            let datetime = DateTime::<FixedOffset>::from_naive_utc_and_offset(naivedatetime, zone);
+            expedient::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
+            distinguished::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
+        }
+    }
 
     check_type_empty!(DateTime<Utc>, via proxy);
-    check_type_test!(
-        General,
-        expedient,
-        from Vec<u8>,
-        into DateTime<Utc>,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            DateTime::<Utc>::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
     check_type_empty!(DateTime<Utc>, via distinguished proxy);
-    check_type_test!(
-        General,
-        distinguished,
-        from Vec<u8>,
-        into DateTime<Utc>,
-        converter(b) {
-            use arbitrary::{Arbitrary, Unstructured};
-            DateTime::<Utc>::arbitrary(&mut Unstructured::new(&b)).unwrap()
-        },
-        WireType::LengthDelimited
-    );
+
+    mod proptests {
+        use super::*;
+        check_type_test!(
+            General,
+            expedient,
+            from Vec<u8>,
+            into DateTime<Utc>,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                DateTime::<Utc>::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+        check_type_test!(
+            General,
+            distinguished,
+            from Vec<u8>,
+            into DateTime<Utc>,
+            converter(b) {
+                use arbitrary::{Arbitrary, Unstructured};
+                DateTime::<Utc>::arbitrary(&mut Unstructured::new(&b)).unwrap()
+            },
+            WireType::LengthDelimited
+        );
+    }
 }
 
 empty_state_via_default!(TimeDelta);
@@ -782,7 +904,7 @@ mod timedelta {
             negative: bool,
             tag: u32,
         ) {
-            crate::encoding::test::expedient::check_type::<TimeDelta, General>(
+            expedient::check_type::<TimeDelta, General>(
                 milli_nanos_to_timedelta(millis, submilli_nanos, negative),
                 tag,
                 WireType::LengthDelimited,
@@ -795,7 +917,7 @@ mod timedelta {
             negative: bool,
             tag: u32,
         ) {
-            crate::encoding::test::distinguished::check_type::<TimeDelta, General>(
+            distinguished::check_type::<TimeDelta, General>(
                 milli_nanos_to_timedelta(millis, submilli_nanos, negative),
                 tag,
                 WireType::LengthDelimited,
