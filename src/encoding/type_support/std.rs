@@ -177,7 +177,7 @@ impl Proxiable for SystemTime {
     }
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
-        const PLUS: u64 = '+' as u64; 
+        const PLUS: u64 = '+' as u64;
         const MINUS: u64 = '-' as u64;
         let (operation, secs, nanos): (fn(_, _) -> _, u64, u64) = match proxy.into_inner() {
             [0, 0, 0] => {
