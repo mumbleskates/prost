@@ -12,6 +12,7 @@ use chrono::{
     Timelike, Utc,
 };
 
+#[allow(unused_imports)]
 #[cfg(test)]
 pub(super) use {
     fixedoffset::test_zones,

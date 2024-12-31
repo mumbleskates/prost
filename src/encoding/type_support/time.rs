@@ -9,6 +9,7 @@ use crate::Canonicity::Canonical;
 use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
 use time::{Date, Duration, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
 
+#[allow(unused_imports)]
 #[cfg(test)]
 pub(super) use {
     date::test_dates, duration::test_durations, primitivedatetime::test_datetimes,
