@@ -12,6 +12,8 @@ mod additional;
 mod core_and_alloc;
 mod primitives;
 
+mod common;
+
 #[cfg(feature = "arrayvec")]
 mod arrayvec;
 #[cfg(feature = "bstr")]

@@ -1,20 +1,12 @@
-use crate::buf::ReverseBuf;
 use crate::encoding::local_proxy::LocalProxy;
-use crate::encoding::underived::{
-    underived_decode, underived_decode_distinguished, underived_encode, underived_encoded_len,
-    underived_prepend,
-};
+use crate::encoding::type_support::common::time_proxies::TimeDeltaProxy;
 use crate::encoding::value_traits::empty_state_via_default;
 use crate::encoding::{
-    delegate_value_encoding, Canonicity, Capped, DecodeContext, DecodeErrorKind,
-    DistinguishedEncoder, DistinguishedProxiable, DistinguishedValueEncoder, EmptyState, Encoder,
-    Fixed, ForOverwrite, General, Packed, Proxiable, Proxied, ValueEncoder, Varint, WireType,
-    Wiretyped,
+    delegate_value_encoding, Canonicity, DecodeErrorKind, DistinguishedProxiable, EmptyState,
+    ForOverwrite, General, Packed, Proxiable, Proxied, Varint,
 };
 use crate::Canonicity::Canonical;
-use crate::DecodeError;
 use crate::DecodeErrorKind::{InvalidValue, OutOfDomainValue};
-use bytes::{Buf, BufMut};
 use chrono::{
     DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, TimeZone,
     Timelike, Utc,
@@ -38,10 +30,7 @@ impl EmptyState for NaiveDate {
 
 #[inline(always)]
 fn parts_to_naivedate(year: i32, ordinal0: i32) -> Option<NaiveDate> {
-    NaiveDate::from_yo_opt(
-        year,
-        u32::try_from(ordinal0).ok()?.checked_add(1)?,
-    )
+    NaiveDate::from_yo_opt(year, u32::try_from(ordinal0).ok()?.checked_add(1)?)
 }
 
 impl Proxiable for NaiveDate {
@@ -687,72 +676,6 @@ mod datetime {
         },
         WireType::LengthDelimited
     );
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct TimeDeltaProxy {
-    secs: i64,
-    nanos: i32,
-}
-
-empty_state_via_default!(TimeDeltaProxy);
-
-impl Wiretyped<General> for TimeDeltaProxy {
-    const WIRE_TYPE: WireType = WireType::LengthDelimited;
-}
-
-impl ValueEncoder<General> for TimeDeltaProxy {
-    fn encode_value<B: BufMut + ?Sized>(value: &Self, buf: &mut B) {
-        underived_encode!(TimeDelta {
-            1: General => secs: &value.secs,
-            2: Fixed => nanos: &value.nanos,
-        }, buf)
-    }
-
-    fn prepend_value<B: ReverseBuf + ?Sized>(value: &Self, buf: &mut B) {
-        underived_prepend!(TimeDelta {
-            2: Fixed => nanos: &value.nanos,
-            1: General => secs: &value.secs,
-        }, buf)
-    }
-
-    fn value_encoded_len(value: &Self) -> usize {
-        underived_encoded_len!(TimeDelta {
-            1: General => secs: &value.secs,
-            2: Fixed => nanos: &value.nanos,
-        })
-    }
-
-    fn decode_value<B: Buf + ?Sized>(
-        value: &mut Self,
-        mut buf: Capped<B>,
-        ctx: DecodeContext,
-    ) -> Result<(), DecodeError> {
-        underived_decode!(TimeDelta {
-            1: General => secs: &mut value.secs,
-            2: Fixed => nanos: &mut value.nanos,
-        }, buf, ctx)?;
-        if value.secs.signum() as i32 * value.nanos.signum() == -1 {
-            Err(DecodeError::new(InvalidValue))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl DistinguishedValueEncoder<General> for TimeDeltaProxy {
-    const CHECKS_EMPTY: bool = true;
-
-    fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
-        value: &mut Self,
-        mut buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
-    ) -> Result<Canonicity, DecodeError> {
-        underived_decode_distinguished!(TimeDelta {
-            1: General => secs: &mut value.secs,
-            2: Fixed => nanos: &mut value.nanos,
-        }, buf, ctx)
-    }
 }
 
 empty_state_via_default!(TimeDelta);

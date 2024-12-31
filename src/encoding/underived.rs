@@ -79,7 +79,7 @@ macro_rules! underived_decode {
         $ctx:ident
     ) => {
         {
-            use crate::encoding::{skip_field, TagReader};
+            use crate::encoding::{skip_field, Encoder, TagReader};
             let mut buf = $buf.take_length_delimited()?;
             let ctx = $ctx;
             ctx.limit_reached()?;
@@ -124,7 +124,7 @@ macro_rules! underived_decode_distinguished {
         $ctx:ident
     ) => {
         {
-            use crate::encoding::{skip_field, Canonicity, TagReader};
+            use crate::encoding::{skip_field, Canonicity, DistinguishedEncoder, TagReader};
             let mut buf = $buf.take_length_delimited()?;
             let ctx = $ctx;
             if !ALLOW_EMPTY && buf.remaining_before_cap() == 0 {
