@@ -4,8 +4,8 @@ use regex::Regex;
 use std::str::{from_utf8, FromStr};
 use std::sync::LazyLock;
 
-use bilrost::Canonicity::Canonical;
-use bilrost::{DecodeError, DistinguishedMessage, Message, WithCanonicity};
+use bilrost::Canonicity::{Canonical, HasExtensions, NotCanonical};
+use bilrost::{DecodeError, DecodeErrorKind, DistinguishedMessage, Message, WithCanonicity};
 
 pub mod test_messages;
 
@@ -246,17 +246,23 @@ where
             }
         }
         _ => {
-            let Err(err) = M::decode_restricted(data, Canonical) else {
+            if M::decode_restricted(data, Canonical).is_ok() {
                 return RoundtripResult::Error(err!(
                     "decoded non-canonically but restricted mode did not err"
                 ));
             };
-            if err.kind() != canon.canonical().unwrap_err() {
-                return RoundtripResult::Error(err!(
-                    "decoded non-canonically but restricted mode produced the wrong error: \
-                    expected {canon_err:?} but got {err}",
-                    canon_err = canon.canonical().unwrap_err(),
-                ));
+            if canon == NotCanonical {
+                let Err(err) = M::decode_restricted(data, HasExtensions) else {
+                    return RoundtripResult::Error(err!(
+                        "decoded non-canonically but partially restricted mode did not err"
+                    ));
+                };
+                if err.kind() != DecodeErrorKind::NotCanonical {
+                    return RoundtripResult::Error(err!(
+                        "decoded non-canonically but partially restricted mode produced the wrong \
+                        error: {err}"
+                    ));
+                }
             }
             if buf1.as_slice() == data {
                 return RoundtripResult::Error(err!(
