@@ -7,7 +7,8 @@ use crate::encoding::value_traits::{
 use crate::encoding::{
     encode_varint, encoded_len_varint, prepend_varint, unpacked, Canonicity, Capped, DecodeContext,
     DecodeError, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General,
-    TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped,
+    RestrictedDecodeContext, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType,
+    Wiretyped,
 };
 use crate::DecodeErrorKind::{InvalidValue, Truncated, UnexpectedlyRepeated};
 
@@ -86,7 +87,7 @@ where
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut C,
         mut buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut capped = buf.take_length_delimited()?;
         // MSRV: this could be .is_some_and(..)
@@ -97,19 +98,20 @@ where
             // No number of fixed-sized values can pack evenly into this size.
             return Err(DecodeError::new(Truncated));
         }
-        let mut canon = Canonicity::Canonical;
+        let canon = &mut Canonicity::Canonical;
         while capped.has_remaining()? {
             let mut new_val = T::for_overwrite();
-            canon.update(
+            ctx.update(
+                canon,
                 DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
                     &mut new_val,
                     capped.lend(),
                     ctx.clone(),
                 )?,
-            );
-            canon.update(value.insert_distinguished(new_val)?);
+            )?;
+            ctx.update(canon, value.insert_distinguished(new_val)?)?;
         }
-        Ok(canon)
+        Ok(*canon)
     }
 }
 
@@ -179,7 +181,7 @@ where
         duplicated: bool,
         value: &mut C,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
@@ -188,16 +190,19 @@ where
             // We've encountered the expected length-delimited type: decode it in packed format.
             // Set ALLOW_EMPTY to false: empty collections are not canonical
             let canon = DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
-                value, buf, ctx,
+                value,
+                buf,
+                ctx.clone(),
             )?;
-            Ok(if !C::CHECKS_EMPTY && value.is_empty() {
+            ctx.check(if !C::CHECKS_EMPTY && value.is_empty() {
                 Canonicity::NotCanonical
             } else {
                 canon
             })
         } else {
             // Otherwise, try decoding it in the unpacked representation
-            unpacked::decode::<C, E>(wire_type, value, buf, ctx)?;
+            _ = ctx.check(Canonicity::NotCanonical)?;
+            unpacked::decode::<C, E>(wire_type, value, buf, ctx.expedient_context())?;
             Ok(Canonicity::NotCanonical)
         }
     }
@@ -280,7 +285,7 @@ where
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut [T; N],
         mut buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut capped = buf.take_length_delimited()?;
         // MSRV: this could be .is_some_and(..)
@@ -292,21 +297,22 @@ where
             return Err(DecodeError::new(InvalidValue));
         }
 
-        let mut canon = Canonicity::Canonical;
+        let canon = &mut Canonicity::Canonical;
         for dest in value.iter_mut() {
             // If the value's size was already checked, we don't need to check again
             if <T as Wiretyped<E>>::WIRE_TYPE.fixed_size().is_none() && !capped.has_remaining()? {
                 // Not enough values
                 return Err(DecodeError::new(InvalidValue));
             }
-            canon.update(
+            ctx.update(
+                canon,
                 // Empty values are allowed because they are nested
                 DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
                     dest,
                     capped.lend(),
                     ctx.clone(),
                 )?,
-            );
+            )?;
         }
 
         // If the value's size was already checked, we don't need to check again
@@ -314,7 +320,7 @@ where
             // Too many values or trailing data
             Err(DecodeError::new(InvalidValue))
         } else {
-            Ok(canon)
+            Ok(*canon)
         }
     }
 }
@@ -382,7 +388,7 @@ where
         duplicated: bool,
         value: &mut [T; N],
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
@@ -391,9 +397,9 @@ where
             // We've encountered the expected length-delimited type: decode it in packed format.
             // Set ALLOW_EMPTY to false: empty collections are not canonical
             let canon = DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
-                value, buf, ctx,
+                value, buf, ctx.clone(),
             )?;
-            Ok(
+            ctx.check(
                 if
                 /* !<[T; N]>::CHECKS_EMPTY && /* it never checks */ */
                 value.is_empty() {
@@ -404,7 +410,8 @@ where
             )
         } else {
             // Otherwise, try decoding it in the unpacked representation
-            unpacked::decode_array_unpacked_only::<T, N, E>(wire_type, value, buf, ctx)?;
+            _ = ctx.check(Canonicity::NotCanonical)?;
+            unpacked::decode_array_unpacked_only::<T, N, E>(wire_type, value, buf, ctx.expedient_context())?;
             Ok(Canonicity::NotCanonical)
         }
     }

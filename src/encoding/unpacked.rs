@@ -4,11 +4,7 @@ use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{
     Collection, DistinguishedCollection, EmptyState, ForOverwrite,
 };
-use crate::encoding::{
-    check_wire_type, peek_repeated_field, Capped, DecodeContext, DistinguishedEncoder,
-    DistinguishedValueEncoder, Encoder, FieldEncoder, General, Packed, TagMeasurer, TagRevWriter,
-    TagWriter, ValueEncoder, WireType, Wiretyped,
-};
+use crate::encoding::{check_wire_type, peek_repeated_field, Capped, DecodeContext, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General, Packed, RestrictedDecodeContext, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped};
 use crate::DecodeErrorKind::{InvalidValue, UnexpectedlyRepeated};
 use crate::{Canonicity, DecodeError};
 
@@ -109,26 +105,27 @@ pub(crate) fn decode_distinguished<T, E>(
     wire_type: WireType,
     collection: &mut T,
     mut buf: Capped<impl Buf + ?Sized>,
-    ctx: DecodeContext,
+    ctx: RestrictedDecodeContext,
 ) -> Result<Canonicity, DecodeError>
 where
     T: DistinguishedCollection,
     T::Item: ForOverwrite + Eq + DistinguishedValueEncoder<E>,
 {
     check_wire_type(<T::Item as Wiretyped<E>>::WIRE_TYPE, wire_type)?;
-    let mut canon = Canonicity::Canonical;
+    let canon = &mut Canonicity::Canonical;
     loop {
         // Decode one item
         let mut new_item = T::Item::for_overwrite();
         // Decoded field values are nested within the collection; empty values are OK
-        canon.update(
+        ctx.update(
+            canon,
             DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
                 &mut new_item,
                 buf.lend(),
                 ctx.clone(),
             )?,
-        );
-        canon.update(collection.insert_distinguished(new_item)?);
+        )?;
+        ctx.update(canon, collection.insert_distinguished(new_item)?)?;
 
         if let Some(next_wire_type) = peek_repeated_field(&mut buf) {
             check_wire_type(<T::Item as Wiretyped<E>>::WIRE_TYPE, next_wire_type)?;
@@ -136,7 +133,7 @@ where
             break;
         }
     }
-    Ok(canon)
+    Ok(*canon)
 }
 
 /// Decodes an array value from either packed or unpacked in distinguished mode. If there are
@@ -146,7 +143,7 @@ fn decode_distinguished_array_either_repr<T, const N: usize, E>(
     wire_type: WireType,
     arr: &mut [T; N],
     buf: Capped<impl Buf + ?Sized>,
-    ctx: DecodeContext,
+    ctx: RestrictedDecodeContext,
 ) -> Result<Canonicity, DecodeError>
 where
     T: Eq + ValueEncoder<E> + DistinguishedValueEncoder<E>,
@@ -157,7 +154,8 @@ where
         // We've encountered a length-delimited field when we aren't expecting one; try decoding
         // it in packed format instead.
         // The data is already known to be non-canonical; use expedient decoding
-        ValueEncoder::<Packed<E>>::decode_value(arr, buf, ctx)?;
+        _ = ctx.check(Canonicity::NotCanonical)?;
+        ValueEncoder::<Packed<E>>::decode_value(arr, buf, ctx.expedient_context())?;
         Ok(Canonicity::NotCanonical)
     } else {
         // Otherwise, decode in unpacked mode.
@@ -172,13 +170,13 @@ fn decode_distinguished_array_unpacked_only<T, const N: usize, E>(
     wire_type: WireType,
     arr: &mut [T; N],
     mut buf: Capped<impl Buf + ?Sized>,
-    ctx: DecodeContext,
+    ctx: RestrictedDecodeContext,
 ) -> Result<Canonicity, DecodeError>
 where
     T: Eq + DistinguishedValueEncoder<E>,
 {
     check_wire_type(<T as Wiretyped<E>>::WIRE_TYPE, wire_type)?;
-    let mut canon = Canonicity::Canonical;
+    let canon = &mut Canonicity::Canonical;
     for (i, dest) in arr.iter_mut().enumerate() {
         // The initial field key is consumed, but we must read the repeated field key for each one
         // after that.
@@ -191,19 +189,20 @@ where
             }
         }
         // Decode one item. Empty values are allowed
-        canon.update(
+        ctx.update(
+            canon,
             DistinguishedValueEncoder::<E>::decode_value_distinguished::<true>(
                 dest,
                 buf.lend(),
                 ctx.clone(),
             )?,
-        );
+        )?;
     }
     if peek_repeated_field(&mut buf).is_some() {
         // Too many value fields
         Err(DecodeError::new(InvalidValue))
     } else {
-        Ok(canon)
+        Ok(*canon)
     }
 }
 
@@ -280,7 +279,7 @@ where
         duplicated: bool,
         value: &mut C,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
@@ -291,7 +290,8 @@ where
             // We've encountered a length-delimited field when we aren't expecting one; try decoding
             // it in packed format instead.
             // The data is already known to be non-canonical; use expedient decoding
-            <C as ValueEncoder<Packed<E>>>::decode_value(value, buf, ctx)?;
+            _ = ctx.check(Canonicity::NotCanonical)?;
+            <C as ValueEncoder<Packed<E>>>::decode_value(value, buf, ctx.expedient_context())?;
             Ok(Canonicity::NotCanonical)
         } else {
             // Otherwise, decode in unpacked mode.
@@ -365,13 +365,13 @@ where
         duplicated: bool,
         value: &mut [T; N],
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
         }
-        let canon = decode_distinguished_array_either_repr(wire_type, value, buf, ctx)?;
-        Ok(if EmptyState::is_empty(value) {
+        let canon = decode_distinguished_array_either_repr(wire_type, value, buf, ctx.clone())?;
+        ctx.check(if EmptyState::is_empty(value) {
             Canonicity::NotCanonical
         } else {
             canon
@@ -454,7 +454,7 @@ where
         duplicated: bool,
         value: &mut Option<[T; N]>,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));

@@ -404,16 +404,6 @@ pub struct DecodeContext {
     recurse_count: u32,
 }
 
-// TODO(widders): consider a distinguished decode context which specifies the minimum tolerated
-//  canonicity that should not produce an error, allowing distinguished decoding methods to set a
-//  requirement ahead of time and get error location details (and early exit behavior) when that
-//  requirement is violated. setting NotCanonical would be the same as now; setting HasExtensions or
-//  Canonical would give new and potentially useful behavior.
-//
-//  potential downsides are that this might involve a lot of extra checks of the canonicity. maybe
-//  it would be fine since we already do that whenever we update it, and we have the option to make
-//  that operation a three-way update.
-
 impl Default for DecodeContext {
     #[inline]
     fn default() -> DecodeContext {
@@ -431,7 +421,7 @@ impl DecodeContext {
     /// to be used at the next level of recursion. Continue to use the old context
     // at the previous level of recursion.
     #[inline]
-    pub(crate) fn enter_recursion(&self) -> DecodeContext {
+    pub fn enter_recursion(&self) -> DecodeContext {
         DecodeContext {
             #[cfg(not(feature = "no-recursion-limit"))]
             recurse_count: self.recurse_count - 1,
@@ -445,13 +435,72 @@ impl DecodeContext {
     /// Returns `Err<DecodeError>` if the recursion limit has been reached.
     #[inline]
     #[allow(clippy::unnecessary_wraps)] // needed in other features
-    pub(crate) fn limit_reached(&self) -> Result<(), DecodeError> {
+    pub fn limit_reached(&self) -> Result<(), DecodeError> {
         #[cfg(not(feature = "no-recursion-limit"))]
         if self.recurse_count == 0 {
             return Err(DecodeError::new(
                 crate::DecodeErrorKind::RecursionLimitReached,
             ));
         }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RestrictedDecodeContext {
+    context: DecodeContext,
+    min_canonicity: Canonicity,
+}
+
+impl RestrictedDecodeContext {
+    pub fn new(min_canonicity: Canonicity) -> Self {
+        Self {
+            context: DecodeContext::default(),
+            min_canonicity,
+        }
+    }
+
+    /// Call this function before recursively decoding.
+    ///
+    /// There is no `exit` function since this function creates a new `DecodeContext`
+    /// to be used at the next level of recursion. Continue to use the old context
+    // at the previous level of recursion.
+    #[inline]
+    pub fn enter_recursion(&self) -> Self {
+        Self {
+            context: self.context.enter_recursion(),
+            ..*self
+        }
+    }
+
+    /// Checks whether the recursion limit has been reached in the stack of
+    /// decodes described by the `DecodeContext` at `self.ctx`.
+    ///
+    /// Returns `Ok<()>` if it is ok to continue recursing.
+    /// Returns `Err<DecodeError>` if the recursion limit has been reached.
+    #[inline]
+    pub fn limit_reached(&self) -> Result<(), DecodeError> {
+        self.context.limit_reached()
+    }
+
+    /// Returns the inner non-restricted context for expedient decoding.
+    pub fn expedient_context(&self) -> DecodeContext {
+        self.context.clone()
+    }
+
+    /// Checks the given canonicity against the minimum constraint that this context has.
+    #[inline]
+    pub fn check(&self, canon: Canonicity) -> Result<Canonicity, DecodeError> {
+        match (canon < self.min_canonicity, canon) {
+            (true, Canonicity::NotCanonical) => Err(DecodeError::new(NotCanonical)),
+            (true, Canonicity::HasExtensions) => Err(DecodeError::new(UnknownField)),
+            _ => Ok(canon),
+        }
+    }
+
+    #[inline]
+    pub fn update(&self, canon: &mut Canonicity, new: Canonicity) -> Result<(), DecodeError> {
+        canon.update(self.check(new)?);
         Ok(())
     }
 }
@@ -891,7 +940,7 @@ pub trait DistinguishedEncoder<E>: Encoder<E> {
         duplicated: bool,
         value: &mut Self,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError>;
 }
 
@@ -1468,7 +1517,7 @@ where
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Self,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError>;
 }
 
@@ -1541,7 +1590,7 @@ pub trait DistinguishedFieldEncoder<E> {
         wire_type: WireType,
         value: &mut Self,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError>;
 }
 
@@ -1554,11 +1603,11 @@ where
         wire_type: WireType,
         value: &mut T,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         check_wire_type(Self::WIRE_TYPE, wire_type)?;
-        let canon = Self::decode_value_distinguished::<ALLOW_EMPTY>(value, buf, ctx)?;
-        Ok(if !T::CHECKS_EMPTY && !ALLOW_EMPTY && value.is_empty() {
+        let canon = Self::decode_value_distinguished::<ALLOW_EMPTY>(value, buf, ctx.clone())?;
+        ctx.check(if !T::CHECKS_EMPTY && !ALLOW_EMPTY && value.is_empty() {
             Canonicity::NotCanonical
         } else {
             canon
@@ -1639,7 +1688,7 @@ where
         duplicated: bool,
         value: &mut Option<T>,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if duplicated {
             return Err(DecodeError::new(UnexpectedlyRepeated));
@@ -1893,7 +1942,7 @@ pub trait DistinguishedOneof: Oneof {
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError>;
 }
 
@@ -1907,7 +1956,7 @@ where
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         DistinguishedOneof::oneof_decode_field_distinguished(&mut **value, tag, wire_type, buf, ctx)
     }
@@ -1921,7 +1970,7 @@ pub trait NonEmptyDistinguishedOneof: Sized {
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<(Self, Canonicity), DecodeError>;
 }
 
@@ -1934,7 +1983,7 @@ where
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<(Self, Canonicity), DecodeError> {
         NonEmptyDistinguishedOneof::oneof_decode_field_distinguished(tag, wire_type, buf, ctx)
             .map(|(val, canon)| (Box::new(val), canon))
@@ -1952,7 +2001,7 @@ where
         tag: u32,
         wire_type: WireType,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         if let Some(already) = value {
             Err(DecodeError::new(if already.oneof_current_tag() == tag {
@@ -1961,10 +2010,12 @@ where
                 ConflictingFields
             }))
         } else {
-            T::oneof_decode_field_distinguished(tag, wire_type, buf, ctx).map(|(decoded, canon)| {
-                *value = Some(decoded);
-                canon
-            })
+            T::oneof_decode_field_distinguished(tag, wire_type, buf, ctx.clone()).and_then(
+                |(decoded, canon)| {
+                    *value = Some(decoded);
+                    ctx.check(canon)
+                },
+            )
         }
         .map_err(|mut err| {
             let (msg, field) = T::oneof_variant_name(tag);
@@ -2100,7 +2151,7 @@ macro_rules! delegate_encoding {
                 duplicated: bool,
                 value: &mut $value_ty,
                 buf: $crate::encoding::Capped<B>,
-                ctx: $crate::encoding::DecodeContext,
+                ctx: $crate::encoding::RestrictedDecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
                 $crate::encoding::DistinguishedEncoder::<$to_ty>::decode_distinguished(
                     wire_type,
@@ -2200,7 +2251,7 @@ macro_rules! delegate_value_encoding {
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $value_ty,
                 buf: $crate::encoding::Capped<impl $crate::bytes::Buf + ?Sized>,
-                ctx: $crate::encoding::DecodeContext,
+                ctx: $crate::encoding::RestrictedDecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
                 $crate::encoding::DistinguishedValueEncoder::<$to_ty>::
                     decode_value_distinguished::<ALLOW_EMPTY>
@@ -2300,11 +2351,11 @@ macro_rules! encoder_where_value_encoder {
         {
             #[inline(always)]
             fn decode_distinguished<B: Buf + ?Sized>(
-                wire_type: WireType,
+                wire_type: $crate::encoding::WireType,
                 duplicated: bool,
                 value: &mut T,
-                buf: Capped<B>,
-                ctx: DecodeContext,
+                buf: $crate::encoding::Capped<B>,
+                ctx: $crate::encoding::RestrictedDecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
                 if duplicated {
                     return Err(
@@ -2404,7 +2455,7 @@ mod test {
     }
 
     macro_rules! check_type {
-        ($kind:ident, $encoder_trait:ident, $decode:ident $(, enforce with $require:ident)?) => {
+        ($kind:ident, $encoder_trait:ident, $context:expr, $decode:ident) => {
             pub mod $kind {
                 use crate::buf::ReverseBuffer;
                 use super::*;
@@ -2489,14 +2540,13 @@ mod test {
                         check_legal_remaining(tag, wire_type, buf.remaining())?;
 
                         let mut roundtrip_value = T::for_overwrite();
-                        <T as $encoder_trait<E>>::$decode(
+                        _ = <T as $encoder_trait<E>>::$decode(
                             wire_type,
                             false,
                             &mut roundtrip_value,
                             buf.lend(),
-                            DecodeContext::default(),
+                            $context,
                         )
-                        $(.$require())?
                         .map_err(|error| TestCaseError::fail(error.to_string()))?;
 
                         prop_assert!(
@@ -2591,14 +2641,13 @@ mod test {
                             decoded_wire_type
                         );
 
-                        <T as $encoder_trait<E>>::$decode(
+                        _ = <T as $encoder_trait<E>>::$decode(
                             wire_type,
                             false,
                             &mut roundtrip_value,
                             buf.lend(),
-                            DecodeContext::default(),
+                            $context,
                         )
-                        $(.$require())?
                         .map_err(|error| TestCaseError::fail(error.to_string()))?;
 
                         prop_assert!(
@@ -2627,9 +2676,13 @@ mod test {
             pub(crate) const VALUE: bool = true;
         }
     }
-    check_type!(expedient, Encoder, decode);
-    check_type!(distinguished, DistinguishedEncoder, decode_distinguished,
-        enforce with canonical);
+    check_type!(expedient, Encoder, DecodeContext::default(), decode);
+    check_type!(
+        distinguished,
+        DistinguishedEncoder,
+        RestrictedDecodeContext::new(Canonicity::Canonical),
+        decode_distinguished
+    );
 
     /// Types that have an empty state should have a consistent implementation; this can be
     /// especially important for types that use proxied encoding, which may want to keep emptiness
@@ -2729,10 +2782,9 @@ mod test {
                 false,
                 &mut decoded,
                 capped,
-                DecodeContext::default(),
-            )
-            .expect("decoding a plain field with an encoded defaulted value should succeed"),
-            Canonicity::NotCanonical
+                RestrictedDecodeContext::new(Canonicity::NotCanonical),
+            ),
+            Ok(Canonicity::NotCanonical)
         );
         assert!(decoded.is_empty());
     }
@@ -2881,7 +2933,7 @@ mod test {
         let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished::<true>(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
-            DecodeContext::default(),
+            RestrictedDecodeContext::new(Canonicity::NotCanonical),
         );
         assert_eq!(
             res.expect_err("unaligned packed fixed64 decoded without error")
@@ -2911,7 +2963,7 @@ mod test {
         let res = DistinguishedValueEncoder::<Packed<Fixed>>::decode_value_distinguished::<true>(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
-            DecodeContext::default(),
+            RestrictedDecodeContext::new(Canonicity::NotCanonical),
         );
         assert_eq!(
             res.expect_err("unaligned packed fixed32 decoded without error")
@@ -2944,7 +2996,7 @@ mod test {
         let res = DistinguishedValueEncoder::<Map<Fixed, Fixed>>::decode_value_distinguished::<true>(
             &mut parsed,
             Capped::new(&mut buf.as_slice()),
-            DecodeContext::default(),
+            RestrictedDecodeContext::new(Canonicity::NotCanonical),
         );
         assert_eq!(
             res.expect_err("unaligned 12-byte map decoded without error")
@@ -3221,7 +3273,7 @@ mod test {
                 false,
                 &mut out,
                 Capped::new(&mut [0u8; 0].as_slice()),
-                DecodeContext::default(),
+                RestrictedDecodeContext::new(Canonicity::NotCanonical),
             ),
             Err(DecodeError::new(WrongWireType))
         );

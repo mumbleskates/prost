@@ -5,7 +5,7 @@ use crate::encoding::value_traits::{DistinguishedMapping, Mapping};
 use crate::encoding::{
     encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Canonicity,
     Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, ForOverwrite,
-    ValueEncoder, WireType, Wiretyped,
+    RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeErrorKind::Truncated;
 
@@ -116,7 +116,7 @@ where
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut M,
         mut buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut capped = buf.take_length_delimited()?;
         // MSRV: this could be .is_some_and(..)
@@ -130,27 +130,27 @@ where
             // No number of fixed-sized key+value pairs can pack evenly into this size.
             return Err(DecodeError::new(Truncated));
         }
-        let mut canon = Canonicity::Canonical;
+        let canon = &mut Canonicity::Canonical;
         while capped.has_remaining()? {
             let mut new_key = K::for_overwrite();
             let mut new_val = V::for_overwrite();
-            canon.update(
+            ctx.update(canon,
                 DistinguishedValueEncoder::<KE>::decode_value_distinguished::<true>(
                     &mut new_key,
                     capped.lend(),
                     ctx.clone(),
                 )?,
-            );
-            canon.update(
+            )?;
+            ctx.update(canon,
                 DistinguishedValueEncoder::<VE>::decode_value_distinguished::<true>(
                     &mut new_val,
                     capped.lend(),
                     ctx.clone(),
                 )?,
-            );
-            canon.update(value.insert_distinguished(new_key, new_val)?);
+            )?;
+            ctx.update(canon, value.insert_distinguished(new_key, new_val)?)?;
         }
-        Ok(canon)
+        Ok(*canon)
     }
 }
 

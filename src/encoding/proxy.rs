@@ -1,7 +1,5 @@
 use crate::buf::ReverseBuf;
-use crate::encoding::{
-    Capped, DecodeContext, DistinguishedValueEncoder, ValueEncoder, WireType, Wiretyped,
-};
+use crate::encoding::{Capped, DecodeContext, DistinguishedValueEncoder, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
 use crate::{Canonicity, DecodeError, DecodeErrorKind};
 use bytes::{Buf, BufMut};
 use core::ops::Deref;
@@ -103,7 +101,7 @@ where
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Self,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         let mut proxy = T::new_proxy();
         let mut canon = DistinguishedValueEncoder::<E>::decode_value_distinguished::<ALLOW_EMPTY>(

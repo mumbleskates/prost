@@ -8,10 +8,7 @@ use core::ops::Index;
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::{
-    encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState,
-    ForOverwrite, RuntimeTagMeasurer, TagMeasurer, TagRevWriter, TagWriter, WireType,
-};
+use crate::encoding::{encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState, ForOverwrite, RestrictedDecodeContext, RuntimeTagMeasurer, TagMeasurer, TagRevWriter, TagWriter, WireType};
 use crate::iter::FlatAdapter;
 use crate::DecodeErrorKind::Truncated;
 use crate::{Canonicity, DecodeError, Message, RawDistinguishedMessage, RawMessage};
@@ -395,12 +392,12 @@ impl RawDistinguishedMessage for OpaqueMessage<'_> {
         wire_type: WireType,
         duplicated: bool,
         buf: Capped<B>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError>
     where
         Self: Sized,
     {
-        self.raw_decode_field(tag, wire_type, duplicated, buf, ctx)?;
+        self.raw_decode_field(tag, wire_type, duplicated, buf, ctx.expedient_context())?;
         Ok(Canonicity::Canonical)
     }
 }

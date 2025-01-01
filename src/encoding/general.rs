@@ -8,12 +8,7 @@ use core::str;
 use bytes::{Buf, BufMut, Bytes};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::{
-    delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint,
-    encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
-    DistinguishedProxiable, DistinguishedValueEncoder, Encoder, Fixed, Map, Packed, PlainBytes,
-    Proxiable, Proxied, Unpacked, ValueEncoder, Varint, WireType, Wiretyped,
-};
+use crate::encoding::{delegate_encoding, delegate_value_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError, DistinguishedProxiable, DistinguishedValueEncoder, Encoder, Fixed, Map, Packed, PlainBytes, Proxiable, Proxied, RestrictedDecodeContext, Unpacked, ValueEncoder, Varint, WireType, Wiretyped};
 use crate::message::{merge, merge_distinguished, RawDistinguishedMessage, RawMessage};
 use crate::DecodeErrorKind::InvalidValue;
 use crate::{Blob, DecodeErrorKind};
@@ -137,9 +132,9 @@ impl DistinguishedValueEncoder<General> for String {
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut String,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx)?;
+        Self::decode_value(value, buf, ctx.expedient_context())?;
         Ok(Canonicity::Canonical)
     }
 }
@@ -191,7 +186,7 @@ impl DistinguishedValueEncoder<General> for Cow<'_, str> {
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Cow<str>,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         DistinguishedValueEncoder::<General>::decode_value_distinguished::<ALLOW_EMPTY>(
             value.to_mut(),
@@ -251,9 +246,9 @@ impl DistinguishedValueEncoder<General> for Bytes {
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Bytes,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx)?;
+        Self::decode_value(value, buf, ctx.expedient_context())?;
         Ok(Canonicity::Canonical)
     }
 }
@@ -304,7 +299,7 @@ impl DistinguishedValueEncoder<General> for Blob {
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut Blob,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         DistinguishedValueEncoder::<PlainBytes>::decode_value_distinguished::<ALLOW_EMPTY>(
             &mut **value,
@@ -444,7 +439,7 @@ where
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut T,
         mut buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
         ctx.limit_reached()?;
         let buf = buf.take_length_delimited()?;

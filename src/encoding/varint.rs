@@ -1,9 +1,5 @@
 use crate::buf::ReverseBuf;
-use crate::encoding::{
-    encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Buf, BufMut,
-    Canonicity, Capped, DecodeContext, DistinguishedValueEncoder, Encoder, ValueEncoder, WireType,
-    Wiretyped,
-};
+use crate::encoding::{encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Buf, BufMut, Canonicity, Capped, DecodeContext, DistinguishedValueEncoder, Encoder, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
 use crate::DecodeError;
 use crate::DecodeErrorKind::OutOfDomainValue;
 
@@ -100,9 +96,9 @@ macro_rules! varint {
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut $ty,
                 buf: Capped<impl Buf + ?Sized>,
-                ctx: DecodeContext,
+                ctx: RestrictedDecodeContext,
             ) -> Result<Canonicity, DecodeError> {
-                ValueEncoder::<Varint>::decode_value(value, buf, ctx)?;
+                ValueEncoder::<Varint>::decode_value(value, buf, ctx.expedient_context())?;
                 Ok(Canonicity::Canonical)
             }
         }

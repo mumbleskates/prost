@@ -131,7 +131,7 @@ macro_rules! underived_decode_distinguished {
                 Result::<_, crate::DecodeError>::Ok(Canonicity::NotCanonical)
             } else {
                 ctx.limit_reached()?;
-                let mut canon = Canonicity::Canonical;
+                let canon = &mut Canonicity::Canonical;
                 let ctx = ctx.enter_recursion();
                 let tr = &mut TagReader::new();
                 let mut last_tag = None::<u32>;
@@ -141,24 +141,27 @@ macro_rules! underived_decode_distinguished {
                     last_tag = Some(tag);
                     match tag {
                         $($tag => {
-                            canon.update(DistinguishedEncoder::<$encoder>::decode_distinguished(
-                                wire_type,
-                                duplicated,
-                                $target,
-                                buf.lend(),
-                                ctx.clone(),
-                            ).map_err(|mut error| {
-                                error.push(stringify!($name), stringify!($field_name));
-                                error
-                            })?);
+                            ctx.update(
+                                canon,
+                                DistinguishedEncoder::<$encoder>::decode_distinguished(
+                                    wire_type,
+                                    duplicated,
+                                    $target,
+                                    buf.lend(),
+                                    ctx.clone(),
+                                ).map_err(|mut error| {
+                                    error.push(stringify!($name), stringify!($field_name));
+                                    error
+                                })?,
+                            )?;
                         })*
                         _ => {
                             skip_field(wire_type, buf.lend())?;
-                            canon.update(Canonicity::HasExtensions);
+                            ctx.update(canon, Canonicity::HasExtensions)?;
                         },
                     }
                 }
-                Result::<_, crate::DecodeError>::Ok(canon)
+                Result::<_, crate::DecodeError>::Ok(*canon)
             }
         }
     };

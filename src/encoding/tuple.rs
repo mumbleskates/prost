@@ -21,8 +21,8 @@ use crate::buf::ReverseBuf;
 use crate::encoding::{
     delegate_value_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder,
     prepend_varint, skip_field, Canonicity, Capped, DecodeContext, DistinguishedEncoder,
-    DistinguishedValueEncoder, EmptyState, Encoder, General, TagReader, TagRevWriter, TagWriter,
-    TrivialTagMeasurer, ValueEncoder, WireType, Wiretyped,
+    DistinguishedValueEncoder, EmptyState, Encoder, General, RestrictedDecodeContext, TagReader,
+    TagRevWriter, TagWriter, TrivialTagMeasurer, ValueEncoder, WireType, Wiretyped,
 };
 use crate::DecodeError;
 
@@ -133,7 +133,7 @@ macro_rules! impl_tuple {
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut Self,
                 mut buf: Capped<impl Buf + ?Sized>,
-                ctx: DecodeContext,
+                ctx: RestrictedDecodeContext,
             ) -> Result<Canonicity, DecodeError>
             where
                 Self: Sized,
@@ -143,10 +143,10 @@ macro_rules! impl_tuple {
                 // bytes. It is far cheaper to check here than to check after the value has been
                 // decoded and checking the value's `is_empty()`.
                 if !ALLOW_EMPTY && buf.remaining_before_cap() == 0 {
-                    return Ok(Canonicity::NotCanonical);
+                    return ctx.check(Canonicity::NotCanonical);
                 }
                 ctx.limit_reached()?;
-                let mut canon = Canonicity::Canonical;
+                let canon = &mut Canonicity::Canonical;
                 let ctx = ctx.enter_recursion();
                 let tr = &mut TagReader::new();
                 let mut last_tag = None::<u32>;
@@ -157,24 +157,28 @@ macro_rules! impl_tuple {
                     // Decode the field. Each tuple field has a tag corresponding to its index.
                     match tag {
                         $($numbers => {
-                            canon.update($letters::decode_distinguished(
-                                wire_type,
-                                duplicated,
-                                &mut value.$numbers,
-                                buf.lend(),
-                                ctx.clone(),
-                            ).map_err(|mut error| {
-                                error.push($name, stringify!($numbers));
-                                error
-                            })?);
+                            ctx.update(
+                                canon,
+                                $letters::decode_distinguished(
+                                    wire_type,
+                                    duplicated,
+                                    &mut value.$numbers,
+                                    buf.lend(),
+                                    ctx.clone(),
+                                )
+                                    .map_err(|mut error| {
+                                        error.push($name, stringify!($numbers));
+                                        error
+                                    })?
+                            )?;
                         })*
                         _ => {
                             skip_field(wire_type, buf.lend())?;
-                            canon.update(Canonicity::HasExtensions);
+                            ctx.update(canon, Canonicity::HasExtensions)?;
                         },
                     }
                 }
-                Ok(canon)
+                Ok(*canon)
             }
         }
 

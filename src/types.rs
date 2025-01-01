@@ -7,7 +7,9 @@ use core::ops::{Deref, DerefMut};
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::{skip_field, Canonicity, Capped, DecodeContext, WireType};
+use crate::encoding::{
+    skip_field, Canonicity, Capped, DecodeContext, RestrictedDecodeContext, WireType,
+};
 use crate::message::{RawDistinguishedMessage, RawMessage};
 use crate::DecodeError;
 
@@ -178,12 +180,12 @@ impl RawDistinguishedMessage for () {
         wire_type: WireType,
         _duplicated: bool,
         buf: Capped<B>,
-        _ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError>
     where
         Self: Sized,
     {
         skip_field(wire_type, buf)?;
-        Ok(Canonicity::HasExtensions)
+        ctx.check(Canonicity::HasExtensions)
     }
 }

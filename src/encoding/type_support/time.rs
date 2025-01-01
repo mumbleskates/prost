@@ -391,10 +391,11 @@ mod utcoffset {
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{
         Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, ForOverwrite, General,
-        ValueEncoder, WireType,
+        ValueEncoder, WireType, RestrictedDecodeContext,
     };
     use crate::DecodeError;
     use crate::DecodeErrorKind::InvalidValue;
+    use crate::Canonicity::NotCanonical;
     use alloc::vec::Vec;
     use time::UtcOffset;
 
@@ -430,7 +431,7 @@ mod utcoffset {
                 ValueEncoder::<General>::decode_value(
                     &mut utc_off,
                     Capped::new(&mut buf.as_slice()),
-                    DecodeContext::default()
+                    DecodeContext::default(),
                 ),
                 Err(DecodeError::new(InvalidValue))
             );
@@ -438,7 +439,7 @@ mod utcoffset {
                 DistinguishedValueEncoder::<General>::decode_value_distinguished::<true>(
                     &mut utc_off,
                     Capped::new(&mut buf.as_slice()),
-                    DecodeContext::default()
+                    RestrictedDecodeContext::new(NotCanonical),
                 ),
                 Err(DecodeError::new(InvalidValue))
             );

@@ -1,9 +1,6 @@
 use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::for_overwrite_via_default;
-use crate::encoding::{
-    encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext,
-    DistinguishedValueEncoder, EmptyState, General, ValueEncoder, WireType, Wiretyped,
-};
+use crate::encoding::{encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, General, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
 use crate::DecodeErrorKind::InvalidValue;
 use crate::{Canonicity, DecodeError};
 use bytes::{Buf, BufMut};
@@ -65,9 +62,9 @@ impl DistinguishedValueEncoder<General> for bytestring::ByteString {
     fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
         value: &mut bytestring::ByteString,
         buf: Capped<impl Buf + ?Sized>,
-        ctx: DecodeContext,
+        ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx)?;
+        Self::decode_value(value, buf, ctx.expedient_context())?;
         Ok(Canonicity::Canonical)
     }
 }

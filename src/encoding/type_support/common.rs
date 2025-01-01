@@ -6,10 +6,7 @@ pub(crate) mod time_proxies {
         underived_prepend,
     };
     use crate::encoding::value_traits::empty_state_via_default;
-    use crate::encoding::{
-        Capped, DecodeContext, DistinguishedValueEncoder, Fixed, General, ValueEncoder, WireType,
-        Wiretyped,
-    };
+    use crate::encoding::{Capped, DecodeContext, DistinguishedValueEncoder, Fixed, General, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
     use crate::DecodeErrorKind::InvalidValue;
     use crate::{Canonicity, DecodeError};
     use bytes::{Buf, BufMut};
@@ -71,7 +68,7 @@ pub(crate) mod time_proxies {
         fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
             value: &mut Self,
             mut buf: Capped<impl Buf + ?Sized>,
-            ctx: DecodeContext,
+            ctx: RestrictedDecodeContext,
         ) -> Result<Canonicity, DecodeError> {
             underived_decode_distinguished!(TimeDelta {
                 1: General => secs: &mut value.secs,
