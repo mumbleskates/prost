@@ -881,10 +881,13 @@ fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
 
         quote! {
             #(#tags)* => {
-                canon.update(#decode.map_err(|mut error| {
-                    error.push(STRUCT_NAME, stringify!(#field_ident));
-                    error
-                })?);
+                ctx.update(
+                    canon,
+                    #decode.map_err(|mut error| {
+                        error.push(STRUCT_NAME, stringify!(#field_ident));
+                        error
+                    })?,
+                )?;
             },
         }
     });
@@ -907,21 +910,21 @@ fn try_distinguished_message(input: TokenStream) -> Result<TokenStream, Error> {
                 wire_type: ::bilrost::encoding::WireType,
                 duplicated: bool,
                 buf: ::bilrost::encoding::Capped<__B>,
-                ctx: ::bilrost::encoding::DecodeContext,
+                ctx: ::bilrost::encoding::RestrictedDecodeContext,
             ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError>
             where
                 __B: ::bilrost::bytes::Buf + ?Sized,
             {
                 #struct_name
-                let mut canon = ::bilrost::Canonicity::Canonical;
+                let canon = &mut ::bilrost::Canonicity::Canonical;
                 match tag {
                     #(#decode)*
                     _ => {
-                        canon.update(::bilrost::Canonicity::HasExtensions);
+                        ctx.update(canon, ::bilrost::Canonicity::HasExtensions)?;
                         ::bilrost::encoding::skip_field(wire_type, buf)?;
                     }
                 }
-                ::core::result::Result::Ok(canon)
+                ::core::result::Result::Ok(*canon)
             }
         }
     };
@@ -974,7 +977,7 @@ fn distinguished_message_via_oneof(input: DeriveInput) -> Result<TokenStream, Er
                 wire_type: ::bilrost::encoding::WireType,
                 _duplicated: bool,
                 buf: ::bilrost::encoding::Capped<__B>,
-                ctx: ::bilrost::encoding::DecodeContext,
+                ctx: ::bilrost::encoding::RestrictedDecodeContext,
             ) -> ::core::result::Result<::bilrost::Canonicity, ::bilrost::DecodeError>
             where
                 __B: ::bilrost::bytes::Buf + ?Sized,
@@ -988,7 +991,7 @@ fn distinguished_message_via_oneof(input: DeriveInput) -> Result<TokenStream, Er
                         ctx,
                     )
                 } else {
-                    ::core::result::Result::Ok(::bilrost::Canonicity::HasExtensions)
+                    ctx.check(::bilrost::Canonicity::HasExtensions)
                 }
             }
         }
@@ -1184,12 +1187,12 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
             fn decode_value_distinguished<const ALLOW_EMPTY: bool>(
                 value: &mut Self,
                 buf: ::bilrost::encoding::Capped<impl ::bilrost::bytes::Buf + ?Sized>,
-                ctx: ::bilrost::encoding::DecodeContext,
+                ctx: ::bilrost::encoding::RestrictedDecodeContext,
             ) -> Result<::bilrost::Canonicity, ::bilrost::DecodeError> {
                 ::bilrost::encoding::ValueEncoder::<::bilrost::encoding::General>::decode_value(
                     value,
                     buf,
-                    ctx,
+                    ctx.expedient_context(),
                 )?;
                 ::core::result::Result::Ok(::bilrost::Canonicity::Canonical)
             }
@@ -1639,7 +1642,12 @@ impl ToTokens for DecoderForOneof<'_> {
             tokens.append_all(quote! {
                 #tag => {
                     let mut new_value = ::bilrost::encoding::ForOverwrite::for_overwrite();
-                    #decode.map(|canon| (#ident::#variant_ident #with_new_value, canon))
+                    #decode.and_then(|canon| {
+                        ::core::result::Result::Ok((
+                            #ident::#variant_ident #with_new_value,
+                            ctx.check(canon)?
+                        ))
+                    })
                 }
             })
         } else {
@@ -1749,7 +1757,7 @@ fn try_distinguished_oneof(input: TokenStream) -> Result<TokenStream, Error> {
                 tag: u32,
                 wire_type: ::bilrost::encoding::WireType,
                 buf: ::bilrost::encoding::Capped<__B>,
-                ctx: ::bilrost::encoding::DecodeContext,
+                ctx: ::bilrost::encoding::RestrictedDecodeContext,
             ) -> ::core::result::Result<#decode_field_return_ty, ::bilrost::DecodeError> {
                 #decode
             }

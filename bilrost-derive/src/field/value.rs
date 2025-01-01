@@ -223,7 +223,7 @@ impl Field {
                         wire_type,
                         #ident,
                         buf,
-                        ctx,
+                        ctx.clone(),
                     )
             )
         } else {
@@ -233,7 +233,7 @@ impl Field {
                     duplicated,
                     #ident,
                     buf,
-                    ctx,
+                    ctx.clone(),
                 )
             )
         }

@@ -80,7 +80,7 @@ impl Field {
                 tag,
                 wire_type,
                 buf,
-                ctx,
+                ctx.clone(),
             )
         )
     }
