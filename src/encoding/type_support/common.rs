@@ -84,6 +84,7 @@ pub(crate) mod time_proxies {
 /// This is where we show that we have equivalent encodings for the time and chrono crate types.
 #[cfg(all(test, feature = "chrono", feature = "time"))]
 mod chrono_time_value_compat {
+    use crate::encoding::type_support::time::RANDOM_SAMPLES;
     use crate::encoding::type_support::{chrono as impl_chrono, time as impl_time};
     use crate::encoding::{EmptyState, General, Proxiable, ValueEncoder};
     use alloc::fmt::Debug;
@@ -92,8 +93,6 @@ mod chrono_time_value_compat {
     use core::iter::repeat_with;
     use itertools::iproduct;
     use rand::{thread_rng, Rng};
-
-    const RANDOM_SAMPLES: usize = impl_time::RANDOM_SAMPLES as usize;
 
     fn assert_same_encoding<T, U>(t: &T, u: &U)
     where

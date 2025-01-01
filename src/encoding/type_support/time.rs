@@ -16,7 +16,7 @@ pub(super) use {
 };
 
 #[cfg(test)]
-pub(super) const RANDOM_SAMPLES: u32 = 100;
+pub(super) const RANDOM_SAMPLES: usize = 100;
 
 impl ForOverwrite for Date {
     fn for_overwrite() -> Self {
@@ -79,6 +79,7 @@ mod date {
     use super::RANDOM_SAMPLES;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
+    use core::iter::repeat_with;
     use rand::{thread_rng, Rng};
     use time::Date;
     use time::Month::{January, June};
@@ -97,16 +98,9 @@ mod date {
     #[test]
     fn check_type() {
         let mut rng = thread_rng();
-
-        for date in test_dates() {
+        for date in test_dates().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
-        }
-
-        for i in 0..RANDOM_SAMPLES {
-            let date: Date = rng.gen();
-            expedient::check_type(date, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(date, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(Date, via proxy);
@@ -185,6 +179,7 @@ mod time_ty {
     use super::RANDOM_SAMPLES;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
+    use core::iter::repeat_with;
     use rand::{thread_rng, Rng};
     use time::Time;
 
@@ -202,16 +197,9 @@ mod time_ty {
     #[test]
     fn check_type() {
         let mut rng = thread_rng();
-
-        for date in test_times() {
+        for date in test_times().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
-        }
-
-        for i in 0..RANDOM_SAMPLES {
-            let time: Time = rng.gen();
-            expedient::check_type(time, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(time, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(Time, via proxy);
@@ -286,6 +274,7 @@ mod primitivedatetime {
     use super::RANDOM_SAMPLES;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
+    use core::iter::repeat_with;
     use itertools::iproduct;
     use rand::{thread_rng, Rng};
     use time::Month::{August, March};
@@ -313,16 +302,12 @@ mod primitivedatetime {
     #[test]
     fn check_type() {
         let mut rng = thread_rng();
-
-        for datetime in test_datetimes() {
+        for datetime in test_datetimes()
+            .into_iter()
+            .chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
+        {
             expedient::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
-        }
-
-        for i in 0..RANDOM_SAMPLES {
-            let datetime: PrimitiveDateTime = rng.gen();
-            expedient::check_type(datetime, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(datetime, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(PrimitiveDateTime, via proxy);
@@ -401,6 +386,7 @@ mod utcoffset {
     use crate::DecodeError;
     use crate::DecodeErrorKind::InvalidValue;
     use alloc::vec::Vec;
+    use core::iter::repeat_with;
     use rand::{thread_rng, Rng};
     use time::UtcOffset;
 
@@ -417,16 +403,9 @@ mod utcoffset {
     #[test]
     fn check_type() {
         let mut rng = thread_rng();
-
-        for zone in test_zones() {
+        for zone in test_zones().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
             expedient::check_type(zone, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(zone, 123, WireType::LengthDelimited).unwrap();
-        }
-
-        for i in 0..RANDOM_SAMPLES {
-            let zone: UtcOffset = rng.gen();
-            expedient::check_type(zone, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(zone, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(UtcOffset, via proxy);
@@ -523,6 +502,7 @@ mod offsetdatetime {
     use super::{odt_compose, RANDOM_SAMPLES};
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::WireType;
+    use core::iter::repeat_with;
     use itertools::iproduct;
     use rand::{thread_rng, Rng};
     use time::OffsetDateTime;
@@ -530,17 +510,12 @@ mod offsetdatetime {
     #[test]
     fn check_type() {
         let mut rng = thread_rng();
-
-        for (datetime, zone) in iproduct!(test_datetimes(), test_zones()) {
+        for (datetime, zone) in iproduct!(test_datetimes(), test_zones())
+            .chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
+        {
             let odt = odt_compose(datetime, zone);
             expedient::check_type(odt, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(odt, 123, WireType::LengthDelimited).unwrap();
-        }
-
-        for i in 0..RANDOM_SAMPLES {
-            let odt: OffsetDateTime = rng.gen();
-            expedient::check_type(odt, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(odt, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(OffsetDateTime, via proxy);
@@ -593,6 +568,7 @@ mod duration {
     use super::RANDOM_SAMPLES;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
+    use core::iter::repeat_with;
     use rand::{thread_rng, Rng};
     use time::Duration;
 
@@ -611,16 +587,9 @@ mod duration {
     #[test]
     fn check_type() {
         let mut rng = thread_rng();
-
-        for duration in test_durations() {
+        for duration in test_durations().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
             expedient::check_type(duration, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(duration, 123, WireType::LengthDelimited).unwrap();
-        }
-
-        for i in 0..RANDOM_SAMPLES {
-            let duration: Duration = rng.gen();
-            expedient::check_type(duration, i, WireType::LengthDelimited).unwrap();
-            distinguished::check_type(duration, i, WireType::LengthDelimited).unwrap();
         }
     }
     check_type_empty!(Duration, via proxy);
