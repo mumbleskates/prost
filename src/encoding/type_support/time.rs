@@ -391,11 +391,11 @@ mod utcoffset {
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{
         Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, ForOverwrite, General,
-        ValueEncoder, WireType, RestrictedDecodeContext,
+        RestrictedDecodeContext, ValueEncoder, WireType,
     };
+    use crate::Canonicity::NotCanonical;
     use crate::DecodeError;
     use crate::DecodeErrorKind::InvalidValue;
-    use crate::Canonicity::NotCanonical;
     use alloc::vec::Vec;
     use time::UtcOffset;
 

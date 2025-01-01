@@ -1,6 +1,10 @@
 use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::for_overwrite_via_default;
-use crate::encoding::{encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, General, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
+use crate::encoding::{
+    encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext,
+    DistinguishedValueEncoder, EmptyState, General, RestrictedDecodeContext, ValueEncoder,
+    WireType, Wiretyped,
+};
 use crate::DecodeErrorKind::InvalidValue;
 use crate::{Canonicity, DecodeError};
 use bytes::{Buf, BufMut};

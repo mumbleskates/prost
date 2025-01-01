@@ -1,6 +1,9 @@
 use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::for_overwrite_via_default;
-use crate::encoding::{Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, General, PlainBytes, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
+use crate::encoding::{
+    Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, General, PlainBytes,
+    RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped,
+};
 use crate::{Canonicity, DecodeError};
 use alloc::vec::Vec;
 use bytes::{Buf, BufMut};

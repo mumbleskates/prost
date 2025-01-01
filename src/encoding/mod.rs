@@ -2457,22 +2457,15 @@ mod test {
     macro_rules! check_type {
         ($kind:ident, $encoder_trait:ident, $context:expr, $decode:ident) => {
             pub mod $kind {
-                use crate::buf::ReverseBuffer;
                 use super::*;
+                use crate::buf::ReverseBuffer;
 
-                pub fn check_type<T, E>(
-                    value: T,
-                    tag: u32,
-                    wire_type: WireType,
-                ) -> TestCaseResult
+                pub fn check_type<T, E>(value: T, tag: u32, wire_type: WireType) -> TestCaseResult
                 where
                     T: Debug + ForOverwrite + PartialEq + $encoder_trait<E>,
                 {
-                    let expected_len = <T as Encoder<E>>::encoded_len(
-                        tag,
-                        &value,
-                        &mut RuntimeTagMeasurer::new(),
-                    );
+                    let expected_len =
+                        <T as Encoder<E>>::encoded_len(tag, &value, &mut RuntimeTagMeasurer::new());
 
                     let mut forward_encoded = Vec::with_capacity(expected_len);
                     <T as Encoder<E>>::encode(

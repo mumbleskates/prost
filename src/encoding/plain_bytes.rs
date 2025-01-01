@@ -5,7 +5,11 @@ use core::ops::Deref;
 use crate::buf::ReverseBuf;
 use bytes::{Buf, BufMut};
 
-use crate::encoding::{const_varint, delegate_encoding, encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError, DistinguishedValueEncoder, Encoder, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
+use crate::encoding::{
+    const_varint, delegate_encoding, encode_varint, encoded_len_varint,
+    encoder_where_value_encoder, prepend_varint, Canonicity, Capped, DecodeContext, DecodeError,
+    DistinguishedValueEncoder, Encoder, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped,
+};
 use crate::DecodeErrorKind::InvalidValue;
 
 /// `PlainBytes` implements encoding for blob values directly into `Vec<u8>`, and provides the base

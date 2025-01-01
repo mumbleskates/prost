@@ -4,9 +4,12 @@ use alloc::vec::Vec;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use crate::buf::{ReverseBuf, ReverseBuffer};
-use crate::encoding::{encode_varint, encoded_len_varint, prepend_varint, Canonicity, Capped, DecodeContext, EmptyState, RestrictedDecodeContext, TagReader, WireType};
-use crate::{length_delimiter_len, DecodeError, EncodeError};
+use crate::encoding::{
+    encode_varint, encoded_len_varint, prepend_varint, Canonicity, Capped, DecodeContext,
+    EmptyState, RestrictedDecodeContext, TagReader, WireType,
+};
 use crate::Canonicity::NotCanonical;
+use crate::{length_delimiter_len, DecodeError, EncodeError};
 
 /// Merges fields from the given buffer, to its cap, into the given `TaggedDecodable` value.
 /// Implemented as a private standalone method to discourage "merging" as a usage pattern.
@@ -547,10 +550,7 @@ where
         Self::decode_restricted_capped(buf, NotCanonical)
     }
 
-    fn replace_distinguished_from<B: Buf>(
-        &mut self,
-        buf: B,
-    ) -> Result<Canonicity, DecodeError> {
+    fn replace_distinguished_from<B: Buf>(&mut self, buf: B) -> Result<Canonicity, DecodeError> {
         self.replace_restricted_from(buf, NotCanonical)
     }
 
@@ -602,46 +602,68 @@ where
         self.replace_restricted_from_capped(buf, NotCanonical)
     }
 
-    fn decode_restricted<B: Buf>(mut buf: B, restrict_to: Canonicity) -> Result<(Self, Canonicity), DecodeError>
+    fn decode_restricted<B: Buf>(
+        mut buf: B,
+        restrict_to: Canonicity,
+    ) -> Result<(Self, Canonicity), DecodeError>
     where
-        Self: Sized
+        Self: Sized,
     {
         Self::decode_restricted_capped(Capped::new(&mut buf), restrict_to)
     }
 
-    fn decode_restricted_length_delimited<B: Buf>(mut buf: B, restrict_to: Canonicity) -> Result<(Self, Canonicity), DecodeError>
+    fn decode_restricted_length_delimited<B: Buf>(
+        mut buf: B,
+        restrict_to: Canonicity,
+    ) -> Result<(Self, Canonicity), DecodeError>
     where
-        Self: Sized
+        Self: Sized,
     {
         Self::decode_restricted_capped(Capped::new_length_delimited(&mut buf)?, restrict_to)
     }
 
-    fn decode_restricted_capped<B: Buf + ?Sized>(buf: Capped<B>, restrict_to: Canonicity) -> Result<(Self, Canonicity), DecodeError>
+    fn decode_restricted_capped<B: Buf + ?Sized>(
+        buf: Capped<B>,
+        restrict_to: Canonicity,
+    ) -> Result<(Self, Canonicity), DecodeError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let mut message = Self::empty();
-        let canon = merge_distinguished(&mut message, buf, RestrictedDecodeContext::new(restrict_to))?;
+        let canon =
+            merge_distinguished(&mut message, buf, RestrictedDecodeContext::new(restrict_to))?;
         Ok((message, canon))
     }
 
-    fn replace_restricted_from<B: Buf>(&mut self, mut buf: B, restrict_to: Canonicity) -> Result<Canonicity, DecodeError>
+    fn replace_restricted_from<B: Buf>(
+        &mut self,
+        mut buf: B,
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError>
     where
-        Self: Sized
+        Self: Sized,
     {
         self.replace_restricted_from_capped(Capped::new(&mut buf), restrict_to)
     }
 
-    fn replace_restricted_from_length_delimited<B: Buf>(&mut self, mut buf: B, restrict_to: Canonicity) -> Result<Canonicity, DecodeError>
+    fn replace_restricted_from_length_delimited<B: Buf>(
+        &mut self,
+        mut buf: B,
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError>
     where
-        Self: Sized
+        Self: Sized,
     {
         self.replace_restricted_from_capped(Capped::new_length_delimited(&mut buf)?, restrict_to)
     }
 
-    fn replace_restricted_from_capped<B: Buf + ?Sized>(&mut self, buf: Capped<B>, restrict_to: Canonicity) -> Result<Canonicity, DecodeError>
+    fn replace_restricted_from_capped<B: Buf + ?Sized>(
+        &mut self,
+        buf: Capped<B>,
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError>
     where
-        Self: Sized
+        Self: Sized,
     {
         self.clear();
         merge_distinguished(self, buf, RestrictedDecodeContext::new(restrict_to)).map_err(|err| {
@@ -650,23 +672,43 @@ where
         })
     }
 
-    fn replace_restricted_from_slice(&mut self, buf: &[u8], restrict_to: Canonicity) -> Result<Canonicity, DecodeError> {
+    fn replace_restricted_from_slice(
+        &mut self,
+        buf: &[u8],
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError> {
         self.replace_restricted_from(buf, restrict_to)
     }
 
-    fn replace_restricted_from_dyn(&mut self, buf: &mut dyn Buf, restrict_to: Canonicity) -> Result<Canonicity, DecodeError> {
+    fn replace_restricted_from_dyn(
+        &mut self,
+        buf: &mut dyn Buf,
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError> {
         self.replace_restricted_from(buf, restrict_to)
     }
 
-    fn replace_restricted_from_length_delimited_slice(&mut self, buf: &[u8], restrict_to: Canonicity) -> Result<Canonicity, DecodeError> {
+    fn replace_restricted_from_length_delimited_slice(
+        &mut self,
+        buf: &[u8],
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError> {
         self.replace_restricted_from_length_delimited(buf, restrict_to)
     }
 
-    fn replace_restricted_from_length_delimited_dyn(&mut self, buf: &mut dyn Buf, restrict_to: Canonicity) -> Result<Canonicity, DecodeError> {
+    fn replace_restricted_from_length_delimited_dyn(
+        &mut self,
+        buf: &mut dyn Buf,
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError> {
         self.replace_restricted_from_length_delimited(buf, restrict_to)
     }
 
-    fn replace_restricted_from_capped_dyn(&mut self, buf: Capped<dyn Buf>, restrict_to: Canonicity) -> Result<Canonicity, DecodeError> {
+    fn replace_restricted_from_capped_dyn(
+        &mut self,
+        buf: Capped<dyn Buf>,
+        restrict_to: Canonicity,
+    ) -> Result<Canonicity, DecodeError> {
         self.replace_restricted_from_capped(buf, restrict_to)
     }
 }

@@ -134,14 +134,16 @@ where
         while capped.has_remaining()? {
             let mut new_key = K::for_overwrite();
             let mut new_val = V::for_overwrite();
-            ctx.update(canon,
+            ctx.update(
+                canon,
                 DistinguishedValueEncoder::<KE>::decode_value_distinguished::<true>(
                     &mut new_key,
                     capped.lend(),
                     ctx.clone(),
                 )?,
             )?;
-            ctx.update(canon,
+            ctx.update(
+                canon,
                 DistinguishedValueEncoder::<VE>::decode_value_distinguished::<true>(
                     &mut new_val,
                     capped.lend(),

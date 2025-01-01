@@ -4,7 +4,11 @@ use crate::buf::ReverseBuf;
 use crate::encoding::value_traits::{
     Collection, DistinguishedCollection, EmptyState, ForOverwrite,
 };
-use crate::encoding::{check_wire_type, peek_repeated_field, Capped, DecodeContext, DistinguishedEncoder, DistinguishedValueEncoder, Encoder, FieldEncoder, General, Packed, RestrictedDecodeContext, TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped};
+use crate::encoding::{
+    check_wire_type, peek_repeated_field, Capped, DecodeContext, DistinguishedEncoder,
+    DistinguishedValueEncoder, Encoder, FieldEncoder, General, Packed, RestrictedDecodeContext,
+    TagMeasurer, TagRevWriter, TagWriter, ValueEncoder, WireType, Wiretyped,
+};
 use crate::DecodeErrorKind::{InvalidValue, UnexpectedlyRepeated};
 use crate::{Canonicity, DecodeError};
 

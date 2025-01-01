@@ -6,7 +6,10 @@ pub(crate) mod time_proxies {
         underived_prepend,
     };
     use crate::encoding::value_traits::empty_state_via_default;
-    use crate::encoding::{Capped, DecodeContext, DistinguishedValueEncoder, Fixed, General, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
+    use crate::encoding::{
+        Capped, DecodeContext, DistinguishedValueEncoder, Fixed, General, RestrictedDecodeContext,
+        ValueEncoder, WireType, Wiretyped,
+    };
     use crate::DecodeErrorKind::InvalidValue;
     use crate::{Canonicity, DecodeError};
     use bytes::{Buf, BufMut};

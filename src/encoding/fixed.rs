@@ -3,7 +3,10 @@ use alloc::vec::Vec;
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::{delegate_encoding, encoder_where_value_encoder, Canonicity, Capped, DecodeContext, DistinguishedValueEncoder, Encoder, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
+use crate::encoding::{
+    delegate_encoding, encoder_where_value_encoder, Canonicity, Capped, DecodeContext,
+    DistinguishedValueEncoder, Encoder, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped,
+};
 use crate::DecodeError;
 use crate::DecodeErrorKind::Truncated;
 

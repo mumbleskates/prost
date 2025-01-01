@@ -8,7 +8,11 @@ use core::ops::Index;
 use bytes::{Buf, BufMut};
 
 use crate::buf::ReverseBuf;
-use crate::encoding::{encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState, ForOverwrite, RestrictedDecodeContext, RuntimeTagMeasurer, TagMeasurer, TagRevWriter, TagWriter, WireType};
+use crate::encoding::{
+    encode_varint, encoded_len_varint, prepend_varint, Capped, DecodeContext, EmptyState,
+    ForOverwrite, RestrictedDecodeContext, RuntimeTagMeasurer, TagMeasurer, TagRevWriter,
+    TagWriter, WireType,
+};
 use crate::iter::FlatAdapter;
 use crate::DecodeErrorKind::Truncated;
 use crate::{Canonicity, DecodeError, Message, RawDistinguishedMessage, RawMessage};

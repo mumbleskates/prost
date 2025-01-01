@@ -1,5 +1,9 @@
 use crate::buf::ReverseBuf;
-use crate::encoding::{encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Buf, BufMut, Canonicity, Capped, DecodeContext, DistinguishedValueEncoder, Encoder, RestrictedDecodeContext, ValueEncoder, WireType, Wiretyped};
+use crate::encoding::{
+    encode_varint, encoded_len_varint, encoder_where_value_encoder, prepend_varint, Buf, BufMut,
+    Canonicity, Capped, DecodeContext, DistinguishedValueEncoder, Encoder, RestrictedDecodeContext,
+    ValueEncoder, WireType, Wiretyped,
+};
 use crate::DecodeError;
 use crate::DecodeErrorKind::OutOfDomainValue;
 

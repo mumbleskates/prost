@@ -397,7 +397,9 @@ where
             // We've encountered the expected length-delimited type: decode it in packed format.
             // Set ALLOW_EMPTY to false: empty collections are not canonical
             let canon = DistinguishedValueEncoder::<Packed<E>>::decode_value_distinguished::<false>(
-                value, buf, ctx.clone(),
+                value,
+                buf,
+                ctx.clone(),
             )?;
             ctx.check(
                 if
@@ -411,7 +413,12 @@ where
         } else {
             // Otherwise, try decoding it in the unpacked representation
             _ = ctx.check(Canonicity::NotCanonical)?;
-            unpacked::decode_array_unpacked_only::<T, N, E>(wire_type, value, buf, ctx.expedient_context())?;
+            unpacked::decode_array_unpacked_only::<T, N, E>(
+                wire_type,
+                value,
+                buf,
+                ctx.expedient_context(),
+            )?;
             Ok(Canonicity::NotCanonical)
         }
     }
