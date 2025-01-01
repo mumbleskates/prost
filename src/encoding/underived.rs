@@ -156,8 +156,8 @@ macro_rules! underived_decode_distinguished {
                             )?;
                         })*
                         _ => {
-                            skip_field(wire_type, buf.lend())?;
                             ctx.update(canon, Canonicity::HasExtensions)?;
+                            skip_field(wire_type, buf.lend())?;
                         },
                     }
                 }

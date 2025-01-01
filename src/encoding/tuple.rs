@@ -173,8 +173,8 @@ macro_rules! impl_tuple {
                             )?;
                         })*
                         _ => {
-                            skip_field(wire_type, buf.lend())?;
                             ctx.update(canon, Canonicity::HasExtensions)?;
+                            skip_field(wire_type, buf.lend())?;
                         },
                     }
                 }

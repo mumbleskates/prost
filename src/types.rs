@@ -185,7 +185,8 @@ impl RawDistinguishedMessage for () {
     where
         Self: Sized,
     {
+        _ = ctx.check(Canonicity::HasExtensions)?;
         skip_field(wire_type, buf)?;
-        ctx.check(Canonicity::HasExtensions)
+        Ok(Canonicity::HasExtensions)
     }
 }
