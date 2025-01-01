@@ -246,6 +246,18 @@ where
             }
         }
         _ => {
+            let Err(err) = M::decode_restricted(data, Canonical) else {
+                return RoundtripResult::Error(err!(
+                    "decoded non-canonically but restricted mode did not err"
+                ));
+            };
+            if err.kind() != canon.canonical().unwrap_err() {
+                return RoundtripResult::Error(err!(
+                    "decoded non-canonically but restricted mode produced the wrong error: \
+                    expected {canon_err:?} but got {err}",
+                    canon_err = canon.canonical().unwrap_err(),
+                ));
+            }
             if buf1.as_slice() == data {
                 return RoundtripResult::Error(err!(
                     "decoded non-canonically but round tripped unchanged"
