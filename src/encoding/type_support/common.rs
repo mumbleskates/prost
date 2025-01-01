@@ -84,15 +84,13 @@ pub(crate) mod time_proxies {
 /// This is where we show that we have equivalent encodings for the time and chrono crate types.
 #[cfg(all(test, feature = "chrono", feature = "time"))]
 mod chrono_time_value_compat {
-    use crate::encoding::type_support::time::RANDOM_SAMPLES;
+    use crate::encoding::type_support::time::with_random_values;
     use crate::encoding::type_support::{chrono as impl_chrono, time as impl_time};
     use crate::encoding::{EmptyState, General, Proxiable, ValueEncoder};
     use alloc::fmt::Debug;
     use alloc::vec::Vec;
     use chrono::{Datelike, FixedOffset, Timelike};
-    use core::iter::repeat_with;
     use itertools::iproduct;
-    use rand::{thread_rng, Rng};
 
     fn assert_same_encoding<T, U>(t: &T, u: &U)
     where
@@ -118,16 +116,13 @@ mod chrono_time_value_compat {
 
     #[test]
     fn date() {
-        let mut rng = thread_rng();
         for chrono_date in impl_chrono::test_dates() {
             let Some(time_date) = date_c_to_t(chrono_date) else {
                 continue;
             };
             assert_same_encoding(&chrono_date, &time_date);
         }
-        for time_date in
-            impl_time::test_dates().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for time_date in with_random_values(impl_time::test_dates()) {
             let Some(chrono_date) = date_t_to_c(time_date) else {
                 continue;
             };
@@ -156,16 +151,13 @@ mod chrono_time_value_compat {
 
     #[test]
     fn time() {
-        let mut rng = thread_rng();
         for chrono_time in impl_chrono::test_times() {
             let Some(time_time) = time_c_to_t(chrono_time) else {
                 continue;
             };
             assert_same_encoding(&chrono_time, &time_time);
         }
-        for time_time in
-            impl_time::test_times().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for time_time in with_random_values(impl_time::test_times()) {
             let Some(chrono_time) = time_t_to_c(time_time) else {
                 continue;
             };
@@ -189,17 +181,13 @@ mod chrono_time_value_compat {
 
     #[test]
     fn datetime() {
-        let mut rng = thread_rng();
         for chrono_datetime in impl_chrono::test_datetimes() {
             let Some(time_datetime) = datetime_c_to_t(chrono_datetime) else {
                 continue;
             };
             assert_same_encoding(&chrono_datetime, &time_datetime);
         }
-        for time_datetime in impl_time::test_datetimes()
-            .into_iter()
-            .chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for time_datetime in with_random_values(impl_time::test_datetimes()) {
             let Some(chrono_datetime) = datetime_t_to_c(time_datetime) else {
                 continue;
             };
@@ -217,16 +205,13 @@ mod chrono_time_value_compat {
 
     #[test]
     fn zone() {
-        let mut rng = thread_rng();
         for chrono_offset in impl_chrono::test_zones() {
             let Some(time_offset) = offset_c_to_t(chrono_offset) else {
                 continue;
             };
             assert_same_encoding(&chrono_offset, &time_offset);
         }
-        for time_offset in
-            impl_time::test_zones().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for time_offset in with_random_values(impl_time::test_zones()) {
             let Some(chrono_offset) = offset_t_to_c(time_offset) else {
                 continue;
             };
@@ -262,7 +247,6 @@ mod chrono_time_value_compat {
 
     #[test]
     fn aware_date() {
-        let mut rng = thread_rng();
         for chrono_pair in iproduct!(impl_chrono::test_datetimes(), impl_chrono::test_zones()) {
             let chrono_aware = aware_compose_chrono(chrono_pair).unwrap();
             let Some(time_aware) = aware_c_to_t(chrono_aware) else {
@@ -270,9 +254,10 @@ mod chrono_time_value_compat {
             };
             assert_same_encoding(&chrono_aware, &time_aware);
         }
-        for time_pair in iproduct!(impl_time::test_datetimes(), impl_time::test_zones())
-            .chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for time_pair in with_random_values(iproduct!(
+            impl_time::test_datetimes(),
+            impl_time::test_zones()
+        )) {
             let time_aware = aware_compose_time(time_pair).unwrap();
             let Some(chrono_aware) = aware_t_to_c(time_aware) else {
                 continue;
@@ -298,19 +283,19 @@ mod chrono_time_value_compat {
 
     #[test]
     fn timedelta() {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
         for chrono_delta in impl_chrono::test_timedeltas()
-            .chain(repeat_with(|| impl_chrono::random_timedelta(&mut rng)))
-            .take(RANDOM_SAMPLES)
+            .chain(core::iter::repeat_with(|| {
+                impl_chrono::random_timedelta(&mut rng)
+            }))
+            .take(crate::encoding::type_support::time::RANDOM_SAMPLES)
         {
             let Some(time_delta) = delta_c_to_t(chrono_delta) else {
                 continue;
             };
             assert_same_encoding(&chrono_delta, &time_delta);
         }
-        for time_delta in
-            impl_time::test_durations().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for time_delta in with_random_values(impl_time::test_durations()) {
             let Some(chrono_delta) = delta_t_to_c(time_delta) else {
                 continue;
             };

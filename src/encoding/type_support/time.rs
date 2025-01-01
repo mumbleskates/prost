@@ -11,12 +11,31 @@ use time::{Date, Duration, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
 
 #[cfg(all(test, feature = "chrono"))]
 pub(super) use {
-    date::test_dates, duration::test_durations, primitivedatetime::test_datetimes,
-    time_ty::test_times, utcoffset::test_zones,
+    date::test_dates,
+    duration::test_durations,
+    helpers::{with_random_values, RANDOM_SAMPLES},
+    primitivedatetime::test_datetimes,
+    time_ty::test_times,
+    utcoffset::test_zones,
 };
 
 #[cfg(test)]
-pub(super) const RANDOM_SAMPLES: usize = 100;
+mod helpers {
+    use core::iter::repeat_with;
+    use rand::{thread_rng, Rng};
+
+    pub(in super::super) const RANDOM_SAMPLES: usize = 100;
+
+    pub(in super::super) fn with_random_values<It>(it: It) -> impl Iterator<Item = It::Item>
+    where
+        It: IntoIterator,
+        rand::distributions::Standard: rand::distributions::Distribution<It::Item>,
+    {
+        let mut rng = thread_rng();
+        it.into_iter()
+            .chain(repeat_with(move || rng.gen()).take(RANDOM_SAMPLES))
+    }
+}
 
 impl ForOverwrite for Date {
     fn for_overwrite() -> Self {
@@ -76,11 +95,9 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod date {
-    use super::RANDOM_SAMPLES;
+    use super::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
-    use core::iter::repeat_with;
-    use rand::{thread_rng, Rng};
     use time::Date;
     use time::Month::{January, June};
 
@@ -97,12 +114,12 @@ mod date {
 
     #[test]
     fn check_type() {
-        let mut rng = thread_rng();
-        for date in test_dates().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
+        for date in with_random_values(test_dates()) {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
         }
     }
+
     check_type_empty!(Date, via proxy);
     check_type_empty!(Date, via distinguished proxy);
 }
@@ -176,11 +193,9 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod time_ty {
-    use super::RANDOM_SAMPLES;
+    use super::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
-    use core::iter::repeat_with;
-    use rand::{thread_rng, Rng};
     use time::Time;
 
     pub(in super::super) fn test_times() -> impl Iterator<Item = Time> + Clone {
@@ -196,12 +211,12 @@ mod time_ty {
 
     #[test]
     fn check_type() {
-        let mut rng = thread_rng();
-        for date in test_times().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
+        for date in with_random_values(test_times()) {
             expedient::check_type(date, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(date, 123, WireType::LengthDelimited).unwrap();
         }
     }
+
     check_type_empty!(Time, via proxy);
     check_type_empty!(Time, via distinguished proxy);
 }
@@ -271,12 +286,10 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 mod primitivedatetime {
     use super::date::test_dates;
     use super::time_ty::test_times;
-    use super::RANDOM_SAMPLES;
+    use super::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
-    use core::iter::repeat_with;
     use itertools::iproduct;
-    use rand::{thread_rng, Rng};
     use time::Month::{August, March};
     use time::{Date, PrimitiveDateTime, Time};
 
@@ -301,15 +314,12 @@ mod primitivedatetime {
 
     #[test]
     fn check_type() {
-        let mut rng = thread_rng();
-        for datetime in test_datetimes()
-            .into_iter()
-            .chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for datetime in with_random_values(test_datetimes()) {
             expedient::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(datetime, 123, WireType::LengthDelimited).unwrap();
         }
     }
+
     check_type_empty!(PrimitiveDateTime, via proxy);
     check_type_empty!(PrimitiveDateTime, via distinguished proxy);
 }
@@ -377,7 +387,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<(Varint, Varint, Va
 
 #[cfg(test)]
 mod utcoffset {
-    use super::RANDOM_SAMPLES;
+    use super::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{
         Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, ForOverwrite, General,
@@ -386,8 +396,6 @@ mod utcoffset {
     use crate::DecodeError;
     use crate::DecodeErrorKind::InvalidValue;
     use alloc::vec::Vec;
-    use core::iter::repeat_with;
-    use rand::{thread_rng, Rng};
     use time::UtcOffset;
 
     pub(in super::super) fn test_zones() -> impl Iterator<Item = UtcOffset> + Clone {
@@ -402,12 +410,12 @@ mod utcoffset {
 
     #[test]
     fn check_type() {
-        let mut rng = thread_rng();
-        for zone in test_zones().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
+        for zone in with_random_values(test_zones()) {
             expedient::check_type(zone, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(zone, 123, WireType::LengthDelimited).unwrap();
         }
     }
+
     check_type_empty!(UtcOffset, via proxy);
     check_type_empty!(UtcOffset, via distinguished proxy);
 
@@ -499,25 +507,21 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 mod offsetdatetime {
     use super::primitivedatetime::test_datetimes;
     use super::utcoffset::test_zones;
-    use super::{odt_compose, RANDOM_SAMPLES};
+    use super::{odt_compose, with_random_values};
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::WireType;
-    use core::iter::repeat_with;
     use itertools::iproduct;
-    use rand::{thread_rng, Rng};
     use time::OffsetDateTime;
 
     #[test]
     fn check_type() {
-        let mut rng = thread_rng();
-        for (datetime, zone) in iproduct!(test_datetimes(), test_zones())
-            .chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES))
-        {
+        for (datetime, zone) in with_random_values(iproduct!(test_datetimes(), test_zones())) {
             let odt = odt_compose(datetime, zone);
             expedient::check_type(odt, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(odt, 123, WireType::LengthDelimited).unwrap();
         }
     }
+
     check_type_empty!(OffsetDateTime, via proxy);
     check_type_empty!(OffsetDateTime, via distinguished proxy);
 }
@@ -565,11 +569,9 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 
 #[cfg(test)]
 mod duration {
-    use super::RANDOM_SAMPLES;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
+    use crate::encoding::type_support::time::with_random_values;
     use crate::encoding::{EmptyState, WireType};
-    use core::iter::repeat_with;
-    use rand::{thread_rng, Rng};
     use time::Duration;
 
     pub(in super::super) fn test_durations() -> impl Iterator<Item = Duration> + Clone {
@@ -586,12 +588,12 @@ mod duration {
 
     #[test]
     fn check_type() {
-        let mut rng = thread_rng();
-        for duration in test_durations().chain(repeat_with(|| rng.gen()).take(RANDOM_SAMPLES)) {
+        for duration in with_random_values(test_durations()) {
             expedient::check_type(duration, 123, WireType::LengthDelimited).unwrap();
             distinguished::check_type(duration, 123, WireType::LengthDelimited).unwrap();
         }
     }
+
     check_type_empty!(Duration, via proxy);
     check_type_empty!(Duration, via distinguished proxy);
 }
