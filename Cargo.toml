@@ -92,6 +92,7 @@ chrono = ["dep:chrono"]
 hashbrown = ["dep:hashbrown"]
 smallvec = ["dep:smallvec"]
 thin-vec = ["dep:thin-vec"]
+time = ["dep:time"]
 tinyvec = ["dep:tinyvec"]
 
 # Optimization controls. "auto-optimize" enables the default setting for all optimizations.
