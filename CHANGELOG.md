@@ -2,12 +2,15 @@
 
 ### Breaking changes
 
-* The (unstable) internal encoding traits continue to evolve.
+* The (unstable) internal encoding traits & types continue to evolve.
   * `Oneof` traits now encode and decode slightly differently and the traits
     bearing an empty state now have special responsibility for guarding against
-    value duplication and recording error locations
-  * distinguished encoding traits now use a different context type which
-    restricts the minimum tolerated canonicity
+    value duplication and recording error locations.
+  * Distinguished encoding traits now use a different context type,.
+    `RestrictedDecodeContext`, which restricts the minimum tolerated canonicity
+    and allows for early exits and detailed errors about the location of
+    non-canonical data problems.
+  * `DecodeContext` now has public method visibility.
 
 ### New features
 
@@ -27,7 +30,7 @@
 
 * Rectify an ambiguous usage of `PartialEq` that could potentially cause
   compilation failures when supported types in the program support equality.
-* bilrost-derive: simplify some codegen to remove a needless `let mut` in
+* `bilrost-derive`: simplify some codegen to remove a needless `let mut` in
   derived decoding implementations.
 
 ### Cleanups
