@@ -192,7 +192,7 @@ pub trait Message: EmptyState {
 ///       methods
 /// * "canonical" methods, which are shorthand for "restricted" methods with `Canonical` constraint
 ///   and do not return the `Canonicity`, because it will always be fully `Canonical`.
-/// 
+///
 /// Note that currently the only restriction level that is sensible to explicitly pass to
 /// "restricted" methods is `HasExtensions`: "distinguished" methods already dispatch to passing
 /// `NotCanonical`, and when `Canonical` is passed only `Canonical` can be returned from a
