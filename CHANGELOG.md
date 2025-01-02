@@ -2,6 +2,13 @@
 
 ### Breaking changes
 
+* The (unstable) internal encoding traits continue to evolve.
+  * `Oneof` traits now encode and decode slightly differently and the traits
+    bearing an empty state now have special responsibility for guarding against
+    value duplication and recording error locations
+  * distinguished encoding traits now use a different context type which
+    restricts the minimum tolerated canonicity
+
 ### New features
 
 * Added support for `core::time::Duration` and `std::time::SystemTime`.
@@ -12,10 +19,9 @@
   their important types, available through new crate features.
 * `Oneof` types can now be wrapped in `Box` (multiple times even, and either
   side of `Option` if you really want.)
-* A new fuzzer binary is available specifically for the newer types which have
-  the newer, slightly more abstract encoding paths. These fuzzers are typically
-  run in the order of hundreds to thousands of CPU hours per significant change,
-  and are available for you to run as well.
+* `DistinguishedMessage`: added "restricted" and "canonical" decoding methods
+  alongside the existing "distinguished" ones, allowing decoding to stop early
+  on canonicity errors.
 
 ### Fixes
 
@@ -41,6 +47,10 @@
   for primitive and core types in the builtin encoders are still in those
   encoders' modules, but the `value_traits` module now contains only traits and
   macros and all conditionally-enabled code has been moved into `type_support`.
+* A new fuzzer binary is available specifically for the newer types which have
+  the newer, slightly more abstract encoding paths. These fuzzers are typically
+  run in the order of hundreds to thousands of CPU hours per significant change,
+  and are available for you to run as well.
 
 ## v0.1010.0
 
