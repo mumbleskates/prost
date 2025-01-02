@@ -178,37 +178,44 @@ mod assert {
     /// Trait for easily passing expectations for restricted decoding results to
     /// `decodes_non_canonically`.
     pub(super) trait RestrictedExpectations {
-        fn for_expected_canonicity(
-            &self,
-            expected: Canonicity,
-        ) -> impl IntoIterator<Item = (Canonicity, &str)>;
+        type Iter<'a>: IntoIterator<Item = (Canonicity, &'a str)>
+        where
+            Self: 'a;
+
+        fn for_expected_canonicity(&self, expected: Canonicity) -> Self::Iter<'_>;
     }
 
     impl RestrictedExpectations for &str {
-        fn for_expected_canonicity(
-            &self,
-            expected: Canonicity,
-        ) -> impl IntoIterator<Item = (Canonicity, &str)> {
+        type Iter<'a>
+            = [(Canonicity, &'a str); 1]
+        where
+            Self: 'a;
+
+        fn for_expected_canonicity(&self, expected: Canonicity) -> Self::Iter<'_> {
             [(expected, *self)]
         }
     }
 
     impl RestrictedExpectations for (Canonicity, &str) {
-        fn for_expected_canonicity(
-            &self,
-            _: Canonicity,
-        ) -> impl IntoIterator<Item = (Canonicity, &str)> {
+        type Iter<'a>
+            = [(Canonicity, &'a str); 1]
+        where
+            Self: 'a;
+
+        fn for_expected_canonicity(&self, _: Canonicity) -> Self::Iter<'_> {
             [*self]
         }
     }
 
     impl<const N: usize> RestrictedExpectations for [(Canonicity, &str); N] {
-        fn for_expected_canonicity(
-            &self,
-            _: Canonicity,
-        ) -> impl IntoIterator<Item = (Canonicity, &str)> {
+        type Iter<'a>
+            = [(Canonicity, &'a str); N]
+        where
+            Self: 'a;
+
+        fn for_expected_canonicity(&self, _: Canonicity) -> Self::Iter<'_> {
             assert!(!self.is_empty()); // we must not be lazy
-            self.iter().copied()
+            *self
         }
     }
 
