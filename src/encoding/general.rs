@@ -335,18 +335,11 @@ impl Proxiable for core::time::Duration {
     }
 
     fn decode_proxy(&mut self, proxy: Self::Proxy) -> Result<(), DecodeErrorKind> {
-        let [secs, nanos] = proxy.into_inner();
-        nanos
-            .try_into()
-            .map_err(|_| InvalidValue)
-            .and_then(|nanos| {
-                if nanos > 999_999_999 {
-                    Err(InvalidValue)
-                } else {
-                    *self = core::time::Duration::new(secs, nanos);
-                    Ok(())
-                }
-            })
+        let [secs, nanos @ 0..=999_999_999] = proxy.into_inner() else {
+            return Err(InvalidValue);
+        };
+        *self = core::time::Duration::new(secs, nanos as u32);
+        Ok(())
     }
 }
 
@@ -355,18 +348,11 @@ impl DistinguishedProxiable for core::time::Duration {
         &mut self,
         proxy: Self::Proxy,
     ) -> Result<Canonicity, DecodeErrorKind> {
-        let ([secs, nanos], canon) = proxy.into_inner_distinguished();
-        nanos
-            .try_into()
-            .map_err(|_| InvalidValue)
-            .and_then(|nanos| {
-                if nanos > 999_999_999 {
-                    Err(InvalidValue)
-                } else {
-                    *self = core::time::Duration::new(secs, nanos);
-                    Ok(canon)
-                }
-            })
+        let ([secs, nanos @ 0..=999_999_999], canon) = proxy.into_inner_distinguished() else {
+            return Err(InvalidValue);
+        };
+        *self = core::time::Duration::new(secs, nanos as u32);
+        Ok(canon)
     }
 }
 
