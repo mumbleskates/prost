@@ -95,7 +95,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod date {
-    use super::with_random_values;
+    use super::helpers::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
     use time::Date;
@@ -193,7 +193,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 
 #[cfg(test)]
 mod time_ty {
-    use super::with_random_values;
+    use super::helpers::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
     use time::Time;
@@ -285,8 +285,8 @@ delegate_value_encoding!(delegate from (General) to (Proxied<Packed<Varint>>)
 #[cfg(test)]
 mod primitivedatetime {
     use super::date::test_dates;
+    use super::helpers::with_random_values;
     use super::time_ty::test_times;
-    use super::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{EmptyState, WireType};
     use itertools::iproduct;
@@ -387,7 +387,7 @@ delegate_value_encoding!(delegate from (General) to (Proxied<(Varint, Varint, Va
 
 #[cfg(test)]
 mod utcoffset {
-    use super::with_random_values;
+    use super::helpers::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::{
         Capped, DecodeContext, DistinguishedValueEncoder, EmptyState, ForOverwrite, General,
