@@ -159,7 +159,7 @@ where
         // it in packed format instead.
         // The data is already known to be non-canonical; use expedient decoding
         _ = ctx.check(Canonicity::NotCanonical)?;
-        ValueEncoder::<Packed<E>>::decode_value(arr, buf, ctx.expedient_context())?;
+        ValueEncoder::<Packed<E>>::decode_value(arr, buf, ctx.into_expedient())?;
         Ok(Canonicity::NotCanonical)
     } else {
         // Otherwise, decode in unpacked mode.
@@ -295,7 +295,7 @@ where
             // it in packed format instead.
             // The data is already known to be non-canonical; use expedient decoding
             _ = ctx.check(Canonicity::NotCanonical)?;
-            <C as ValueEncoder<Packed<E>>>::decode_value(value, buf, ctx.expedient_context())?;
+            <C as ValueEncoder<Packed<E>>>::decode_value(value, buf, ctx.into_expedient())?;
             Ok(Canonicity::NotCanonical)
         } else {
             // Otherwise, decode in unpacked mode.

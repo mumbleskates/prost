@@ -82,7 +82,7 @@ macro_rules! fixed_width_int {
                 buf: Capped<impl Buf + ?Sized>,
                 ctx: RestrictedDecodeContext,
             ) -> Result<Canonicity, DecodeError> {
-                ValueEncoder::<Fixed>::decode_value(value, buf, ctx.expedient_context())?;
+                ValueEncoder::<Fixed>::decode_value(value, buf, ctx.into_expedient())?;
                 Ok(Canonicity::Canonical)
             }
         }
@@ -176,7 +176,7 @@ macro_rules! fixed_width_array {
                 buf: Capped<impl Buf + ?Sized>,
                 ctx: RestrictedDecodeContext,
             ) -> Result<Canonicity, DecodeError> {
-                ValueEncoder::<Fixed>::decode_value(value, buf, ctx.expedient_context())?;
+                ValueEncoder::<Fixed>::decode_value(value, buf, ctx.into_expedient())?;
                 Ok(Canonicity::Canonical)
             }
         }

@@ -64,7 +64,7 @@ impl DistinguishedValueEncoder<PlainBytes> for Vec<u8> {
         buf: Capped<impl Buf + ?Sized>,
         ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx.expedient_context())?;
+        ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx.into_expedient())?;
         Ok(Canonicity::Canonical)
     }
 }
@@ -202,7 +202,7 @@ impl<const N: usize> DistinguishedValueEncoder<PlainBytes> for [u8; N] {
         buf: Capped<impl Buf + ?Sized>,
         ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx.expedient_context())?;
+        ValueEncoder::<PlainBytes>::decode_value(value, buf, ctx.into_expedient())?;
         Ok(Canonicity::Canonical)
     }
 }
@@ -315,7 +315,7 @@ macro_rules! plain_bytes_vec_impl {
                 ctx: $crate::encoding::RestrictedDecodeContext,
             ) -> Result<$crate::Canonicity, $crate::DecodeError> {
                 $crate::encoding::ValueEncoder::<$crate::encoding::PlainBytes>::decode_value(
-                    value, buf, ctx.expedient_context())?;
+                    value, buf, ctx.into_expedient())?;
                 Ok($crate::Canonicity::Canonical)
             }
         }

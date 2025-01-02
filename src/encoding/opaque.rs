@@ -401,7 +401,7 @@ impl RawDistinguishedMessage for OpaqueMessage<'_> {
     where
         Self: Sized,
     {
-        self.raw_decode_field(tag, wire_type, duplicated, buf, ctx.expedient_context())?;
+        self.raw_decode_field(tag, wire_type, duplicated, buf, ctx.into_expedient())?;
         Ok(Canonicity::Canonical)
     }
 }

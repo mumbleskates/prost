@@ -140,7 +140,7 @@ impl DistinguishedValueEncoder<General> for String {
         buf: Capped<impl Buf + ?Sized>,
         ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx.expedient_context())?;
+        Self::decode_value(value, buf, ctx.into_expedient())?;
         Ok(Canonicity::Canonical)
     }
 }
@@ -254,7 +254,7 @@ impl DistinguishedValueEncoder<General> for Bytes {
         buf: Capped<impl Buf + ?Sized>,
         ctx: RestrictedDecodeContext,
     ) -> Result<Canonicity, DecodeError> {
-        Self::decode_value(value, buf, ctx.expedient_context())?;
+        Self::decode_value(value, buf, ctx.into_expedient())?;
         Ok(Canonicity::Canonical)
     }
 }

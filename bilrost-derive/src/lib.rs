@@ -1192,7 +1192,7 @@ fn try_enumeration(input: TokenStream) -> Result<TokenStream, Error> {
                 ::bilrost::encoding::ValueEncoder::<::bilrost::encoding::General>::decode_value(
                     value,
                     buf,
-                    ctx.expedient_context(),
+                    ctx.into_expedient(),
                 )?;
                 ::core::result::Result::Ok(::bilrost::Canonicity::Canonical)
             }

@@ -434,7 +434,6 @@ impl DecodeContext {
     /// Returns `Ok<()>` if it is ok to continue recursing.
     /// Returns `Err<DecodeError>` if the recursion limit has been reached.
     #[inline]
-    #[allow(clippy::unnecessary_wraps)] // needed in other features
     pub fn limit_reached(&self) -> Result<(), DecodeError> {
         #[cfg(not(feature = "no-recursion-limit"))]
         if self.recurse_count == 0 {
@@ -446,6 +445,10 @@ impl DecodeContext {
     }
 }
 
+/// Additional information passed to every distinguished decode/merge function.
+///
+/// The context should be passed by value and can be freely cloned. When passing
+/// to a function which is decoding a nested object, then use `enter_recursion`.
 #[derive(Clone, Debug)]
 pub struct RestrictedDecodeContext {
     context: DecodeContext,
@@ -453,6 +456,7 @@ pub struct RestrictedDecodeContext {
 }
 
 impl RestrictedDecodeContext {
+    /// Creates a new context with a given minimum canonicity.
     pub fn new(min_canonicity: Canonicity) -> Self {
         Self {
             context: DecodeContext::default(),
@@ -484,8 +488,8 @@ impl RestrictedDecodeContext {
     }
 
     /// Returns the inner non-restricted context for expedient decoding.
-    pub fn expedient_context(&self) -> DecodeContext {
-        self.context.clone()
+    pub fn into_expedient(self) -> DecodeContext {
+        self.context
     }
 
     /// Checks the given canonicity against the minimum constraint that this context has.
@@ -498,6 +502,8 @@ impl RestrictedDecodeContext {
         }
     }
 
+    /// Shorthand call to simultaneously update the given canonicity with the new value and fail if
+    /// it is below the minimum for this context.
     #[inline]
     pub fn update(&self, canon: &mut Canonicity, new: Canonicity) -> Result<(), DecodeError> {
         canon.update(self.check(new)?);
