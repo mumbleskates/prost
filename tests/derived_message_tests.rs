@@ -196,17 +196,6 @@ mod assert {
         }
     }
 
-    impl RestrictedExpectations for (Canonicity, &str) {
-        type Iter<'a>
-            = [(Canonicity, &'a str); 1]
-        where
-            Self: 'a;
-
-        fn for_expected_canonicity(&self, _: Canonicity) -> Self::Iter<'_> {
-            [*self]
-        }
-    }
-
     impl<const N: usize> RestrictedExpectations for [(Canonicity, &str); N] {
         type Iter<'a>
             = [(Canonicity, &'a str); N]
