@@ -55,6 +55,17 @@
   run in the order of hundreds to thousands of CPU hours per significant change,
   and are available for you to run as well.
 
+## v0.1010.1
+
+### Cleanups
+
+* `bilrost-types`: parsing fractional seconds with more than 9 digits now
+  simply truncates instead of erring.
+* `bilrost-types`: parsing timestamps with "unknown local offset" timezones
+  ("-00:00") is now tolerated, since the timezone information is discarded
+  anyway.
+* `bilrost-types`: improved fuzzing binaries for datetime parsing.
+
 ## v0.1010.0
 
 ### New features
