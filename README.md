@@ -1000,12 +1000,49 @@ of a normal Bilrost varint.)
 
 #### Decoding in distinguished mode
 
-`DistinguishedMessage` has corresponding methods for decoding and replacing
-named `decode_distinguished_..` and `replace_distinguished_..`. Instead of
-returning `Result<(), DecodeError>` or `Result<Foo, DecodeError>`, these return
-`Result<Canonicity, DecodeError>` or `Result<(Foo, Canonicity), DecodeError>`.
-`Canonicity` is a simple enum that indicates whether the decoded data was
-`Canonical`, `HasExtensions`, or is `NotCanonical`.
+`DistinguishedMessage` has corresponding methods for decoding and replacing in
+three related modes:
+
+* "distinguished" mode: Decoding succeeds whenever the encoding is valid even if
+  it is not canonical, and extra information is returned indicating whether any
+  known fields had non-canonical representations or any unknown fields were
+  present
+* "canonical" mode: Decoding fails and returns an error immediately whenever the
+  encoding is not completely canonical. Returned values are guaranteed to be
+  fully canonical on success.
+* "restricted" mode: given encoded data and a minimum canonicity to restrict
+  decoding to, decoding will stop and return an error immediately if something
+  in the encoding is less canonical than the specified restriction. On success,
+  extra information is returned indicating the canonicity just as in
+  "distinguished" mode. The possible restriction levels are the variants of
+  `Canonicity`:
+  * `NotCanonical`: Exactly the same as "distinguished" mode
+  * `HasExtensions`: Only fails if known fields are found to be encoded
+    non-canonically
+  * `Canonical`: Fails if any unknown fields are present or any fields are
+    encoded non-canonically; the returned canonicity data will always be
+    `Canonical`
+
+#### Canonicity information
+
+In "distinguished" and "restricted" modes, instead of
+returning `Result<(), DecodeError>` or `Result<Foo, DecodeError>`, decoding
+methods return types like `Result<Canonicity, DecodeError>` or
+`Result<(Foo, Canonicity), DecodeError>`. `Canonicity` is a simple enum that
+indicates whether the decoded data was `Canonical`, `HasExtensions`, or is
+`NotCanonical`:
+
+* `Canonical` means the decoded data is the only data that could have
+  canonically decoded to this value, and that if the value or another value that
+  equals it is encoded that encoding will have exactly matching bytes.
+* `HasExtensions` means the fields that are known to the decoding process were
+  encoded correctly, but other fields existed that have no corresponding struct
+  destination and were discarded during decoding. These might be from later (or
+  perhaps earlier) versions of the same program.
+* `NotCanonical` means there were fields encoded non-canonically: when
+  they are re-encoded they would be encoded differently. There are many
+  different byte strings that can produce the same decoded value, but only one
+  of them can be canonical.
 
 The `bilrost::WithCanonicity` trait is made available to unwrap values and
 results that have canonicity information:
@@ -1222,10 +1259,8 @@ assert_eq!(
         .as_slice()
 );
 
-let decoded = PubKeyRegistry::decode_distinguished(encoded.as_slice())
-    .canonical() // Check that the decoded data was canonical
-    .unwrap();
-assert_eq!(registry, decoded);
+let decoded = PubKeyRegistry::decode_canonical(encoded.as_slice());
+assert_eq!(decoded, Ok(registry));
 ```
 
 ### Supported message field types
