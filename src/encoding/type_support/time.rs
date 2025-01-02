@@ -506,9 +506,10 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 
 #[cfg(test)]
 mod offsetdatetime {
+    use super::helpers::with_random_values;
+    use super::odt_compose;
     use super::primitivedatetime::test_datetimes;
     use super::utcoffset::test_zones;
-    use super::{odt_compose, with_random_values};
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
     use crate::encoding::WireType;
     use itertools::iproduct;
@@ -570,8 +571,8 @@ delegate_value_encoding!(delegate from (General) to (Proxied<General>)
 
 #[cfg(test)]
 mod duration {
+    use super::helpers::with_random_values;
     use crate::encoding::test::{check_type_empty, distinguished, expedient};
-    use crate::encoding::type_support::time::with_random_values;
     use crate::encoding::{EmptyState, WireType};
     use time::Duration;
 

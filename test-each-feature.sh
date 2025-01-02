@@ -6,10 +6,13 @@ for feature in std \
                detailed-errors \
                extended-diagnostics \
                arrayvec \
+               bstr \
                bytestring \
+               chrono \
                hashbrown \
                smallvec \
                thin-vec \
+               time \
                tinyvec \
                self-copy-optimization \
                unroll-varint-encoding \
